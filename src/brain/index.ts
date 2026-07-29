@@ -5,7 +5,7 @@ import { TEXT_MODEL, definirHeadline, escreverLegenda } from "../caption";
 import { generate3Arts, deriveStory, type Brief } from "../art/pipeline";
 import { sendMessage, sendMediaGroup, inlineKeyboard } from "../telegram/api";
 import { enqueue, listQueue, cancelQueueItem } from "../scheduler";
-import { publishImage } from "../instagram";
+import { publishStep } from "../publish";
 import { createIssue, commentOnIssue, attachJpeg, moveIssueState } from "../linear";
 
 let _ai: GoogleGenAI | null = null;
@@ -14,8 +14,9 @@ const ai = () => (_ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }
 const systemPrompt = () =>
   [
     "Você é o agente de marketing da EM Vidros no Telegram. Fala português coloquial, é direto e eficiente.",
-    "Fluxo: pedido → brief estruturado (confirmar antes de gastar geração) → formato (Feed/Stories/Os dois) → headline → 3 artes → escolha → legenda (só Feed) → Linear → publicar/agendar.",
-    "REGRAS RÍGIDAS: (1) nunca chame gerar_3_artes sem formato definido e sem definir_headline antes; (2) nunca chame escrever_legenda quando formato=stories; (3) publicação só com confirmação humana explícita.",
+    "Fluxo: pedido → brief estruturado (confirmar antes de gastar geração) → formato (Feed/Stories/Os dois) → headline → 3 artes → escolha → legenda (só Feed) → Linear → entregar pra publicar (manual) ou agendar lembrete.",
+    "Publicação é MANUAL: o bot entrega a arte final + legenda no Telegram e o time posta na mão no Instagram. Não fale que 'publiquei no Instagram'.",
+    "REGRAS RÍGIDAS: (1) nunca chame gerar_3_artes sem formato definido e sem definir_headline antes; (2) nunca chame escrever_legenda quando formato=stories; (3) só entregue/agende com confirmação humana explícita.",
     "Se o usuário já disser o formato na mensagem, não pergunte de novo — só confirme no brief.",
     "\n--- BRANDBOOK ---\n" + readFileSync("brand/BRANDBOOK.md", "utf8"),
     "\n--- TOM DE VOZ ---\n" + readFileSync("brand/voice.md", "utf8"),
@@ -78,7 +79,7 @@ const TOOLS = [
   {
     type: "function",
     name: "agendar_publicacao",
-    description: "Agenda a publicação. publish_at em ISO 8601 com offset de America/Sao_Paulo, já confirmado com o usuário.",
+    description: "Agenda um lembrete: no horário definido, o bot entrega a arte + legenda no Telegram para o time publicar na mão. publish_at em ISO 8601 com offset de America/Sao_Paulo, já confirmado com o usuário.",
     parameters: {
       type: "object",
       properties: {
@@ -91,7 +92,7 @@ const TOOLS = [
   {
     type: "function",
     name: "publicar_agora",
-    description: "Publica imediatamente no Instagram. Só depois de confirmação humana explícita.",
+    description: "Entrega agora a arte final e a legenda no Telegram para o time publicar na mão no Instagram. Só depois de confirmação humana explícita.",
     parameters: {
       type: "object",
       properties: { media_type: { type: "string", enum: ["IMAGE", "STORIES"] } },
@@ -219,17 +220,7 @@ async function execTool(chatId: number, name: string, args: any): Promise<string
     }
     case "publicar_agora": {
       if (!post) return "ERRO: sem post.";
-      const arts = JSON.parse(post.arts ?? "[]");
-      const chosen = arts.find((a: any) => a.variant === post.chosen);
-      const jpegPath = args.media_type === "STORIES" ? (post.story_path ?? chosen?.path) : chosen?.path;
-      if (!jpegPath) return "ERRO: arte escolhida não encontrada.";
-      const igId = await publishImage({
-        jpegPath,
-        mediaType: args.media_type,
-        caption: args.media_type === "IMAGE" ? post.legenda : undefined,
-      });
-      db.query("UPDATE posts SET status = 'published' WHERE id = ?").run(post.id);
-      return `Publicado! id ${igId}.`;
+      return await publishStep(chatId, post, args.media_type);
     }
     case "listar_agenda": {
       const items = listQueue(chatId);

@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { publishImage } from "../instagram";
+import { publishStep } from "../publish";
 import { sendMessage } from "../telegram/api";
 
 /**
@@ -22,20 +22,16 @@ async function tick() {
   for (const item of due) {
     db.query("UPDATE queue SET status = 'publishing' WHERE id = ?").run(item.id);
     try {
-      const jpegPath =
-        item.media_type === "STORIES" && item.story_path
-          ? item.story_path
-          : JSON.parse(item.arts ?? "[]").find((a: any) => a.variant === item.chosen)?.path;
-      if (!jpegPath) throw new Error("Arquivo da arte não encontrado");
-
-      const igId = await publishImage({
-        jpegPath,
-        mediaType: item.media_type,
-        caption: item.media_type === "IMAGE" ? item.legenda : undefined,
-      });
+      const post = {
+        id: item.post_id,
+        arts: item.arts,
+        chosen: item.chosen,
+        story_path: item.story_path,
+        legenda: item.legenda,
+      };
+      const msg = await publishStep(item.chat_id, post, item.media_type);
       db.query("UPDATE queue SET status = 'done' WHERE id = ?").run(item.id);
-      db.query("UPDATE posts SET status = 'published' WHERE id = ?").run(item.post_id);
-      await sendMessage(item.chat_id, `✅ Publicado no Instagram (${item.media_type}) — id ${igId}`);
+      await sendMessage(item.chat_id, `⏰ ${msg}`);
     } catch (err: any) {
       // Nunca falha em silêncio (US-6)
       db.query("UPDATE queue SET status = 'failed', error = ? WHERE id = ?").run(String(err), item.id);

@@ -31,7 +31,7 @@ async function handleUpdate(update: any) {
       await brainTurn(chatId, `[sistema] O usuário escolheu o formato "${a}" nos botões. Prossiga o fluxo (headline → 3 artes).`);
     } else if (action === "pick") {
       db.query("UPDATE posts SET chosen = ?, status = 'chosen' WHERE id = ?").run(Number(a), Number(b));
-      await brainTurn(chatId, `[sistema] O usuário escolheu a variação v${a}. Confirme, descarte as outras e prossiga (derivar story se formato=ambos; legenda se inclui feed; salvar no Linear; oferecer Publicar agora/Agendar/Só arquivar).`);
+      await brainTurn(chatId, `[sistema] O usuário escolheu a variação v${a}. Confirme, descarte as outras e prossiga (derivar story se formato=ambos; legenda se inclui feed; salvar no Linear; oferecer Entregar pra publicar agora/Agendar lembrete/Só arquivar).`);
     } else if (action === "redo") {
       await brainTurn(chatId, `[sistema] O usuário pediu para refazer as 3 artes. Gere novamente.`);
     } else if (action === "recap") {
