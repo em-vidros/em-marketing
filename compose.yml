@@ -1,0 +1,14 @@
+services:
+  em-marketing:
+    image: ghcr.io/em-vidros/em-marketing:latest
+    container_name: em-marketing
+    restart: unless-stopped
+    env_file: /etc/emvidros/em-marketing.env
+    ports:
+      - "127.0.0.1:3010:3000"
+    volumes:
+      - ./data:/app/data
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+      com.centurylinklabs.watchtower.scope: "emvidros-prod"
+      ambiente: "prod"

@@ -1,6 +1,6 @@
 {
   "name": "em-marketing",
-  "module": "index.ts",
+  "module": "src/server.ts",
   "type": "module",
   "private": true,
   "devDependencies": {
@@ -16,6 +16,12 @@
   },
   "trustedDependencies": [
     "@google/genai",
-    "protobufjs"
-  ]
+    "protobufjs",
+    "sharp"
+  ],
+  "scripts": {
+    "start": "bun src/server.ts",
+    "spike": "bun scripts/spike-arte.ts",
+    "typecheck": "tsc --noEmit"
+  }
 }
