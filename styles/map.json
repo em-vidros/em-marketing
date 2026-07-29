@@ -1,0 +1,9 @@
+{
+  "_comment": "Tipo de post → trio de variações (v1, v2, v3). O cérebro escolhe; o usuário pode sobrescrever.",
+  "data-comemorativa-regional": ["festivo-comemorativo", "minimal-editorial", "tipografico-bold"],
+  "dia-da-profissao": ["minimal-editorial", "festivo-comemorativo", "institucional-foto"],
+  "produto-tecnico": ["produto-3d", "minimal-editorial", "tipografico-bold"],
+  "educacional": ["tipografico-bold", "minimal-editorial", "produto-3d"],
+  "promocao-sorteio": ["festivo-comemorativo", "produto-3d", "tipografico-bold"],
+  "institucional-bastidor": ["institucional-foto", "minimal-editorial", "premium-escuro"]
+}
