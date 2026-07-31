@@ -2,6 +2,11 @@ name: deploy
 on:
   push:
     branches: [main]
+    # brand/ e styles/ ficam de fora: entram na imagem e são lidos em runtime
+    paths-ignore:
+      - 'docs/**'
+      - '.specs/**'
+      - 'README.md'
 
 jobs:
   build-and-deploy:
