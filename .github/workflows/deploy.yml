@@ -28,5 +28,6 @@ jobs:
           tags: ghcr.io/em-vidros/em-marketing:latest
       - name: Trigger watchtower
         run: |
-          curl -fsS -X POST http://127.0.0.1:8080/v1/update \
-            -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}"
+          curl -fsS -X POST --max-time 90 \
+            -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}" \
+            http://watchtower-prod:8080/v1/update
