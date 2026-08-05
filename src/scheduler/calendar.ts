@@ -60,6 +60,7 @@ async function checkCalendar() {
     await sendMessage(
       chatId,
       `📅 Daqui a 3 dias: *${hit.ocasiao}*.\nQuer que eu prepare o post? Me responda algo como _"cria o post de ${hit.ocasiao}"_ — ou ignore esta mensagem.`,
+      { parse_mode: "Markdown" },
     ).catch(() => {});
   }
 }

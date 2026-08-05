@@ -1,6 +1,6 @@
 const API = "https://api.linear.app/graphql";
 const TEAM_ID = "ec0c88f8-96c2-40b2-853c-98f62b4d98fa"; // time EM Vidros (já existe)
-const LABEL_INSTAGRAM_POST = process.env.LINEAR_LABEL_ID ?? "5a33b4dc"; // label Instagram Post
+const LABEL_INSTAGRAM_POST = process.env.LINEAR_LABEL_ID; // uuid da label "Instagram Post"
 
 async function gql(query: string, variables: Record<string, unknown> = {}): Promise<any> {
   const res = await fetch(API, {
@@ -17,6 +17,7 @@ async function gql(query: string, variables: Record<string, unknown> = {}): Prom
 }
 
 export async function createIssue(opts: { title: string; description: string }): Promise<{ id: string; url: string }> {
+  if (!LABEL_INSTAGRAM_POST) throw new Error("LINEAR_LABEL_ID não configurado");
   const data = await gql(
     `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { issue { id url } } }`,
     { input: { teamId: TEAM_ID, title: opts.title, description: opts.description, labelIds: [LABEL_INSTAGRAM_POST] } },

@@ -108,6 +108,20 @@ const TOOLS = [
   },
 ] as any[];
 
+const TZ = "America/Sao_Paulo";
+
+/**
+ * O modelo às vezes devolve `2026-08-08T09:00:00` sem offset, e o JS lê ISO sem
+ * offset como UTC — o agendamento sairia 3 h adiantado. O Brasil não tem mais
+ * horário de verão desde 2019, então -03:00 é fixo.
+ */
+function saoPauloInstant(publishAt: string): Date {
+  const naive = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(:\d{2})?$/.test(publishAt.trim());
+  const d = new Date(naive ? `${publishAt.trim().replace(" ", "T")}-03:00` : publishAt);
+  if (Number.isNaN(d.getTime())) throw new Error(`data inválida: ${publishAt}`);
+  return d;
+}
+
 // --- estado do post em andamento ---
 
 function currentPost(chatId: number): any {
@@ -215,8 +229,9 @@ async function execTool(chatId: number, name: string, args: any): Promise<string
     }
     case "agendar_publicacao": {
       if (!post) return "ERRO: sem post.";
-      enqueue(post.id, args.media_type, new Date(args.publish_at).toISOString().replace("T", " ").slice(0, 19));
-      return `Agendado ${args.media_type} para ${args.publish_at}.`;
+      const at = saoPauloInstant(args.publish_at);
+      enqueue(post.id, args.media_type, at.toISOString().replace("T", " ").slice(0, 19));
+      return `Agendado ${args.media_type} para ${at.toLocaleString("pt-BR", { timeZone: TZ })} (horário de Brasília).`;
     }
     case "publicar_agora": {
       if (!post) return "ERRO: sem post.";

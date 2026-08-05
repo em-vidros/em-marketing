@@ -37,7 +37,7 @@ export async function publishStep(
   await sendPhoto(chatId, jpegPath, { caption: label });
   if (mediaType === "IMAGE" && post.legenda) {
     await sendMessage(chatId, "Legenda (toque para copiar):");
-    await sendMessage(chatId, post.legenda, { parse_mode: undefined }); // texto puro, copia limpo
+    await sendMessage(chatId, post.legenda);
   }
   db.query("UPDATE posts SET status = 'ready_to_post' WHERE id = ?").run(post.id);
   return mediaType === "STORIES"

@@ -47,7 +47,7 @@ async function handleUpdate(update: any) {
       return;
     }
     if (msg.text.startsWith("/start")) {
-      await sendMessage(chatId, "Oi! Sou o agente de marketing da EM Vidros 🩵\nMe diga que post você quer — ex.: _\"cria um post pro dia do vidraceiro, 18 de maio\"_.");
+      await sendMessage(chatId, "Oi! Sou o agente de marketing da EM Vidros 🩵\nMe diga que post você quer — ex.: _\"cria um post pro dia do vidraceiro, 18 de maio\"_.", { parse_mode: "Markdown" });
       return;
     }
     await brainTurn(chatId, msg.text);

@@ -14,11 +14,16 @@ async function call<T = any>(method: string, body: Record<string, unknown>): Pro
 export const sendChatAction = (chat_id: number, action = "typing") =>
   call("sendChatAction", { chat_id, action }).catch(() => {});
 
+/**
+ * Texto puro por padrão. O Markdown legado do Telegram rejeita a mensagem inteira
+ * (400 "can't parse entities") com um `_` ou `*` desbalanceado — e a maior parte do
+ * que passa aqui é texto livre do modelo. Quem escreve a marcação passa parse_mode.
+ */
 export const sendMessage = (
   chat_id: number,
   text: string,
   extra: Record<string, unknown> = {},
-) => call("sendMessage", { chat_id, text, parse_mode: "Markdown", ...extra });
+) => call("sendMessage", { chat_id, text, ...extra });
 
 export const answerCallbackQuery = (id: string, text?: string) =>
   call("answerCallbackQuery", { callback_query_id: id, text }).catch(() => {});
