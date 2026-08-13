@@ -1,5 +1,6 @@
 const API = "https://api.linear.app/graphql";
 const TEAM_ID = "ec0c88f8-96c2-40b2-853c-98f62b4d98fa"; // time EM Vidros (já existe)
+const PROJECT_EM_MARKETING = "184d5269-422c-4d82-9a69-f32d971447b9"; // projeto EM Marketing (fora dos ciclos)
 const LABEL_INSTAGRAM_POST = process.env.LINEAR_LABEL_ID; // uuid da label "Instagram Post"
 
 async function gql(query: string, variables: Record<string, unknown> = {}): Promise<any> {
@@ -20,7 +21,15 @@ export async function createIssue(opts: { title: string; description: string }):
   if (!LABEL_INSTAGRAM_POST) throw new Error("LINEAR_LABEL_ID não configurado");
   const data = await gql(
     `mutation($input: IssueCreateInput!) { issueCreate(input: $input) { issue { id url } } }`,
-    { input: { teamId: TEAM_ID, title: opts.title, description: opts.description, labelIds: [LABEL_INSTAGRAM_POST] } },
+    {
+      input: {
+        teamId: TEAM_ID,
+        projectId: PROJECT_EM_MARKETING,
+        title: opts.title,
+        description: opts.description,
+        labelIds: [LABEL_INSTAGRAM_POST],
+      },
+    },
   );
   return data.issueCreate.issue;
 }
@@ -63,7 +72,12 @@ export async function moveIssueState(issueId: string, stateName: string) {
   const state = data.team.states.nodes.find(
     (s: any) => s.name.toLowerCase() === stateName.toLowerCase(),
   );
-  if (!state) return;
+  if (!state) {
+    // Falhar calado aqui já custou caro: os estados foram renomeados para PT-BR
+    // e a issue parou de sair de "Em andamento" sem nada no log.
+    console.warn(`Linear: estado "${stateName}" não existe no time. Issue ${issueId} não foi movida.`);
+    return;
+  }
   await gql(`mutation($id: String!, $input: IssueUpdateInput!) { issueUpdate(id: $id, input: $input) { success } }`, {
     id: issueId,
     input: { stateId: state.id },

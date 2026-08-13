@@ -223,7 +223,7 @@ async function execTool(chatId: number, name: string, args: any): Promise<string
       if (post.story_path) await attachJpeg(issue.id, post.story_path, "story.jpg");
       const headline = post.headline ? JSON.parse(post.headline).headline : "";
       await commentOnIssue(issue.id, post.legenda ? `**Legenda aprovada:**\n\n${post.legenda}` : `**Brief:** ${post.brief}\n\n**Headline na arte:** ${headline}`);
-      await moveIssueState(issue.id, "In Review");
+      await moveIssueState(issue.id, "Em revisão");
       db.query("UPDATE posts SET status = 'archived' WHERE id = ?").run(post.id);
       return `Issue salva no Linear${issue.url ? `: ${issue.url}` : ""}.`;
     }
