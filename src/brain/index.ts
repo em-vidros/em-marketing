@@ -189,7 +189,13 @@ async function execTool(chatId: number, name: string, args: any): Promise<string
       ];
       if (post.formato !== "stories") buttons[1]!.push({ text: "✍️ Reescrever legenda", data: `recap:${post.id}` });
       await sendMessage(chatId, "Qual você prefere?", inlineKeyboard(buttons));
-      return "3 artes enviadas com botões. Aguarde a escolha.";
+      const aprovadas = arts.filter((a) => a.qa?.aprovada).length;
+      const pendentes = arts
+        .filter((a) => a.qa && !a.qa.aprovada)
+        .map((a) => `v${a.variant}: ${a.qa!.pendencias.join("; ")}`);
+      return `3 artes enviadas com botões. Controle de qualidade automático: ${aprovadas}/3 aprovadas.${
+        pendentes.length ? ` Informe o usuário das pendências: ${pendentes.join(" | ")}.` : ""
+      } Aguarde a escolha.`;
     }
     case "escrever_legenda": {
       if (!post || !brief) return "ERRO: sem brief.";
@@ -204,11 +210,13 @@ async function execTool(chatId: number, name: string, args: any): Promise<string
       const arts = JSON.parse(post.arts);
       const chosen = arts.find((a: any) => a.variant === post.chosen);
       const { headline } = JSON.parse(post.headline);
-      const path = await deriveStory({ postId: post.id, brief: brief!, headline, chosen });
+      const { path, qa } = await deriveStory({ postId: post.id, brief: brief!, headline, chosen });
       db.query("UPDATE posts SET story_path = ? WHERE id = ?").run(path, post.id);
       const { sendPhoto } = await import("../telegram/api");
       await sendPhoto(chatId, path, { caption: "Versão Stories do conceito escolhido — confirma?" });
-      return "Story derivado e enviado para confirmação.";
+      return qa.aprovada
+        ? "Story derivado e enviado para confirmação."
+        : `Story derivado e enviado para confirmação, mas o controle de qualidade apontou pendências: ${qa.pendencias.join("; ")}. Informe o usuário.`;
     }
     case "salvar_linear": {
       if (!post || !brief) return "ERRO: sem post.";
