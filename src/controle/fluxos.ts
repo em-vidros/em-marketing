@@ -5,8 +5,7 @@
  * outro escritor na frente — erro, nunca retry cego.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
-import { createHash } from "node:crypto";
+import { carregarContextoMarca } from "../adaptadores/marca";
 import type {
   EstadoQualquer,
   FluxoId,
@@ -93,22 +92,14 @@ export function registrarEvento(
 /**
  * Snapshot imutável da marca (PRD §3.3, brand_version): endereçado pelo hash do
  * conteúdo, então pedir de novo com a marca inalterada reusa a mesma linha.
+ *
+ * O hash vem de carregarContextoMarca() e não de uma conta local. Duas contas
+ * dariam dois ids para a mesma árvore, e aí a marca que o artefato diz ter usado
+ * dependeria de quem perguntou.
  */
 function snapshotMarca(db: Banco): string {
-  const brandbook = readFileSync("brand/BRANDBOOK.md", "utf8");
-  const voz = readFileSync("brand/voice.md", "utf8");
-  const tokens = readFileSync("brand/tokens.json", "utf8");
-  const estilos: Record<string, string> = {};
-  for (const nome of readdirSync("styles").filter((n) => n.endsWith(".md")).sort()) {
-    estilos[nome.slice(0, -3)] = readFileSync(`styles/${nome}`, "utf8");
-  }
-  const estilosJson = JSON.stringify(estilos);
-  const sha = createHash("sha256")
-    .update(brandbook)
-    .update(voz)
-    .update(tokens)
-    .update(estilosJson)
-    .digest("hex");
+  const marca = carregarContextoMarca();
+  const sha = marca.brandVersionId;
   const existente = db.query("SELECT id FROM brand_versions WHERE sha256 = ?").get(sha) as
     | { id: string }
     | null;
@@ -116,7 +107,7 @@ function snapshotMarca(db: Banco): string {
   const id = gerarId();
   db.query(
     "INSERT INTO brand_versions (id, sha256, brandbook, voz, tokens, estilos) VALUES (?, ?, ?, ?, ?, ?)",
-  ).run(id, sha, brandbook, voz, tokens, estilosJson);
+  ).run(id, sha, marca.brandbook, marca.voz, JSON.stringify(marca.tokens), JSON.stringify(marca.estilos));
   return id;
 }
 
