@@ -11,8 +11,9 @@ import sharp from "sharp";
 import tokens from "../../brand/tokens.json";
 import type { Formato } from "../modelos/tipos";
 
-export function sha256(bytes: Buffer): string {
-  return createHash("sha256").update(bytes).digest("hex");
+/** Hash de conteúdo de qualquer artefato: PNG, JPEG ou texto UTF-8. */
+export function sha256(conteudo: string | Buffer): string {
+  return createHash("sha256").update(conteudo).digest("hex");
 }
 
 /** PNG mestre da US-5: dimensão exata, sRGB, sem perda. */

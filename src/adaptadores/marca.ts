@@ -7,11 +7,9 @@
  * produzido sem guardar cópia dela.
  */
 
-import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
+import { sha256 } from "./imagem";
 import type { ContextoMarca } from "./tipos";
-
-const hex = (texto: string) => createHash("sha256").update(texto, "utf8").digest("hex");
 
 export function carregarContextoMarca(): ContextoMarca {
   const brandbook = readFileSync("brand/BRANDBOOK.md", "utf8");
@@ -31,10 +29,10 @@ export function carregarContextoMarca(): ContextoMarca {
 
   const pares = Object.keys(conteudo)
     .sort()
-    .map((caminho) => `${caminho}:${hex(conteudo[caminho]!)}`);
+    .map((caminho) => `${caminho}:${sha256(conteudo[caminho]!)}`);
 
   return {
-    brandVersionId: hex(pares.join("\n")),
+    brandVersionId: sha256(pares.join("\n")),
     brandbook,
     voz,
     tokens: JSON.parse(tokensBrutos),
