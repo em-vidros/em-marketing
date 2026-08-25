@@ -55,6 +55,140 @@ interface Migracao {
   aplicar(db: Banco): void;
 }
 
+/**
+ * As oito entidades da Fase 1 (DESIGN.md, Entidades). events, approvals e
+ * artifact_versions são append-only por gatilho, não por disciplina.
+ */
+const SCHEMA_FASE_1 = `
+CREATE TABLE brand_versions (
+  id TEXT PRIMARY KEY,
+  sha256 TEXT NOT NULL UNIQUE,
+  brandbook TEXT NOT NULL,
+  voz TEXT NOT NULL,
+  tokens TEXT NOT NULL,
+  estilos TEXT NOT NULL,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE workflow_runs (
+  id TEXT PRIMARY KEY,
+  tipo TEXT NOT NULL CHECK (tipo IN ('instagram','blog')),
+  estado TEXT NOT NULL,
+  versao INTEGER NOT NULL DEFAULT 0,
+  rodada INTEGER NOT NULL DEFAULT 1,
+  chat_id INTEGER NOT NULL,
+  solicitante_id INTEGER NOT NULL,
+  pedido_json TEXT NOT NULL,
+  brand_version_id TEXT NOT NULL REFERENCES brand_versions(id),
+  revisao_pendente TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE tasks (
+  id TEXT PRIMARY KEY,
+  workflow_id TEXT NOT NULL REFERENCES workflow_runs(id),
+  tipo TEXT NOT NULL,
+  papel TEXT NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'pendente'
+    CHECK (estado IN ('pendente','reivindicada','concluida','falhou','revisao_manual','cancelada')),
+  rodada INTEGER NOT NULL,
+  chave_idempotencia TEXT NOT NULL UNIQUE,
+  entrada_json TEXT,
+  lease_epoca INTEGER NOT NULL DEFAULT 0,
+  lease_dono TEXT,
+  lease_expira_em TEXT,
+  tentativas INTEGER NOT NULL DEFAULT 0,
+  max_tentativas INTEGER NOT NULL DEFAULT 3,
+  saida_json TEXT,
+  erro TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_tasks_fila ON tasks (estado, papel);
+
+CREATE TABLE artifact_versions (
+  id TEXT PRIMARY KEY,
+  workflow_id TEXT NOT NULL REFERENCES workflow_runs(id),
+  linhagem_id TEXT NOT NULL,
+  versao INTEGER NOT NULL,
+  papel TEXT NOT NULL
+    CHECK (papel IN ('direcao','prototipo','master','preview','copy','artigo','qa')),
+  formato TEXT CHECK (formato IN ('feed','stories')),
+  rodada INTEGER NOT NULL,
+  sha256 TEXT NOT NULL,
+  media_tipo TEXT NOT NULL,
+  tamanho INTEGER NOT NULL,
+  caminho TEXT NOT NULL,
+  derivada_de TEXT REFERENCES artifact_versions(id),
+  tarefa_id TEXT REFERENCES tasks(id),
+  meta_json TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (linhagem_id, versao)
+);
+CREATE INDEX idx_artifact_versions_workflow ON artifact_versions (workflow_id);
+
+CREATE TABLE approvals (
+  id TEXT PRIMARY KEY,
+  workflow_id TEXT NOT NULL REFERENCES workflow_runs(id),
+  stage TEXT NOT NULL CHECK (stage IN ('prototype','package','copy','angle')),
+  rodada INTEGER NOT NULL,
+  reviewer_id INTEGER NOT NULL,
+  decision TEXT NOT NULL CHECK (decision IN ('accepted','adjustment_requested','rejected')),
+  artifact_version_ids TEXT NOT NULL,
+  opcao TEXT,
+  notas TEXT,
+  decided_at TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (workflow_id, stage, rodada)
+);
+
+CREATE TABLE deliveries (
+  id TEXT PRIMARY KEY,
+  workflow_id TEXT NOT NULL REFERENCES workflow_runs(id),
+  artifact_version_id TEXT NOT NULL REFERENCES artifact_versions(id),
+  chave TEXT NOT NULL UNIQUE,
+  canal TEXT NOT NULL,
+  estado TEXT NOT NULL DEFAULT 'enviando'
+    CHECK (estado IN ('enviando','confirmada','indeterminada','falhou')),
+  file_id TEXT,
+  hash_conferido TEXT,
+  erro TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE idempotency_keys (
+  chave TEXT PRIMARY KEY,
+  resultado_json TEXT,
+  erro TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now')),
+  concluido_em TEXT
+);
+
+CREATE TABLE events (
+  seq INTEGER PRIMARY KEY AUTOINCREMENT,
+  workflow_id TEXT NOT NULL,
+  tipo TEXT NOT NULL,
+  ator TEXT NOT NULL,
+  dados_json TEXT,
+  criado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX idx_events_workflow ON events (workflow_id, seq);
+
+CREATE TRIGGER events_sem_update BEFORE UPDATE ON events
+BEGIN SELECT RAISE(ABORT, 'events é append-only'); END;
+CREATE TRIGGER events_sem_delete BEFORE DELETE ON events
+BEGIN SELECT RAISE(ABORT, 'events é append-only'); END;
+CREATE TRIGGER approvals_sem_update BEFORE UPDATE ON approvals
+BEGIN SELECT RAISE(ABORT, 'approvals é append-only'); END;
+CREATE TRIGGER approvals_sem_delete BEFORE DELETE ON approvals
+BEGIN SELECT RAISE(ABORT, 'approvals é append-only'); END;
+CREATE TRIGGER artifact_versions_sem_update BEFORE UPDATE ON artifact_versions
+BEGIN SELECT RAISE(ABORT, 'artifact_versions é append-only'); END;
+CREATE TRIGGER artifact_versions_sem_delete BEFORE DELETE ON artifact_versions
+BEGIN SELECT RAISE(ABORT, 'artifact_versions é append-only'); END;
+`;
+
 const MIGRACOES: Migracao[] = [
   {
     versao: 1,
@@ -65,6 +199,12 @@ const MIGRACOES: Migracao[] = [
         return `${t}=${n}`;
       });
       console.log(`migração 001 adotou o schema do bot v1: ${contagens.join(" ")}`);
+    },
+  },
+  {
+    versao: 2,
+    aplicar(db) {
+      db.run(SCHEMA_FASE_1);
     },
   },
 ];
