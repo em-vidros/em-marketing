@@ -1,4 +1,15 @@
-# Roadmap (espelha PRD §5.1)
+# Roadmap
+
+> **2026-08-25 — o roadmap ativo mudou de documento.** F0–F5 abaixo são a v1 do bot
+> (`docs/prd.md`) e ficam como registro. As fases correntes são as de
+> `docs/prd-agencia-multiagente.md` §5.1, sequenciadas em
+> `.specs/features/agencia-multiagente/PLANO.md`.
+>
+> - [x] **Fundação do MVP** — os três predicados do §5.1 provados sem chave de API. `bun run verificar`, 10 suítes, no CI.
+> - [ ] **MVP Instagram** — os quatro agentes contra as APIs reais. Bloqueado por chave da DeepSeek e billing do Gemini.
+> - [ ] **MVP blog** — três ângulos, artigo, revisão, entrega `.md` e `.txt`.
+
+## v1 do bot (histórico)
 
 > Status 2026-08-05: código de F0–F5 implementado e commitado. `[x]` aqui significa **gate validado**, não código escrito — por isso só F0 está fechada. Tudo que não depende do modelo de imagem já foi exercitado de verdade (STATE.md § Validado sem billing). Ver STATE.md § Bloqueios e docs/setup.md.
 
