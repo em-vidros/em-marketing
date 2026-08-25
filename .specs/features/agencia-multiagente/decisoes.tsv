@@ -1,0 +1,10 @@
+ts	phase	decision	why	evidence	result
+2026-08-25T14:12:28Z	frame	Segui o PRD da agência multiagente no lugar do fluxograma	O usuário mandou seguir o PRD; ele é um rewrite, não uma feature em cima do bot atual	docs/prd-agencia-multiagente.md	escopo trocado
+2026-08-25T14:12:28Z	frame	Comecei pela Fundação do MVP, não pelos agentes	Ordem é do próprio PRD §5.1, e é a única fase que se prova inteira sem chave de API	.specs/features/agencia-multiagente/PLANO.md	fase 1 aberta
+2026-08-25T14:12:28Z	frame	Confirmei que deepseek-v4-pro existe e é OpenAI-compatible	PRD depende dele; precisava saber se era premissa real antes de desenhar o adapter	https://api-docs.deepseek.com/quick_start/pricing	confirmado, sem SDK novo
+2026-08-25T14:12:28Z	design	Rodei duas explorações de design em paralelo sobre a fundação	Modelo de domínio e máquinas de estado são porta de mão única	subagentes fable e opus	rodando
+2026-08-25T14:22:03Z	design	Um banco só, migrações por PRAGMA user_version	Conferi o banco de produção: as 5 tabelas estão vazias e user_version=0, então não há nada para migrar	cópia read-only de /opt/emvidros/em-marketing/data/em-marketing.db	confirmado, 0 linhas
+2026-08-25T14:22:03Z	design	Tabela de transições com um único chokepoint transicionar(), não union discriminada	Os estados não carregam payload próprio; o que precisa de tipo são as arestas, e tabela se enumera no harness	.specs/features/agencia-multiagente/DESIGN.md	congelado
+2026-08-25T14:22:03Z	design	Cortei 6 das 14 entidades do PRD §4.5 e somei idempotency_keys	requests é 1:1 com o fluxo, artifacts é um pai sem conteúdo, task_attempts vira evento; o PRD esqueceu a tabela que o §4.6 exige	.specs/features/agencia-multiagente/DESIGN.md	8 tabelas
+2026-08-25T14:22:03Z	design	Ids de 12 chars base32 no lugar de UUID	callback_data do Telegram tem teto de 64 bytes e dois UUIDs não cabem; assim sobra folga	.specs/features/agencia-multiagente/DESIGN.md	31 bytes no pior caso
+2026-08-25T14:22:03Z	design	Prova de reinício mata o processo com SIGKILL, não fecha o banco	Fechar limpo não exercita recuperação do WAL, que é justo o que o predicado promete	scripts/verificar/reinicio.ts	planejado
