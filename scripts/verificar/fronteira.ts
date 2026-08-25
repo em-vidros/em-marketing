@@ -31,7 +31,8 @@ const REGRAS: readonly Regra[] = [
   {
     nome: "imutabilidade",
     padrao: /\bUPDATE\s+(events|approvals|artifact_versions)\b/i,
-    permitido: [],
+    // O arnês prova a rejeição escrevendo a instrução proibida contra banco temporário.
+    permitido: ["scripts/verificar/"],
     motivo: "evento, aprovação e versão de artefato são append-only",
   },
 ];
