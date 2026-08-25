@@ -1,0 +1,168 @@
+/**
+ * Prova do commit "aprovação ligada ao Telegram do Ricardo": codec sobrevive a
+ * entrada hostil, revisor errado não escreve nada, botão de rodada velha é
+ * recusado, duplo toque vira uma linha só e executarUmaVez roda o efeito uma vez.
+ */
+
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { abrirBanco } from "../../src/controle/db";
+import { migrar } from "../../src/controle/migracoes";
+import { criarFluxo, lerFluxo, transicionar } from "../../src/controle/fluxos";
+import { garantirTarefa, reivindicar, concluir } from "../../src/controle/tarefas";
+import { publicarArtefato } from "../../src/controle/artefatos";
+import { abrirRevisao, codificar, decodificar, decidir } from "../../src/controle/aprovacoes";
+import { EfeitoIndeterminado, executarUmaVez } from "../../src/controle/idempotencia";
+import type { Papel, VersaoId } from "../../src/modelos/tipos";
+
+function assert(cond: unknown, msg: string): asserts cond {
+  if (!cond) {
+    console.error(`FALHOU: ${msg}`);
+    process.exit(1);
+  }
+}
+
+const dir = mkdtempSync(join(tmpdir(), "em-mkt-aprovacao-"));
+const db = abrirBanco(join(dir, "t.db"));
+const artefatosDir = join(dir, "artefatos");
+migrar(db);
+
+const RICARDO = 111;
+const INTRUSO = 999;
+
+// codec: ida e volta, e null para qualquer coisa malformada
+const fluxoFake = "0123456789ab" as never;
+const opcaoFake = "zzzzzzzzzzzz" as never;
+for (const cb of [
+  { fluxoId: fluxoFake, stage: "prototype", acao: "aceitar", rodada: 1, opcao: opcaoFake },
+  { fluxoId: fluxoFake, stage: "package", acao: "ajustar", rodada: 42 },
+  { fluxoId: fluxoFake, stage: "copy", acao: "encerrar", rodada: 9999 },
+  { fluxoId: fluxoFake, stage: "angle", acao: "recusar_todas", rodada: 3 },
+  { fluxoId: fluxoFake, stage: "prototype", acao: "cancelar", rodada: 1 },
+] as const) {
+  const data = codificar(cb);
+  assert(Buffer.byteLength(data) <= 64, `codificado passou de 64 bytes: ${data}`);
+  assert(JSON.stringify(decodificar(data)) === JSON.stringify(cb), `ida e volta quebrou: ${data}`);
+}
+for (const lixo of [
+  null,
+  42,
+  "",
+  "a|0123456789ab|p|a|1",
+  "b|0123456789ab|p|a|1|",
+  "a|0123456789AB|p|a|1|",
+  "a|0123456789ab|z|a|1|",
+  "a|0123456789ab|p|q|1|",
+  "a|0123456789ab|p|a|0|",
+  "a|0123456789ab|p|a|1|curta",
+  "a|0123456789ab|p|a|99999|",
+  `a|0123456789ab|p|a|1|${"x".repeat(50)}`,
+  "a|0123456789ab|p|a|1|zzzzzzzzzzzé",
+]) {
+  assert(decodificar(lixo) === null, `lixo decodificou: ${JSON.stringify(lixo)}`);
+}
+
+// fluxo até a primeira revisão de protótipos
+const id = criarFluxo(db, {
+  tipo: "instagram",
+  chatId: 10,
+  solicitanteId: RICARDO,
+  pedido: { theme: "Guarda-corpo de vidro", format: "feed" },
+});
+transicionar(db, { fluxoId: id, para: "brief_confirmed", ator: "teste" });
+transicionar(db, { fluxoId: id, para: "directions_ready", ator: "teste" });
+transicionar(db, { fluxoId: id, para: "prototypes_generating", ator: "teste" });
+
+function rodarTarefa(papel: Papel, conteudos: string[], derivadaDe?: VersaoId): VersaoId[] {
+  garantirTarefa(db, lerFluxo(db, id)!);
+  const t = reivindicar(db, papel, "w")!;
+  const lease = { tarefaId: t.id, epoca: t.leaseEpoca };
+  const versoes = conteudos.map((c) =>
+    publicarArtefato(db, artefatosDir, lease, {
+      papel: papel === "diretor_de_arte" ? "qa" : "prototipo",
+      conteudo: Buffer.from(c),
+      mediaTipo: papel === "diretor_de_arte" ? "application/json" : "image/png",
+      ...(derivadaDe ? { derivadaDe } : {}),
+    }),
+  );
+  concluir(db, lease, { versoes });
+  return versoes;
+}
+
+const protos = rodarTarefa("designer", ["p1", "p2", "p3"]);
+rodarTarefa("diretor_de_arte", ['{"aprovada":true}']);
+abrirRevisao(db, id, "prototype", protos);
+assert(lerFluxo(db, id)!.estado === "awaiting_prototype_review", "revisão não abriu");
+
+const aprovacoes = () => (db.query("SELECT COUNT(*) AS n FROM approvals").get() as { n: number }).n;
+const botao = (acao: "aceitar" | "ajustar" | "recusar_todas" | "encerrar" | "cancelar", rodada: number, opcao?: VersaoId) =>
+  codificar({ fluxoId: id, stage: "prototype", acao, rodada, ...(opcao ? { opcao } : {}) });
+
+// revisor errado: recusa antes de qualquer escrita
+let r = decidir(db, { deId: INTRUSO, aprovadorId: RICARDO, data: botao("aceitar", 1, protos[0]) });
+assert(!r.ok && r.motivo === "nao_autorizado", "intruso não caiu em nao_autorizado");
+assert(aprovacoes() === 0, "intruso escreveu approval");
+
+// rodada que não é a atual: vencida
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("aceitar", 2, protos[0]) });
+assert(!r.ok && r.motivo === "aprovacao_vencida", "rodada futura não caiu em aprovacao_vencida");
+
+// ajustar: uma linha, rodada vira 2, fluxo volta a gerar na mesma transação
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1), notas: "menos texto" });
+assert(r.ok && r.estado === "prototypes_generating", "ajustar não voltou a prototypes_generating");
+const f1 = lerFluxo(db, id)!;
+assert(f1.rodada === 2 && f1.revisaoPendente === null, "ajustar não fechou a rodada");
+assert(aprovacoes() === 1, "ajustar não gravou exatamente uma approval");
+
+// sem revisão aberta, qualquer botão é incompatível
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1) });
+assert(!r.ok && r.motivo === "estado_incompativel", "botão sem revisão aberta passou");
+
+// rodada 2: revisão nova, e o botão do álbum antigo ficou uma rodada atrás
+const [v4] = rodarTarefa("designer", ["p1-ajustado"], protos[0]);
+rodarTarefa("diretor_de_arte", ['{"aprovada":true,"r":2}']);
+abrirRevisao(db, id, "prototype", [v4!]);
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1) });
+assert(!r.ok && r.motivo === "aprovacao_vencida", "botão de rodada velha não foi recusado");
+
+// aceitar exige opção, e opção da rodada velha não cobre a atual
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("aceitar", 2) });
+assert(!r.ok && r.motivo === "callback_invalido", "aceitar sem opção passou");
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("aceitar", 2, protos[1]) });
+assert(!r.ok && r.motivo === "aprovacao_vencida", "opção fora da revisão atual passou");
+
+// aceitar de verdade, e o duplo toque vira no-op
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("aceitar", 2, v4) });
+assert(r.ok && r.estado === "prototype_approved", "aceitar não aprovou");
+const aceite = db
+  .query("SELECT artifact_version_ids, opcao, reviewer_id FROM approvals WHERE decision = 'accepted'")
+  .all() as { artifact_version_ids: string; opcao: string; reviewer_id: number }[];
+assert(aceite.length === 1 && aceite[0]!.opcao === v4 && aceite[0]!.reviewer_id === RICARDO, "aceite não registrou a opção");
+assert(JSON.parse(aceite[0]!.artifact_version_ids)[0] === v4, "aceite não copiou as versões cobertas");
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("aceitar", 2, v4) });
+assert(!r.ok, "duplo toque virou segunda decisão");
+assert(aprovacoes() === 2, `duplo toque deixou ${aprovacoes()} linhas, esperava 2`);
+
+// executarUmaVez: efeito roda uma vez; chave reservada sem resultado é indeterminada
+let rodou = 0;
+const efeito = async () => {
+  rodou++;
+  return { message_id: 7 };
+};
+const u1 = await executarUmaVez(db, "entrega:x", efeito);
+const u2 = await executarUmaVez(db, "entrega:x", efeito);
+assert(u1.novo && !u2.novo && rodou === 1, "efeito rodou mais de uma vez");
+assert(u2.resultado.message_id === 7, "resultado guardado não voltou");
+db.query("INSERT INTO idempotency_keys (chave) VALUES ('entrega:morta')").run();
+let lancou = false;
+try {
+  await executarUmaVez(db, "entrega:morta", efeito);
+} catch (e) {
+  lancou = e instanceof EfeitoIndeterminado;
+}
+assert(lancou && rodou === 1, "chave reservada sem resultado não caiu em EfeitoIndeterminado");
+
+db.close();
+rmSync(dir, { recursive: true, force: true });
+console.log("ok: aprovacao");
