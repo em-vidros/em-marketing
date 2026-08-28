@@ -47,7 +47,7 @@ export interface DiretorCriativo {
 }
 
 export interface Redator {
-  /** `ajuste` é o pedido do Ricardo sobre a legenda `anterior` (US-6); sem os dois, é a primeira versão. */
+  /** `anterior` e `ajuste` chegam quando o Ricardo pede mudança só na legenda (US-6). */
   legenda(e: {
     pedido: Pedido;
     direcao: DirecaoVisual;

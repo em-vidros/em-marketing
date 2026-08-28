@@ -63,11 +63,13 @@ export const TRANSICOES_INSTAGRAM: Transicoes<EstadoInstagram> = {
   prototypes_generating: ["prototype_qa", "cancelled", "failed"],
   // volta para generating quando o diretor de arte reprova e ainda há tentativa
   prototype_qa: ["awaiting_prototype_review", "prototypes_generating", "cancelled", "failed"],
-  // "recusar todas" volta para directions_ready com rodada nova; rejected é encerrar de vez
+  // "recusar todas" volta para brief_confirmed com rodada nova, porque é esse o
+  // estado que exige direcao_criativa: em directions_ready o designer da rodada
+  // nova não acharia direção nenhuma. rejected é encerrar de vez.
   awaiting_prototype_review: [
     "prototype_approved",
     "adjustment_requested",
-    "directions_ready",
+    "brief_confirmed",
     "rejected",
     "cancelled",
   ],
@@ -197,6 +199,8 @@ export interface DirecaoVisual {
   /** Qual arquivo de logo entra na arte; logo_rule diz posição e tamanho. */
   logo_variant: "cor" | "branco";
   logo_rule: string;
+  /** Qual arquivo de logo compor. Ausente cai no colorido, que é o uso padrão. */
+  logo_variant?: "cor" | "branco";
   rationale: string;
   prohibited_elements: string[];
 }
@@ -206,4 +210,18 @@ export interface RevisaoPendente {
   stage: Estagio;
   rodada: number;
   versoes: VersaoId[];
+  /** Texto do que caiu no controle visual, mostrado junto do álbum (US-2). */
+  aviso?: string;
 }
+
+/**
+ * Etapa da conversa de um chat, gravada na tabela conversas. O que acontece
+ * antes de existir fluxo, e o texto do ajuste depois do botão, não podem morar
+ * na memória do processo: um reinício perderia o tema já digitado.
+ */
+export type EstadoConversa =
+  | { etapa: "ociosa" }
+  | { etapa: "formato"; tema: string }
+  | { etapa: "confirmacao"; fluxoId: FluxoId }
+  /** `data` é o callback de ajustar já validado, esperando a instrução em texto. */
+  | { etapa: "instrucao"; data: string };
