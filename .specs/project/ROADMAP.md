@@ -6,7 +6,7 @@
 > `.specs/features/agencia-multiagente/PLANO.md`.
 >
 > - [x] **Fundação do MVP** — os três predicados do §5.1 provados sem chave de API. `bun run verificar`, 10 suítes, no CI.
-> - [ ] **MVP Instagram** — os quatro agentes contra as APIs reais. Bloqueado por chave da DeepSeek e billing do Gemini.
+> - [ ] **MVP Instagram** — código completo em 2026-08-28 (adaptadores reais, workers, conversa do Telegram, bot v1 apagado; 13 suítes em `bun run verificar`). Gate pendente: DNS de `mkt.emvidros.com.br`, `setWebhook`, Telegram ID do Ricardo, chave da DeepSeek e billing do Gemini; depois o benchmark de dez temas e o pedido real pelo celular.
 > - [ ] **MVP blog** — três ângulos, artigo, revisão, entrega `.md` e `.txt`.
 
 ## v1 do bot (histórico)

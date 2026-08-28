@@ -22,7 +22,7 @@
 - Pegar o id completo da label "Instagram Post" → `LINEAR_LABEL_ID` (o PRD só registra o prefixo `5a33b4dc-…`).
 
 ## 5. Servidor (srv-linx-01, `ssh emvidros`)
-1. DNS (Wix): A record `mkt.emvidros.com.br` → `177.54.129.7`.
+1. DNS (Wix): A record `mkt.emvidros.com.br` → `170.247.31.241` (o IP de entrada do srv-linx-01; `177.54.129.7` é o de saída e não recebe conexão).
 2. `/etc/caddy/sites/mkt.emvidros.com.br.caddy`:
    ```
    mkt.emvidros.com.br {

@@ -15,7 +15,7 @@
 - **F2 (gate):** bot criado — `@em_marketing_bot`, token no `.env`, `getMe` ok em 2026-07-31. Faltam duas coisas self-serve: `TELEGRAM_ALLOWED_CHAT_IDS` não existe no `.env`, então a allowlist nasce vazia e `src/server.ts:22-23` descarta 100% dos updates em silêncio; e `setWebhook` nunca rodou (`getWebhookInfo` devolve `url: ""`).
 - F4: falta app Meta + Page token — developers.facebook.com exige senha/2FA. Com `PUBLISH_MODE=manual`, isso bloqueia apenas o modo `auto`, não a v1. Validar Story 1080×1920 em sandbox.
 - **F5 — provisionado em 2026-08-05, falta só o DNS.** Feito: `/etc/emvidros/em-marketing.env` (root:root 600, 11 chaves), `/opt/emvidros/em-marketing/` com o compose, container `em-marketing` no ar em `127.0.0.1:3010→3000` com as labels do watchtower, secret `WATCHTOWER_TOKEN` gravado, e o run `31024888167` **verde de ponta a ponta** (build → ghcr → watchtower 200).
-  Resta: A record `mkt.emvidros.com.br` → 177.54.129.7 (DNS na Wix, só o dono da conta faz) e `/etc/caddy/sites/mkt.emvidros.com.br.caddy` com `reverse_proxy 127.0.0.1:3010`. Sem HTTPS público não dá para rodar o `setWebhook`, então F2 fica atrás disso.
+  Resta: A record `mkt.emvidros.com.br` → 170.247.31.241 (o IP de entrada; 177.54.129.7 é o de saída e foi o registro errado até 2026-08-28) (DNS na Wix, só o dono da conta faz) e `/etc/caddy/sites/mkt.emvidros.com.br.caddy` com `reverse_proxy 127.0.0.1:3010`. Sem HTTPS público não dá para rodar o `setWebhook`, então F2 fica atrás disso.
   **Armadilha do watchtower:** se o container roda num image ID que sumiu do daemon (o build do CI retagueia o `:latest` e o anterior vira dangling), ele aborta com `Unable to update container: no available image info` — chamada devolve 200 e nada acontece. Cura: `docker compose up -d --force-recreate` para realinhar container e `:latest`. Depois disso o scan roda limpo.
 
 ## `.env` local (2026-07-31, chmod 600, fora do git)
@@ -41,15 +41,26 @@ Tudo que não passa por `IMAGE_MODEL` foi exercitado de verdade; quando a chave 
 - **Predicado 3 (entrega única).** Rodar a mesma entrega duas vezes manda um documento só, com o SHA-256 do ida e volta conferido contra o mestre. Morrer entre o envio e o recibo deixa a entrega `indeterminada` com aviso, nunca reenvio calado.
 - **Fronteira.** `bun:sqlite` só em `src/controle/db.ts`, SDK de modelo só em `src/adaptadores/`, e `UPDATE` proibido em `events`, `approvals` e `artifact_versions`. Conferido contra violação plantada.
 
-## Bloqueios da Fase 2
-- **Chave da DeepSeek.** `deepseek-v4-pro` é real e OpenAI-compatible em `https://api.deepseek.com/chat/completions`. Falta a chave com créditos. Sem ela `ADAPTADORES=real` levanta erro nomeando a variável.
-- **Billing do Gemini.** Continua o bloqueio de 2026-07-31 para o modelo de imagem. O caminho determinístico inteiro (dimensão, sRGB, PNG mestre, preview) já roda com o designer falso, então o que falta sem prova é só a qualidade da imagem.
+## Fase 2 da agência — código fechado em 2026-08-28, gate aberto
+Desenho em `.specs/features/agencia-multiagente/DESIGN-fase2.md`, revisado por um crítico antes de implementar (7 furos fechados, entre eles recusar todas indo para o estado errado e o laço de QA sem fim com o designer falso). `bun run verificar` roda 13 suítes em ~60 s; as três novas são `adaptadores` (parse e prompts sem rede), `workers` (o caminho inteiro com fakes, sete casos) e `ponta-a-ponta` (o loop do Ricardo dirigido por updates sintéticos do Telegram, 14 passadas).
+- O bot v1 saiu da árvore (`src/brain`, `art`, `caption`, `publish`, `db`, `instagram`, `scheduler`, `linear`, `telegram/api.ts`, `scripts/spike-arte.ts`, `styles/map.json`). A migração 003 apaga as cinco tabelas dele no boot, logando a contagem.
+- `src/server.ts` é só HTTP; a conversa mora em `src/telegram/conversa.ts` como tabela etapa × evento; os workers em `src/workers/`; os adaptadores reais em `src/adaptadores/{deepseek,gemini,telegram,linear}.ts`.
+- Perfis: `fake` (arnês), `ensaio` (modelos falsos, Telegram real; é o que produção deve usar), `real` (exige `DEEPSEEK_API_KEY`, `GEMINI_API_KEY`, `TELEGRAM_BOT_TOKEN`, `LINEAR_API_KEY`, `LINEAR_LABEL_ID`).
+- `/etc/emvidros/em-marketing.env` ainda não tem `ADAPTADORES`, então o container sobe em `fake` e o Telegram real não entra. Falta acrescentar `ADAPTADORES=ensaio`, `APROVADOR_TELEGRAM_ID=<id do Ricardo>` e `ARTIFACTS_DIR=data/artefatos` (o trecho pronto está em `/tmp/em-mkt-fase2/env-fase2.txt`; o classificador do assistente barra escrita em `/etc`). `TELEGRAM_ALLOWED_CHAT_IDS` continua vazio.
+
+## Bloqueios da Fase 2 (gate)
+- **DNS.** `mkt.emvidros.com.br` aponta para 177.54.129.7, o IP de saída do servidor. Quem entra é 170.247.31.241 (é para onde `comissoes.emvidros.com.br` aponta). O Let's Encrypt falha nos dois desafios (log do Caddy de 2026-08-28 10:32) e o HTTPS não sobe. O vhost em `/etc/caddy/sites/mkt.emvidros.com.br.caddy` e a linha em `/etc/caddy/allowed-hosts` já existem. Trocar o A record na Wix destrava o certificado e, com ele, o `setWebhook`.
+- **Telegram ID do Ricardo** em `APROVADOR_TELEGRAM_ID` e o chat dele em `TELEGRAM_ALLOWED_CHAT_IDS`. Sem os dois, o bot descarta tudo em silêncio e nada é aprovável (falha segura).
+- **Chave da DeepSeek** e **billing do Gemini** para o modelo de imagem. Até lá, `ensaio` roda o loop com arte falsa.
+- **Benchmark de dez temas** (§3.5) e o pedido real do Ricardo pelo celular: são a comprovação da fase e dependem de tudo acima.
 
 ## Lições
 - 2026-07-31 — Isolar a chamada do modelo numa fronteira única (`generateArt`) fez o bloqueio de billing custar uma função em vez do sistema inteiro: F2, F3 e F5 seguiram entregáveis.
 - 2026-08-05 — Dá para validar quase todo o pipeline de arte sem o modelo: injetar um PNG do tamanho exato que o NB2 devolve exercita resize/crop/JPEG/sRGB de ponta a ponta. O que sobra sem prova é só a qualidade da imagem, que é justamente o que precisa de olho humano.
 
 - 2026-08-25 — Delegar duas correntes na mesma árvore de trabalho custa caro: um agente rodou `git add` da árvore inteira apesar da diretiva de caminho explícito e levou junto cinco arquivos do outro, e as duas correntes escreveram duas contas diferentes de `brandVersionId` para a mesma árvore. Da próxima vez, um worktree por corrente.
+- 2026-08-28 — Crítico antes do código paga: um passe de leitura sobre o `DESIGN-fase2.md` achou sete furos que só apareceriam com o Ricardo no celular (recusar todas criava a tarefa do designer, não do diretor criativo; o laço de QA nunca fechava porque o dedupe por conteúdo devolvia a mesma versão). Custou 6 minutos.
+- 2026-08-28 — Worktree de agente nasce em `origin/main`, não na `main` local: três agentes começaram 2 e 16 commits atrás. Antes de delegar, empurrar a `main` ou dar `merge --ff-only main` dentro do worktree.
 - 2026-08-25 — Rodar o arnês dentro da imagem, e não só no shell da máquina, é o que achou o fontconfig: sem ele o `resvg` cai num fallback e a mesma entrada devolve bytes diferentes. Portão que só roda num ambiente não prova o outro.
 
 ## Todos / Deferred
