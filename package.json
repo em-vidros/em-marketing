@@ -21,7 +21,6 @@
   ],
   "scripts": {
     "start": "bun src/server.ts",
-    "spike": "bun scripts/spike-arte.ts",
     "typecheck": "tsc --noEmit",
     "verificar": "bun scripts/verificar/todos.ts"
   }

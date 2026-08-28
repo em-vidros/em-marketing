@@ -1,81 +1,141 @@
-import { Elysia, status } from "elysia";
+/**
+ * Só HTTP e boot. O servidor não decide nada de conteúdo: recebe o update do
+ * Telegram, confere segredo e allowlist, responde 200 e entrega a conversa fora
+ * da requisição. O Telegram reenvia o update quando a resposta demora, e
+ * gerar arte dentro do handler garantiria a demora (PRD §4.11).
+ *
+ * No boot ele sobe o plano de controle, um laço por papel e o tique que
+ * reconcilia e apresenta as revisões abertas. Nada aqui guarda estado: o processo
+ * pode morrer entre dois passos e o reconciliador recompõe o trabalho pelo banco.
+ */
+
 import { timingSafeEqual } from "node:crypto";
-import { db } from "./db";
-import { brainTurn } from "./brain";
-import { startScheduler } from "./scheduler";
-import { startCalendar } from "./scheduler/calendar";
-import { answerCallbackQuery, sendChatAction, sendMessage } from "./telegram/api";
+import { Elysia, status } from "elysia";
+import { carregarAdaptadores, perfilAtual } from "./adaptadores/index";
+import { criarControle } from "./controle/api";
+import type { Papel } from "./modelos/tipos";
+import { chatDoUpdate, criarConversa } from "./telegram/conversa";
+import { apresentarRevisoes } from "./workers/apresentador";
+import type { AoFalhar } from "./workers/laco";
+import { iniciarWorkers } from "./workers/laco";
 
-const ALLOWED = new Set(
-  (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? "").split(",").map((s) => Number(s.trim())).filter(Boolean),
-);
+const PAPEIS: readonly Papel[] = [
+  "diretor_criativo",
+  "redator",
+  "designer",
+  "diretor_de_arte",
+  "operacoes",
+];
 
-function secretOk(header: string | undefined): boolean {
-  const expected = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
-  if (!header || !expected || header.length !== expected.length) return false;
-  return timingSafeEqual(Buffer.from(header), Buffer.from(expected));
+const TIQUE_MS = 30_000;
+
+function texto(nome: string, padrao: string): string {
+  return process.env[nome]?.trim() || padrao;
 }
 
-async function handleUpdate(update: any) {
-  const msg = update.message;
-  const cb = update.callback_query;
-  const chatId: number | undefined = msg?.chat?.id ?? cb?.message?.chat?.id;
-  if (!chatId || !ALLOWED.has(chatId)) return; // allowlist — silêncio para desconhecidos
+const perfil = perfilAtual();
+const adaptadores = carregarAdaptadores();
 
-  if (cb) {
-    await answerCallbackQuery(cb.id);
-    const [action, a = "", b = ""] = String(cb.data).split(":");
-    // callbacks determinísticos viram eventos para o cérebro com estado já gravado
-    if (action === "fmt") {
-      db.query("UPDATE posts SET formato = ? WHERE id = ?").run(a, Number(b));
-      await brainTurn(chatId, `[sistema] O usuário escolheu o formato "${a}" nos botões. Prossiga o fluxo (headline → 3 artes).`);
-    } else if (action === "pick") {
-      db.query("UPDATE posts SET chosen = ?, status = 'chosen' WHERE id = ?").run(Number(a), Number(b));
-      await brainTurn(chatId, `[sistema] O usuário escolheu a variação v${a}. Confirme, descarte as outras e prossiga (derivar story se formato=ambos; legenda se inclui feed; salvar no Linear; oferecer Entregar pra publicar agora/Agendar lembrete/Só arquivar).`);
-    } else if (action === "redo") {
-      await brainTurn(chatId, `[sistema] O usuário pediu para refazer as 3 artes. Gere novamente.`);
-    } else if (action === "recap") {
-      await brainTurn(chatId, `[sistema] O usuário pediu para reescrever a legenda.`);
-    }
-    return;
-  }
+const aprovadorId = Number(texto("APROVADOR_TELEGRAM_ID", "0")) || 0;
+if (aprovadorId === 0) {
+  console.warn(
+    "APROVADOR_TELEGRAM_ID vazio: nenhum botão de aprovação vai passar. Preencha com o Telegram ID do Ricardo.",
+  );
+}
 
-  if (msg?.text) {
-    await sendChatAction(chatId); // resposta em ≤3 s (US-1)
-    if (msg.text.startsWith("/agenda")) {
-      await brainTurn(chatId, "[sistema] O usuário mandou /agenda — liste a fila com listar_agenda.");
-      return;
-    }
-    if (msg.text.startsWith("/start")) {
-      await sendMessage(chatId, "Oi! Sou o agente de marketing da EM Vidros 🩵\nMe diga que post você quer — ex.: _\"cria um post pro dia do vidraceiro, 18 de maio\"_.", { parse_mode: "Markdown" });
-      return;
-    }
-    await brainTurn(chatId, msg.text);
+const controle = criarControle({
+  caminhoDb: texto("DB_PATH", "data/em-marketing.db"),
+  adaptadores,
+  aprovadorId,
+  artefatosDir: texto("ARTIFACTS_DIR", "data/artefatos"),
+});
+
+/** US-9: quem falhou, se ainda vai tentar, e nada de terceiro aviso na mesma tarefa. */
+const aoFalhar: AoFalhar = (_fluxoId, chatId, tipo, mensagem, vaiTentarDeNovo) => {
+  const desfecho = vaiTentarDeNovo ? "Vou tentar de novo." : "Parou; precisa de alguém olhar.";
+  void adaptadores.telegram
+    .enviarMensagem(chatId, `A etapa ${tipo} falhou: ${mensagem}. ${desfecho}`)
+    .catch((erro) => console.error(`aviso de falha não chegou ao chat ${chatId}: ${erro}`));
+};
+
+const trabalhando = iniciarWorkers({
+  controle: controle.paraWorkers,
+  adaptadores,
+  papeis: PAPEIS,
+  aoFalhar,
+});
+
+const tique = setInterval(() => {
+  try {
+    controle.reconciliar();
+  } catch (erro) {
+    console.error(`reconciliador: ${erro}`);
   }
+  void apresentarRevisoes({ controle: controle.paraWorkers, adaptadores }).catch((erro) =>
+    console.error(`apresentador: ${erro}`),
+  );
+}, TIQUE_MS);
+
+const conversa = criarConversa({ entrada: controle.paraTelegram, telegram: adaptadores.telegram, aprovadorId });
+
+const PERMITIDOS = new Set(
+  (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? "")
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isSafeInteger(n) && n !== 0),
+);
+
+/** Comparação de tamanho antes do timingSafeEqual, que lança quando os bytes diferem em número. */
+function segredoConfere(cabecalho: string | undefined): boolean {
+  const esperado = process.env.TELEGRAM_WEBHOOK_SECRET ?? "";
+  if (!cabecalho || !esperado) return false;
+  const a = Buffer.from(cabecalho, "utf8");
+  const b = Buffer.from(esperado, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
 }
 
 const app = new Elysia()
   .get("/health", () => ({ ok: true, ts: new Date().toISOString() }))
-  .get("/media/:id", ({ params }) => {
-    const row = db.query("SELECT path, expired FROM media WHERE id = ?").get(params.id) as any;
-    if (!row || row.expired) return status(404, "not found");
-    return new Response(Bun.file(row.path), { headers: { "content-type": "image/jpeg" } });
-  })
   .post(
     "/webhooks/telegram",
     async ({ request, headers }) => {
-      if (!secretOk(headers["x-telegram-bot-api-secret-token"])) return status(401, "unauthorized");
-      const raw = await request.text();
-      const update = JSON.parse(raw);
-      // responde 200 imediatamente; processa em background
-      queueMicrotask(() => handleUpdate(update).catch((e) => console.error("update error:", e)));
+      if (!segredoConfere(headers["x-telegram-bot-api-secret-token"])) return status(401, "unauthorized");
+      let update: unknown;
+      try {
+        update = JSON.parse(await request.text());
+      } catch {
+        return status(400, "bad request");
+      }
+      const chatId = chatDoUpdate(update);
+      // Silêncio para chat de fora: responder já contaria como resposta do bot.
+      if (chatId === null || !PERMITIDOS.has(chatId)) return { ok: true };
+      queueMicrotask(() => {
+        void conversa.tratar(update);
+      });
       return { ok: true };
     },
-    { parse: "none" as any },
+    { parse: "none" as never },
   )
   .listen(Number(process.env.PORT ?? 3000));
 
-startScheduler();
-startCalendar();
+console.log(
+  `em-marketing ouvindo em :${app.server?.port} | adaptadores=${perfil} | ` +
+    `aprovador=${aprovadorId || "nenhum"} | chats permitidos=${PERMITIDOS.size}`,
+);
 
-console.log(`em-marketing ouvindo em :${app.server?.port}`);
+let parando = false;
+
+/** Tarefa em voo perde a lease e volta pela fila no boot seguinte; é o desenho da Fase 1. */
+async function parar(sinal: string): Promise<void> {
+  if (parando) return;
+  parando = true;
+  console.log(`${sinal}: parando`);
+  clearInterval(tique);
+  trabalhando.parar();
+  await app.stop();
+  controle.fechar();
+  process.exit(0);
+}
+
+process.on("SIGTERM", () => void parar("SIGTERM"));
+process.on("SIGINT", () => void parar("SIGINT"));

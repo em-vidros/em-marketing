@@ -1,9 +1,9 @@
 # em-marketing
 
-Agente de marketing da EM Vidros no Telegram: gera 3 variações de arte (Gemini Nano Banana 2), escreve legenda no tom da marca, registra no Linear e publica/agenda no Instagram @emvidros.
+Agência multiagente de marketing da EM Vidros no Telegram: o Ricardo manda um tema, escolhe Feed, Stories ou os dois, revisa três prévias com botões, aprova e baixa o mestre. O registro fica no Linear; publicar no Instagram continua manual.
 
-- **Requisitos:** `docs/prd.md` · **Setup manual:** `docs/setup.md` · **Estado do projeto:** `.specs/project/`
+- **Requisitos:** `docs/prd-agencia-multiagente.md` · **Desenho:** `.specs/features/agencia-multiagente/` · **Estado do projeto:** `.specs/project/`
 - **Agência:** times e agentes em `agencia/` (marketing, operações, vendas)
 - **Rodar:** `bun install && bun start` (variáveis em `.env.example`)
-- **Spike de arte (gate da Fase 1):** `bun run spike`
+- **Provar sem rede e sem chave:** `bun run verificar`
 - **Deploy:** push na `main` → GH Actions → ghcr → watchtower (srv-linx-01, `mkt.emvidros.com.br`)

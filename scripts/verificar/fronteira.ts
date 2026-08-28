@@ -19,14 +19,20 @@ const REGRAS: readonly Regra[] = [
   {
     nome: "banco",
     padrao: /bun:sqlite/,
-    permitido: ["src/controle/db.ts", "src/db/index.ts"],
+    permitido: ["src/controle/db.ts"],
     motivo: "só o módulo de banco abre conexão; o resto recebe as funções do controle",
   },
   {
     nome: "modelo",
     padrao: /@google\/genai|generativelanguage\.googleapis\.com|api\.deepseek\.com/,
-    permitido: ["src/adaptadores/", "src/art/", "src/brain/", "src/caption/"],
-    motivo: "SDK e host de modelo só em src/adaptadores/ e no bot v1 que cai na Fase 2",
+    permitido: ["src/adaptadores/"],
+    motivo: "SDK e host de modelo só em src/adaptadores/",
+  },
+  {
+    nome: "efeito externo",
+    padrao: /api\.telegram\.org|api\.linear\.app/,
+    permitido: ["src/adaptadores/"],
+    motivo: "quem fala com o Telegram e com o Linear é a porta, e o resto recebe a porta",
   },
   {
     nome: "imutabilidade",
