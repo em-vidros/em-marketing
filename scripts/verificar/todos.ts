@@ -15,6 +15,7 @@ const SUITES = [
   "lease",
   "artefatos",
   "arte-offline",
+  "adaptadores",
   "aprovacao",
   "controle",
   "reinicio",
