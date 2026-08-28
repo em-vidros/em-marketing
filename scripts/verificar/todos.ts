@@ -18,6 +18,7 @@ const SUITES = [
   "adaptadores",
   "aprovacao",
   "controle",
+  "workers",
   "reinicio",
 ] as const;
 
