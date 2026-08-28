@@ -6,7 +6,8 @@
 import type { Banco } from "./db";
 import { emTransacao } from "./db";
 
-const TABELAS_LEGADAS = ["conversations", "posts", "queue", "media", "calendar_sent"] as const;
+/** Ordem de descarte: queue referencia posts, então cai antes dele. */
+const TABELAS_LEGADAS = ["queue", "media", "calendar_sent", "conversations", "posts"] as const;
 
 /** DDL verbatim de src/db/index.ts mais a calendar_sent de src/scheduler/calendar.ts. */
 const SCHEMA_LEGADO = `
@@ -189,6 +190,24 @@ CREATE TRIGGER artifact_versions_sem_delete BEFORE DELETE ON artifact_versions
 BEGIN SELECT RAISE(ABORT, 'artifact_versions é append-only'); END;
 `;
 
+/**
+ * O que a Fase 2 soma: a conversa por chat, durável porque um reinício não pode
+ * perder o tema que o Ricardo já digitou, e o par de colunas que a política
+ * repetirSeFalhou consulta. `reservado_em` é o instante da reserva em curso,
+ * reescrito a cada tentativa nova; `criado_em` continua sendo a primeira vez que
+ * a chave apareceu.
+ */
+const SCHEMA_FASE_2 = `
+CREATE TABLE conversas (
+  chat_id INTEGER PRIMARY KEY,
+  estado_json TEXT NOT NULL,
+  atualizado_em TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+ALTER TABLE idempotency_keys ADD COLUMN tentativas INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE idempotency_keys ADD COLUMN reservado_em TEXT;
+`;
+
 const MIGRACOES: Migracao[] = [
   {
     versao: 1,
@@ -205,6 +224,24 @@ const MIGRACOES: Migracao[] = [
     versao: 2,
     aplicar(db) {
       db.run(SCHEMA_FASE_1);
+    },
+  },
+  /**
+   * O bot v1 sai da árvore junto com esta migração, e as tabelas dele saem
+   * junto. Sem guarda contra linha existente: o v1 escreve em `conversations` a
+   * cada mensagem que processa, e um boot travado por causa de uma linha de
+   * conversa velha custaria mais que a linha vale. A contagem vai para o log.
+   */
+  {
+    versao: 3,
+    aplicar(db) {
+      const contagens = TABELAS_LEGADAS.map((t) => {
+        const { n } = db.query(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number };
+        db.run(`DROP TABLE ${t}`);
+        return `${t}=${n}`;
+      });
+      console.log(`migração 003 descartou o schema do bot v1: ${contagens.join(" ")}`);
+      db.run(SCHEMA_FASE_2);
     },
   },
 ];

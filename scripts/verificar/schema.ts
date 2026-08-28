@@ -40,6 +40,7 @@ const NOVAS = [
   "deliveries",
   "idempotency_keys",
   "events",
+  "conversas",
 ];
 for (const t of NOVAS) {
   assert(
@@ -47,6 +48,24 @@ for (const t of NOVAS) {
     `tabela ${t} não materializou`,
   );
 }
+for (const t of ["conversations", "posts", "queue", "media", "calendar_sent"]) {
+  assert(
+    !db.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t),
+    `tabela ${t} do bot v1 sobreviveu à migração 003`,
+  );
+}
+
+const colunas = (db.query("PRAGMA table_info(idempotency_keys)").all() as { name: string }[]).map((c) => c.name);
+for (const c of ["tentativas", "reservado_em"]) {
+  assert(colunas.includes(c), `idempotency_keys sem a coluna ${c} que a política repetirSeFalhou lê`);
+}
+
+// a conversa é durável e uma por chat
+db.run("INSERT INTO conversas (chat_id, estado_json) VALUES (7, '{\"etapa\":\"ociosa\"}')");
+rejeita(
+  () => db.run("INSERT INTO conversas (chat_id, estado_json) VALUES (7, '{\"etapa\":\"ociosa\"}')"),
+  "conversas aceitou dois estados para o mesmo chat",
+);
 
 // linhas mínimas satisfazendo as FKs
 db.run("INSERT INTO brand_versions (id, sha256, brandbook, voz, tokens, estilos) VALUES ('b', 's', '', '', '{}', '{}')");

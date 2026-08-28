@@ -18,6 +18,8 @@ function assert(cond: unknown, msg: string): asserts cond {
   }
 }
 
+const LEGADAS = ["conversations", "posts", "queue", "media", "calendar_sent"] as const;
+
 const dir = mkdtempSync(join(tmpdir(), "em-mkt-migracoes-"));
 const versaoDe = (db: ReturnType<typeof abrirBanco>) =>
   (db.query("PRAGMA user_version").get() as { user_version: number }).user_version;
@@ -28,10 +30,14 @@ const schemaDe = (db: ReturnType<typeof abrirBanco>) =>
 const db1 = abrirBanco(join(dir, "novo.db"));
 migrar(db1);
 assert(versaoDe(db1) === VERSAO_ALVO, `user_version ${versaoDe(db1)} != alvo ${VERSAO_ALVO}`);
-for (const t of ["conversations", "posts", "queue", "media", "calendar_sent"]) {
+for (const t of LEGADAS) {
   const linha = db1.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t);
-  assert(linha, `tabela legada ${t} não materializou`);
+  assert(!linha, `tabela legada ${t} sobreviveu à migração 003`);
 }
+assert(
+  db1.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversas'").get(),
+  "migração 003 não criou conversas",
+);
 const antes = schemaDe(db1);
 migrar(db1);
 assert(schemaDe(db1) === antes, "segunda migração alterou o schema");
@@ -48,10 +54,22 @@ CREATE TABLE IF NOT EXISTS media (id TEXT PRIMARY KEY, path TEXT NOT NULL, expir
 CREATE TABLE IF NOT EXISTS calendar_sent (year INTEGER, mmdd TEXT, PRIMARY KEY (year, mmdd));
 `);
 db2.run("INSERT INTO media (id, path) VALUES ('abc', '/tmp/x.png')");
+db2.run("INSERT INTO conversations (chat_id, interaction_id) VALUES (5, 'i1')");
+// Linha do v1 não trava o boot. O bot v1 escreve em conversations a cada mensagem
+// que processa, e parar a subida por causa de uma conversa velha custaria mais do
+// que a linha vale; a contagem vai para o log antes do descarte.
 migrar(db2);
 assert(versaoDe(db2) === VERSAO_ALVO, "migração não avançou user_version no arquivo de produção");
-const media = db2.query("SELECT id, path FROM media").all() as { id: string; path: string }[];
-assert(media.length === 1 && media[0]!.id === "abc", "migração tocou em dado existente");
+for (const t of LEGADAS) {
+  assert(
+    !db2.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(t),
+    `tabela ${t} com linha do v1 sobreviveu à migração 003`,
+  );
+}
+assert(
+  db2.query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'conversas'").get(),
+  "migração 003 não criou conversas no arquivo de produção",
+);
 db2.close();
 
 // ids
