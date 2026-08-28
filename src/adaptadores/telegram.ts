@@ -11,7 +11,8 @@
 
 import type { PortaTelegram } from "./tipos";
 
-const BASE = "https://api.telegram.org";
+/** Exportado para o arnês conferir a URL sem repetir o host fora deste diretório. */
+export const BASE_TELEGRAM = "https://api.telegram.org";
 const MAX_ALBUM = 10;
 
 export type Buscador = (url: string | URL | Request, init?: RequestInit) => Promise<Response>;
@@ -62,7 +63,7 @@ export class TelegramReal implements PortaTelegram {
     corpo: string | FormData,
     cabecalhos?: Record<string, string>,
   ): Promise<unknown> {
-    const resposta = await this.buscar(`${BASE}/bot${this.token}/${metodo}`, {
+    const resposta = await this.buscar(`${BASE_TELEGRAM}/bot${this.token}/${metodo}`, {
       method: "POST",
       body: corpo,
       ...(cabecalhos ? { headers: cabecalhos } : {}),
@@ -179,7 +180,7 @@ export class TelegramReal implements PortaTelegram {
   }
 
   async baixarArquivo(filePath: string): Promise<Buffer> {
-    const resposta = await this.buscar(`${BASE}/file/bot${this.token}/${filePath}`);
+    const resposta = await this.buscar(`${BASE_TELEGRAM}/file/bot${this.token}/${filePath}`);
     if (!resposta.ok)
       throw new Error(`Telegram baixarArquivo: HTTP ${resposta.status} em ${filePath}`);
     return Buffer.from(await resposta.arrayBuffer());

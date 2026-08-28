@@ -14,7 +14,7 @@ import { createHash } from "node:crypto";
 import type { DirecaoVisual, Pedido } from "../modelos/tipos";
 import type { Artigo, ContextoMarca, DiretorCriativo, Redator } from "./tipos";
 
-const ENDPOINT = "https://api.deepseek.com/chat/completions";
+export const ENDPOINT_DEEPSEEK = "https://api.deepseek.com/chat/completions";
 export const MODELO_TEXTO = "deepseek-v4-pro";
 const TIMEOUT_MS = 120_000;
 
@@ -384,7 +384,7 @@ export class ClienteDeepSeek {
   ) {}
 
   async completar(mensagens: readonly Mensagem[]): Promise<unknown> {
-    const resposta = await this.buscar(ENDPOINT, {
+    const resposta = await this.buscar(ENDPOINT_DEEPSEEK, {
       method: "POST",
       headers: {
         "content-type": "application/json",
