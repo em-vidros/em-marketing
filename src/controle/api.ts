@@ -116,6 +116,8 @@ export interface ControlePlano {
   lerArtefato(id: VersaoId): ArtefatoLido;
   resumoArtefato(id: VersaoId): ResumoArtefato;
   artefatosDoFluxo(fluxoId: FluxoId): readonly ResumoArtefato[];
+  /** O executor de entrega confere o desfecho: executarEntregas transiciona sozinho. */
+  estadoDoFluxo(fluxoId: FluxoId): EstadoQualquer;
   revisoesAbertas(): readonly RevisaoAberta[];
   executarEntregas(fluxoId: FluxoId): Promise<void>;
   reconciliar(): void;
@@ -275,6 +277,11 @@ export function criarControle(opts: {
       return paraResumo(linha);
     },
     artefatosDoFluxo: (fluxoId) => artefatosDoFluxo(db, fluxoId),
+    estadoDoFluxo(fluxoId) {
+      const fluxo = lerFluxo(db, fluxoId);
+      if (!fluxo) throw new Error(`fluxo ${fluxoId} não existe`);
+      return fluxo.estado;
+    },
     revisoesAbertas: () => revisoesAbertas(db),
     executarEntregas: (fluxoId) => executarEntregas(db, opts.adaptadores, fluxoId),
     reconciliar: () => reconciliar(db),

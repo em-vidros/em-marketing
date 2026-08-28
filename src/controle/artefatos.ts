@@ -68,17 +68,26 @@ export function publicarArtefato(db: Banco, dir: string, lease: Lease, a: NovoAr
     let numero: number;
     if (a.derivadaDe) {
       const mae = db
-        .query("SELECT workflow_id, linhagem_id FROM artifact_versions WHERE id = ?")
-        .get(a.derivadaDe) as { workflow_id: string; linhagem_id: string } | null;
+        .query("SELECT workflow_id, linhagem_id, papel FROM artifact_versions WHERE id = ?")
+        .get(a.derivadaDe) as { workflow_id: string; linhagem_id: string; papel: string } | null;
       if (!mae) throw new Error(`derivadaDe ${a.derivadaDe} não existe`);
       if (mae.workflow_id !== tarefa.workflow_id) {
         throw new Error(`derivadaDe ${a.derivadaDe} é de outro fluxo`);
       }
-      linhagemId = mae.linhagem_id;
-      const { m } = db
-        .query("SELECT MAX(versao) AS m FROM artifact_versions WHERE linhagem_id = ?")
-        .get(linhagemId) as { m: number };
-      numero = m + 1;
+      if (mae.papel === a.papel) {
+        // Mesmo papel é versão nova da mesma peça: o ajuste da US-3 e o Stories
+        // que sai do Feed aprovado na US-4. Papel diferente é acompanhamento do
+        // mestre (preview, parecer), e continuar a linhagem faria o número de
+        // versão que o Ricardo vê contar coisas que ele nunca escolheu.
+        linhagemId = mae.linhagem_id;
+        const { m } = db
+          .query("SELECT MAX(versao) AS m FROM artifact_versions WHERE linhagem_id = ?")
+          .get(linhagemId) as { m: number };
+        numero = m + 1;
+      } else {
+        linhagemId = gerarId();
+        numero = 1;
+      }
     } else {
       linhagemId = gerarId();
       numero = 1;
