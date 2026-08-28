@@ -465,7 +465,12 @@ const chamadas = (b: Bancada, metodo: string) => b.telegram.chamadas.filter((c) 
     void b.apresentar();
   }, 10);
   const limite = Date.now() + 60_000;
-  while (b.controle.inspecionar.fluxo(id)!.estado !== "awaiting_prototype_review") {
+  // Esperar só pelo estado corre com o tique: quem abre a revisão é o concluir, e o
+  // álbum sai no tique seguinte. Sair antes dele acusaria o apresentador de omissão.
+  while (
+    b.controle.inspecionar.fluxo(id)!.estado !== "awaiting_prototype_review" ||
+    chamadas(b, "enviarAlbum").length === 0
+  ) {
     assert(Date.now() < limite, "laço: os workers com timer não chegaram à revisão em 60s");
     await new Promise((r) => setTimeout(r, 20));
   }
