@@ -194,6 +194,8 @@ export interface DirecaoVisual {
   main_element: string;
   headline: string;
   support_text?: string;
+  /** Qual arquivo de logo entra na arte; logo_rule diz posição e tamanho. */
+  logo_variant: "cor" | "branco";
   logo_rule: string;
   rationale: string;
   prohibited_elements: string[];

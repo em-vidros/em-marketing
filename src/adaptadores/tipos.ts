@@ -42,7 +42,14 @@ export interface DiretorCriativo {
 }
 
 export interface Redator {
-  legenda(e: { pedido: Pedido; direcao: DirecaoVisual; marca: ContextoMarca }): Promise<string>;
+  /** `ajuste` é o pedido do Ricardo sobre a legenda `anterior` (US-6); sem os dois, é a primeira versão. */
+  legenda(e: {
+    pedido: Pedido;
+    direcao: DirecaoVisual;
+    marca: ContextoMarca;
+    anterior?: string;
+    ajuste?: string;
+  }): Promise<string>;
   angulos(e: { tema: string; marca: ContextoMarca }): Promise<readonly { titulo: string; angulo: string }[]>;
   artigo(e: {
     titulo: string;

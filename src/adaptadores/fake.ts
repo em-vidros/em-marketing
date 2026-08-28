@@ -56,6 +56,7 @@ interface Estilo {
   readonly composicao: string;
   readonly tipografia: string;
   readonly elementoPrincipal: string;
+  readonly logoVariante: "cor" | "branco";
   readonly regraLogo: string;
   /** Ordem fixa: fundo, acento, apoio, texto — o designer falso lê por posição. */
   readonly paleta: readonly string[];
@@ -69,6 +70,7 @@ const ESTILOS: readonly Estilo[] = [
     composicao: "fundo areia com muito respiro, headline grande alinhada à esquerda, herói centralizado abaixo",
     tipografia: "Montserrat Bold no headline, Inter no apoio",
     elementoPrincipal: "objeto 3D de vidro translúcido teal ligado ao tema",
+    logoVariante: "cor",
     regraLogo: "logo colorido pequeno no rodapé, discreto",
     paleta: [cor.neutral.areia, cor.primary.tealEM, cor.accent.tealVivo, cor.text.carvao],
     proibidos: ["sombra dramática", "gradiente pesado", "foto de banco de imagem"],
@@ -79,6 +81,7 @@ const ESTILOS: readonly Estilo[] = [
     composicao: "texto ocupa 80% da composição, alinhamento assimétrico à esquerda, barra teal vertical",
     tipografia: "Montserrat Black gigante, entrelinha apertada",
     elementoPrincipal: "a própria frase, com palavras alternando teal e carvão",
+    logoVariante: "cor",
     regraLogo: "logo colorido no canto, com a assinatura imagine em vidro",
     paleta: [cor.neutral.branco, cor.primary.tealEM, cor.accent.tealVivo, cor.text.carvao],
     proibidos: ["foto", "render 3D", "ilustração", "texto centralizado"],
@@ -89,6 +92,7 @@ const ESTILOS: readonly Estilo[] = [
     composicao: "herói 3D saindo da borda, blocos teal arredondados como janelas de informação",
     tipografia: "Montserrat ExtraBold no headline, apoio dentro dos blocos teal",
     elementoPrincipal: "render fotorrealista do produto de vidro com reflexo especular",
+    logoVariante: "cor",
     regraLogo: "logo colorido no rodapé, fora do herói",
     paleta: [cor.neutral.cinza, cor.accent.tealVivo, cor.primary.tealEM, cor.text.carvao],
     proibidos: ["overlay teal pesado", "fundo escuro", "textura de confete"],
@@ -99,6 +103,7 @@ const ESTILOS: readonly Estilo[] = [
     composicao: "fundo quase-preto com spotlight, herói iluminado ao centro e muito ar em volta",
     tipografia: "Montserrat Bold em branco, tracking generoso",
     elementoPrincipal: "objeto de vidro teal com glow, mood de showroom noturno",
+    logoVariante: "branco",
     regraLogo: "logo branco, versão invertida oficial",
     paleta: [cor.dark.quasePreto, cor.accent.tealVivo, cor.primary.tealEM, cor.neutral.branco],
     proibidos: ["cor alegre", "elemento lúdico", "fundo claro"],
@@ -109,6 +114,7 @@ const ESTILOS: readonly Estilo[] = [
     composicao: "fundo azul-céu texturizado, balões cromados e confete discreto, skyline no rodapé",
     tipografia: "Montserrat ExtraBold com uma ou duas palavras em script inclinado",
     elementoPrincipal: "numeral gigante com outline branco e sombra petróleo",
+    logoVariante: "cor",
     regraLogo: "logo colorido no rodapé, junto da silhueta da cidade",
     paleta: [cor.festive.azulCeu, cor.primary.tealEM, cor.festive.prata, cor.deep.petroleo],
     proibidos: ["tom memorial", "fundo escuro", "layout vazio demais"],
@@ -119,6 +125,7 @@ const ESTILOS: readonly Estilo[] = [
     composicao: "foto documental da fábrica com faixa de texto caixa-alta por cima",
     tipografia: "Montserrat ExtraBold branco em caixa-alta, kicker em pill teal",
     elementoPrincipal: "equipe ou porta-voz real, luz industrial de ambiente",
+    logoVariante: "branco",
     regraLogo: "logo branco sobre a faixa escura",
     paleta: [cor.text.carvao, cor.primary.tealEM, cor.deep.petroleo, cor.neutral.branco],
     proibidos: ["foto de banco de imagem", "grading saturado", "render 3D"],
@@ -205,6 +212,7 @@ export class FakeDiretorCriativo implements DiretorCriativo {
         main_element: estilo.elementoPrincipal,
         headline: enquadramento.headline(pedido.theme),
         support_text: enquadramento.apoio,
+        logo_variant: estilo.logoVariante,
         logo_rule: estilo.regraLogo,
         rationale: `${estilo.territorio} aplicado a "${pedido.theme}" por ${enquadramento.recorte}: ${estilo.composicao}.`,
         prohibited_elements: [...estilo.proibidos],
@@ -286,12 +294,20 @@ function slugificar(texto: string): string {
 }
 
 export class FakeRedator implements Redator {
-  async legenda(e: { pedido: Pedido; direcao: DirecaoVisual; marca: ContextoMarca }): Promise<string> {
+  async legenda(e: {
+    pedido: Pedido;
+    direcao: DirecaoVisual;
+    marca: ContextoMarca;
+    anterior?: string;
+    ajuste?: string;
+  }): Promise<string> {
     const escolha = fracao(
-      `${e.pedido.theme}\0${e.direcao.direction_id}\0${e.marca.brandVersionId}`,
+      `${e.pedido.theme}\0${e.direcao.direction_id}\0${e.marca.brandVersionId}\0${e.ajuste ?? ""}`,
       LEGENDAS.length,
     );
-    return `${LEGENDAS[escolha]!(e.pedido.theme)}\n\n${HASHTAGS}`;
+    const corpo = LEGENDAS[escolha]!(e.pedido.theme);
+    const ajuste = e.ajuste ? `\n\n(${e.ajuste})` : "";
+    return `${corpo}${ajuste}\n\n${HASHTAGS}`;
   }
 
   async angulos(e: { tema: string; marca: ContextoMarca }): Promise<readonly { titulo: string; angulo: string }[]> {
