@@ -16,10 +16,15 @@ export interface ContextoMarca {
   estilos: Record<string, string>;
 }
 
+export interface Violacao {
+  criterio: string;
+  problema: string;
+}
+
 export interface Veredito {
   aprovada: boolean;
   score: number;
-  violacoes: { criterio: string; problema: string }[];
+  violacoes: Violacao[];
 }
 
 export interface Artigo {

@@ -18,12 +18,13 @@ chave da DeepSeek e sem billing do Gemini, o mesmo caminho roda com arte falsa
 ## Módulos
 
 ```
-src/modelos/tipos.ts            + logo_variant na DirecaoVisual
-src/adaptadores/tipos.ts        + ajuste na legenda do Redator
-src/controle/api.ts             PacoteContexto estendido, SaidaTarefa, revisoesAbertas, conversa
+src/modelos/tipos.ts            logo_variant na DirecaoVisual (feito); aresta awaiting_prototype_review → brief_confirmed; aviso na RevisaoPendente; EstadoConversa
+src/adaptadores/tipos.ts        ajuste na legenda do Redator (feito); Violacao exportado
+src/controle/api.ts             PacoteContexto estendido, SaidaTarefa, revisoesAbertas, executarEntregas no ControlePlano, conversa
 src/controle/tarefas.ts         chave de tarefa com contador de visitas; concluir roteia por SaidaTarefa
-src/controle/aprovacoes.ts      validarCallback; aceitar no protótipo decide o próximo estado
-src/controle/idempotencia.ts    executarUmaVez com política repetirSeFalhou
+src/controle/revisoes.ts        abrirRevisao sai de aprovacoes.ts para cá, e assim tarefas.ts não cria ciclo de import
+src/controle/aprovacoes.ts      validarCallback; aceitar e recusar todas no protótipo decidem o próximo estado
+src/controle/idempotencia.ts    executarUmaVez com política repetirSeFalhou, janela e teto
 src/controle/conversas.ts       estado da conversa por chat (tabela conversas)
 src/controle/migracoes.ts       migração 003: apaga as 5 tabelas do v1, cria conversas
 src/controle/entregas.ts        nome do arquivo com tema, formato e versão (US-5)
@@ -89,6 +90,10 @@ export interface PacoteContexto {
 }
 ```
 
+`TarefaAtribuida` ganha `visita: number`, a contagem de tarefas do mesmo tipo e
+rodada no fluxo, esta incluída. É o mesmo `n` da chave de tarefa, e é o que limita
+o laço de QA.
+
 ## Saída tipada e roteamento no concluir
 
 O worker nunca chama `transicionar`. Ele devolve um desfecho tipado e o plano de
@@ -97,14 +102,15 @@ controle escolhe a aresta, na mesma transação que fecha a tarefa.
 ```ts
 export type SaidaTarefa =
   | { readonly tipo: "seguir"; readonly versoes: readonly VersaoId[]; readonly resumo?: string }
-  | { readonly tipo: "revisar"; readonly stage: Estagio; readonly versoes: readonly VersaoId[] }
+  | { readonly tipo: "revisar"; readonly stage: Estagio; readonly versoes: readonly VersaoId[]; readonly aviso?: string }
   | { readonly tipo: "voltar"; readonly versoes: readonly VersaoId[]; readonly motivo: string };
 ```
 
 - `seguir` usa `ESTADO_APOS_CONCLUSAO[tipo]`, como hoje.
-- `revisar` chama `abrirRevisao(fluxo, stage, versoes)` dentro da transação do
+- `revisar` chama `abrirRevisao(fluxo, stage, versoes, aviso)` dentro da transação do
   `concluir`. O fluxo chega em `awaiting_*` sem tarefa viva, que é o invariante que
-  `reinicio.ts` confere.
+  `reinicio.ts` confere. `aviso` fica em `revisao_pendente` (campo novo, opcional) e
+  é o que o apresentador mostra quando uma direção caiu no QA (US-2).
 - `voltar` usa a tabela `ESTADO_DE_VOLTA`, indexada pelo estado atual do fluxo:
   `prototype_qa → prototypes_generating`, `package_qa → package_finalizing`,
   `copy_review → draft_generating`. Estado fora da tabela é `ArestaIlegal`.
@@ -122,12 +128,13 @@ reconciliadores concorrentes calculam a mesma chave e só um insere. A checagem 
 "tarefa viva" passa a incluir `revisao_manual`, senão o contador daria volta ao
 teto de tentativas.
 
-O teto do laço de QA é do executor, não do reconciliador: por linhagem, no máximo
-`TETO_QA = 3` pareceres por rodada. Depois disso a direção sai da revisão e o
-Ricardo é avisado com o motivo (US-2: "informa a falha e não substitui a direção
-silenciosamente").
+O teto do laço de QA é do executor, não do reconciliador, e conta visitas, não
+pareceres: `visita >= TETO_QA (3)` fecha o laço. Contar pareceres não serve porque
+`publicarArtefato` deduplica por conteúdo; um refino que devolve os mesmos bytes
+devolve a mesma versão, que já tem parecer, e a contagem nunca andaria. Ao fechar,
+a linhagem reprovada sai da revisão e o `aviso` diz qual caiu e por quê.
 
-## Aceite no protótipo
+## Aceite e recusa no protótipo
 
 `prototype_approved` não tem tarefa e não é espera humana. `decidir()` faz dois
 saltos no aceite, como já faz no ajuste:
@@ -138,6 +145,26 @@ saltos no aceite, como já faz no ajuste:
   é conteúdo visível novo e, no `both`, o Stories também. Os dois passam pela
   revisão de pacote.
 
+`Recusar todas` hoje vai para `directions_ready`, que exige `design_prototipos`, e
+o designer da rodada nova não acharia direção nenhuma. O estado que exige
+`direcao_criativa` é `brief_confirmed`. Entra a aresta
+`awaiting_prototype_review → brief_confirmed`, `recusar_todas` vai para lá com a
+rodada incrementada, e a aresta para `directions_ready` sai da lista de
+`awaiting_prototype_review`.
+
+## Conjunto do pacote
+
+Aceitar não incrementa a rodada, então em `package_qa` as três linhagens de
+protótipo ainda são "da rodada". O pacote nunca é "toda a rodada". É
+`conjuntoDoPacote(contexto)`, função pura usada por `finalizar_pacote`, pelo QA no
+estágio de pacote e pelo apresentador:
+
+- Feed: a linhagem da `opcao` do último aceite de `stage = prototype`, na versão mais
+  nova.
+- Stories: a versão mais nova entre os mestres `formato = stories` (só existe uma
+  linhagem, derivada do Feed aceito). Só quando `format = both`.
+- Legenda: o `copy` mais novo. Só quando o pacote inclui Feed.
+
 ## Modos do designer
 
 `modoDoDesigner(contexto)` devolve uma união discriminada. É função pura do
@@ -146,23 +173,27 @@ e só produz o que falta.
 
 ```ts
 type ModoDesigner =
-  | { modo: "gerar"; formato: Formato; direcoes: readonly DirecaoVisual[] }   // sem mestre nesta rodada
-  | { modo: "refinar"; formato: Formato; alvos: readonly { master: ResumoArtefato; direcao: DirecaoVisual; violacoes: Violacao[] }[] }
-  | { modo: "ajustar"; formato: Formato; master: ResumoArtefato; direcao: DirecaoVisual; instrucao: string }
+  | { modo: "produzir"; formato: Formato; gerar: readonly DirecaoVisual[]; refinar: readonly Alvo[]; ajustar?: { master: ResumoArtefato; direcao: DirecaoVisual; instrucao: string } }
   | { modo: "nada_a_fazer"; versoes: readonly VersaoId[] };
+interface Alvo { master: ResumoArtefato; direcao: DirecaoVisual; violacoes: readonly Violacao[] }
 ```
 
-Derivação:
+Derivação, sempre sobre a rodada atual e sempre idempotente (queda depois de
+publicar e antes de concluir não refaz chamada de modelo):
 
 1. `direcaoDaRodada` = último artefato `direcao` com `rodada = atual`.
-2. Sem `direcaoDaRodada` → `ajustar`. A decisão é a última `adjustment_requested`
-   de `stage = prototype` com `rodada = atual - 1`; `master` é a `opcao`;
-   `instrucao` são as `notas`; a direção vem do artefato `direcao` da rodada
-   anterior, pelo `direction_id` que o mestre guarda em `meta`.
+2. Sem `direcaoDaRodada` é rodada de ajuste. A decisão é a última
+   `adjustment_requested` de `stage = prototype` com `rodada = atual - 1`; a
+   `opcao` é o mestre base; a direção vem do `direction_id` no `meta` dele. Se já
+   existe mestre nesta rodada com `derivadaDe = opcao` (ou descendente), o ajuste
+   está feito: esse mestre entra em `refinar` se o último parecer dele reprovou,
+   senão é `nada_a_fazer`. Se não existe, `ajustar` com as `notas`.
 3. Com `direcaoDaRodada`: para cada direção, o último mestre da rodada com
-   `meta.direction_id` igual. Direção sem mestre entra em `gerar`. Mestre cujo último
-   parecer `qa` reprovou entra em `refinar`. Se nada entra em nenhum dos dois, é
-   `nada_a_fazer` com os mestres atuais.
+   `meta.direction_id` igual. Sem mestre, entra em `gerar`. Com mestre cujo último
+   parecer reprovou, entra em `refinar`. Nada em nenhum dos dois é `nada_a_fazer`.
+
+Refinar é `designer.editar` com as violações do parecer como instrução, `derivadaDe`
+o mestre reprovado, mesmo `refId`.
 
 Cada peça produzida vira dois artefatos: `master` (PNG normalizado por
 `normalizarMestre`, `formato`, `meta {direction_id, modelo, refId}`, `derivadaDe`
@@ -191,38 +222,49 @@ type Executor = (a: Ambiente) => Promise<SaidaTarefa | { tipo: "fechada" }>;
 - `design_prototipos`: `modoDoDesigner`, depois `gerar` ou `editar` por alvo.
   `seguir` com os mestres atuais.
 - `qa_visual`: `stage` é `prototype` em `prototype_qa` e `package` em `package_qa`.
-  Alvos são o último mestre de cada linhagem da rodada que ainda não tem parecer.
-  Para cada um, `arte.revisar` e um artefato `qa` (JSON do veredito, `derivadaDe` o
-  mestre, `meta {aprovada, stage, direction_id}`). Depois: linhagem reprovada com
-  menos de `TETO_QA` pareceres na rodada → `voltar`. Senão, sobreviventes são as
-  linhagens aprovadas; zero sobrevivente é falha permanente; caso contrário
-  `revisar` com os mestres sobreviventes, mais o `copy` no estágio de pacote.
-- `finalizar_pacote`: o conjunto do pacote é a última versão de cada linhagem entre
-  o Feed aceito, o Stories e a legenda. Produz o que falta: Stories por
+  Candidatos: no protótipo, o último mestre de cada linhagem da rodada; no pacote,
+  os mestres de `conjuntoDoPacote`. Alvo é candidato sem parecer; para cada alvo,
+  `arte.revisar` e um artefato `qa` (JSON do veredito, `derivadaDe` o mestre,
+  `meta {aprovada, stage, direction_id}`). Depois, olhando o último parecer de cada
+  candidato: alguma linhagem reprovada e `visita < TETO_QA` → `voltar`; senão as
+  reprovadas caem e as aprovadas seguem. Zero aprovada é `FalhaPermanente`. Caso
+  contrário `revisar` com os mestres aprovados (mais o `copy` no pacote) e `aviso`
+  nomeando o que caiu e a violação. Zero alvo com tudo aprovado é o caso de
+  retentativa depois de queda e segue direto para `revisar`.
+- `finalizar_pacote`: produz o que falta em `conjuntoDoPacote`: Stories por
   `designer.editar({base: feed, instrucao: recompor em 9:16 mantendo conceito, cores e
   elemento principal, formato: stories, refId})` quando `format = both`; legenda por
   `redator.legenda` quando o pacote inclui Feed. Com ajuste de pacote (última
-  `adjustment_requested` de `stage = package`, `rodada = atual - 1`), produz só o
-  alvo da `opcao`: Feed (e rederiva o Stories), Stories, ou legenda com `ajuste`.
-  `seguir` com as versões do pacote.
-- `entrega`: manda a legenda como mensagem copiável (idempotente, repetível), chama
-  `executarEntregas` e manda "pronto para publicar". Devolve `fechada`, porque
+  `adjustment_requested` de `stage = package`, `rodada = atual - 1`, e ainda sem
+  versão nova do alvo nesta rodada), produz só o alvo da `opcao`: Feed (e rederiva o
+  Stories), Stories, ou legenda com `anterior` e `ajuste`. `seguir` com as versões
+  do pacote.
+- `entrega`: manda a prévia aprovada como foto e a legenda como mensagem copiável
+  (as duas idempotentes e repetíveis), chama `controle.executarEntregas` e manda
+  "pronto para publicar". `executarEntregas` manda como documento só os mestres; a
+  legenda nunca vai como `.txt` no Instagram. Devolve `fechada`, porque
   `executarEntregas` já fecha a tarefa e transiciona. Se o fluxo não chegou em
   `delivered`, falha permanente.
 - `arquivar_linear`: issue, anexos e comentário com histórico, cada um sob
   `executarUmaVez` estrito. Mensagem com o link. `seguir`.
 - `redacao_angulos`, `redacao_artigo`, `revisao_copy`: falha permanente "Fase 3".
 
-Falha: `FalhaPermanente` vai para `revisao_manual`; qualquer outro erro é
-transitória e respeita `max_tentativas`. O laço avisa o chat do fluxo em toda falha,
-dizendo se vai tentar de novo (US-9).
+Falha: `FalhaPermanente` e `EfeitoIndeterminado` vão para `revisao_manual`
+(repetir um efeito indeterminado só lança de novo); qualquer outro erro é
+transitória e respeita `max_tentativas`. O laço avisa o chat do fluxo na primeira
+falha e na última, dizendo se vai tentar de novo (US-9). Três avisos por tarefa em
+incidente de rede é ruído.
 
 ## Apresentar revisões
 
 Mandar o álbum é efeito externo e não cabe na transação do `concluir`. Quem
-apresenta é o `apresentador`, no tick do worker: para cada fluxo em `awaiting_*`,
-chave `fluxo:stage:rodada:apresentacao` sob `executarUmaVez` com
-`repetirSeFalhou`. Álbum duplicado é tolerável; álbum nunca enviado não é. É o
+apresenta é o `apresentador`, num laço só (o mesmo tick do reconciliador, nunca um
+por papel): para cada fluxo em `awaiting_*`, chave `fluxo:stage:rodada:apresentacao`
+sob `executarUmaVez` com `repetirSeFalhou`. A política repete quando a chave tem
+`erro` gravado, ou quando está reservada sem resultado há mais de 10 minutos (o
+processo caiu no meio; álbum em voo não conta). Teto de 5 tentativas por chave,
+coluna `tentativas` em `idempotency_keys`; passou do teto, o apresentador loga e
+para de insistir. Álbum duplicado é tolerável; álbum nunca enviado não é. É o
 oposto da entrega, onde duplicar é o erro e a chave fica indeterminada.
 
 Conteúdo por estágio (PRD §4.7):
@@ -250,16 +292,26 @@ type EstadoConversa =
 Botões de conversa usam o codec `c|<acao>|<arg>`: `c|f|feed`, `c|f|stories`,
 `c|f|both`, `c|ok|<fluxo>`, `c|no|<fluxo>`. Botões de aprovação continuam em `a|`.
 
-- Texto em `ociosa` com fluxo ativo no chat → diz em que etapa está e oferece
-  `/cancelar`. Sem fluxo ativo → o texto é o tema; vai para `formato` e pergunta o
-  formato.
-- `c|f|*` em `formato` → `criarFluxo`, vai para `confirmacao`, mostra o brief com
-  `Confirmar` e `Cancelar`.
-- `c|ok` → `confirmarBrief`, `ociosa`. `c|no` → `cancelar`, `ociosa`.
-- `a|…` com ação `ajustar` → `validarCallback` primeiro; ok → `instrucao` e pede o
-  texto. Outras ações → `aoCallback` e resposta em palavras simples.
-- Texto em `instrucao` → `aoCallback` com `notas`, `ociosa`.
-- `/start`, `/status`, `/cancelar`. Qualquer data mostrada usa `America/Fortaleza`.
+A máquina é total: toda combinação de etapa e evento tem uma linha, e a tabela
+mora numa estrutura, não em `if` espalhado. Eventos: texto, comando (`/start`,
+`/status`, `/cancelar`), `c|f`, `c|ok`, `c|no`, `a|` (ajustar), `a|` (outras).
+
+- Fluxo ativo do chat é o último não terminal. Fluxo parado em `requested` (o
+  Ricardo nunca confirmou) não conta como ativo: um tema novo cancela ele e começa
+  de novo.
+- Texto em `ociosa` com fluxo ativo → diz em que etapa está e oferece `/cancelar`.
+  Sem fluxo ativo → o texto é o tema; vai para `formato` e pergunta o formato.
+- Texto em `formato` → tema novo, pergunta de novo. Texto em `confirmacao` → repete
+  o brief. Texto em `instrucao` → `aoCallback` com `notas`, `ociosa`.
+- `c|f|*` em `formato` → `criarFluxo`, `confirmacao`, brief com `Confirmar` e
+  `Cancelar`. `c|f|*` em qualquer outra etapa → ignora com aviso curto.
+- `c|ok` e `c|no` só valem em `confirmacao` e para o mesmo `fluxoId`; `c|ok` →
+  `confirmarBrief`, `c|no` → `cancelar`; os dois → `ociosa`.
+- `a|` com `ajustar` → `validarCallback`; ok → `instrucao` e pede o texto. Qualquer
+  outro `a|` → `aoCallback` e resposta em palavras simples; se estava em
+  `instrucao`, o ajuste pendente morre e a etapa volta a `ociosa`.
+- `/cancelar` cancela o fluxo ativo e limpa a etapa. `/status` não muda etapa.
+  Qualquer data mostrada usa `America/Fortaleza`.
 
 O aprovador vem de `APROVADOR_TELEGRAM_ID`; vazio é `0` e nada é aprovável. A
 allowlist de chats continua fechando por padrão. Atualizações do mesmo chat rodam
@@ -299,11 +351,12 @@ chaves não chegam.
 
 ## Migração 003
 
-Apaga `conversations`, `posts`, `queue`, `media` e `calendar_sent`, e cria
-`conversas (chat_id INTEGER PRIMARY KEY, estado_json TEXT NOT NULL, atualizado_em)`.
-Se qualquer tabela do v1 tiver linha, a migração lança e o boot para: em produção
-as cinco estão vazias desde 25/08, e um banco com dado é um banco que ninguém
-conhecia.
+Apaga `conversations`, `posts`, `queue`, `media` e `calendar_sent`, logando a
+contagem de cada uma, e cria `conversas (chat_id INTEGER PRIMARY KEY, estado_json
+TEXT NOT NULL, atualizado_em)`. Também soma `tentativas INTEGER NOT NULL DEFAULT 0`
+em `idempotency_keys`. Não há guarda contra linha no v1: o bot v1 escreve em
+`conversations` a cada mensagem que processa, e um boot que trava por causa de uma
+linha de conversa velha seria pior que perder a linha.
 
 ## Arnês
 
