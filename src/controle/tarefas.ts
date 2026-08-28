@@ -3,17 +3,25 @@
  * lease_epoca, então bater/concluir/falhar de um worker zumbi (lease vencida e
  * tarefa reivindicada por outro) altera zero linhas e o zumbi descobre que
  * perdeu. O estado do fluxo declara a tarefa exigida (TAREFA_DO_ESTADO);
- * garantirTarefa insere o que faltar e a chave fluxo:estado:rodada torna a
+ * garantirTarefa insere o que faltar e a chave fluxo:estado:rodada:n torna a
  * inserção no-op quando a tarefa já existe.
+ *
+ * O `n` é a visita: a contagem de tarefas do mesmo tipo e rodada no fluxo. Sem
+ * ele o laço de QA pararia em silêncio, porque a segunda passada pelo mesmo
+ * estado na mesma rodada esbarraria na chave da primeira, já concluída. Ele sai
+ * do banco, então dois reconciliadores concorrentes calculam a mesma chave e só
+ * um insere.
  */
 
-import type { EstadoQualquer, FluxoId, Papel, TarefaId, TipoTarefa, VersaoId } from "../modelos/tipos";
+import type { Estagio, EstadoQualquer, FluxoId, Papel, TarefaId, TipoTarefa, VersaoId } from "../modelos/tipos";
 import { PAPEL_DA_TAREFA, TAREFA_DO_ESTADO, transicoesDe } from "../modelos/tipos";
 import type { Banco } from "./db";
 import { emTransacao } from "./db";
+import { ArestaIlegal } from "./fluxos";
 import type { Fluxo } from "./fluxos";
 import { lerFluxo, registrarEvento, transicionar } from "./fluxos";
 import { novaTarefaId } from "./ids";
+import { abrirRevisao } from "./revisoes";
 
 export class LeasePerdida extends Error {}
 
@@ -62,6 +70,12 @@ function deLinha(l: LinhaTarefa): Tarefa {
 }
 
 const LEASE_MS = 60_000;
+
+/**
+ * Tarefa em revisao_manual conta como viva: ela parou esperando gente, e recriar
+ * a mesma tarefa por baixo daria a volta no teto de tentativas em silêncio.
+ */
+const ESTADOS_VIVOS = ["pendente", "reivindicada", "revisao_manual"] as const;
 
 /** Pares estado:tarefa legítimos para reivindicação, direto do mapa congelado. */
 const PARES_ELEGIVEIS = Object.entries(TAREFA_DO_ESTADO)
@@ -124,7 +138,7 @@ export function bater(db: Banco, lease: Lease): boolean {
 
 /**
  * Tarefas cuja conclusão tem um sucessor determinístico. As demais páram: quem
- * avança é abrirRevisao (estados awaiting_*) ou a orquestração da Fase 2.
+ * avança é abrirRevisao (estados awaiting_*) ou uma decisão do Ricardo.
  */
 const ESTADO_APOS_CONCLUSAO: Partial<Record<TipoTarefa, EstadoQualquer>> = {
   direcao_criativa: "directions_ready",
@@ -134,11 +148,33 @@ const ESTADO_APOS_CONCLUSAO: Partial<Record<TipoTarefa, EstadoQualquer>> = {
   arquivar_linear: "archived",
 };
 
-export function concluir(
-  db: Banco,
-  lease: Lease,
-  saida: { versoes: readonly VersaoId[]; resumo?: string },
-): void {
+/**
+ * Volta do controle de qualidade, indexada pelo estado atual do fluxo. É o
+ * caminho de quem reprovou e ainda tem visita sobrando; a rodada não anda,
+ * porque rodada nova é decisão do Ricardo, não do diretor de arte.
+ */
+const ESTADO_DE_VOLTA: Partial<Record<EstadoQualquer, EstadoQualquer>> = {
+  prototype_qa: "prototypes_generating",
+  package_qa: "package_finalizing",
+  copy_review: "draft_generating",
+};
+
+/**
+ * Desfecho tipado da tarefa. O worker nunca chama transicionar: ele diz o que
+ * aconteceu e o plano de controle escolhe a aresta, na transação que fecha a
+ * tarefa. É o que mantém "worker não transiciona" verdadeiro por construção.
+ */
+export type SaidaTarefa =
+  | { readonly tipo: "seguir"; readonly versoes: readonly VersaoId[]; readonly resumo?: string }
+  | {
+      readonly tipo: "revisar";
+      readonly stage: Estagio;
+      readonly versoes: readonly VersaoId[];
+      readonly aviso?: string;
+    }
+  | { readonly tipo: "voltar"; readonly versoes: readonly VersaoId[]; readonly motivo: string };
+
+export function concluir(db: Banco, lease: Lease, saida: SaidaTarefa): void {
   emTransacao(db, () => {
     const linha = db
       .query(
@@ -164,8 +200,24 @@ export function concluir(
       fluxoId: tarefa.workflowId,
       tipo: "tarefa_concluida",
       ator: `worker:${tarefa.tipo}`,
-      dados: { tarefaId: tarefa.id, tipo: tarefa.tipo, versoes: saida.versoes },
+      dados: { tarefaId: tarefa.id, tipo: tarefa.tipo, desfecho: saida.tipo, versoes: saida.versoes },
     });
+    if (saida.tipo === "revisar") {
+      abrirRevisao(db, tarefa.workflowId, saida.stage, saida.versoes, saida.aviso);
+      return;
+    }
+    if (saida.tipo === "voltar") {
+      const fluxo = lerFluxo(db, tarefa.workflowId)!;
+      const destino = ESTADO_DE_VOLTA[fluxo.estado];
+      if (!destino) throw new ArestaIlegal(`${fluxo.estado} não tem volta de controle de qualidade`);
+      transicionar(db, {
+        fluxoId: tarefa.workflowId,
+        para: destino,
+        ator: `worker:${tarefa.tipo}`,
+        dados: { motivo: saida.motivo },
+      });
+      return;
+    }
     const sucessor = ESTADO_APOS_CONCLUSAO[tarefa.tipo];
     if (sucessor) {
       transicionar(db, { fluxoId: tarefa.workflowId, para: sucessor, ator: `worker:${tarefa.tipo}` });
@@ -173,12 +225,13 @@ export function concluir(
   });
 }
 
+/** Devolve onde a tarefa parou: 'pendente' é o aviso de que ainda vai tentar de novo (US-9). */
 export function falhar(
   db: Banco,
   lease: Lease,
   erro: { tipo: "transitoria" | "permanente"; mensagem: string },
-): void {
-  emTransacao(db, () => {
+): "pendente" | "revisao_manual" {
+  return emTransacao(db, () => {
     const destino =
       erro.tipo === "permanente"
         ? "'revisao_manual'"
@@ -197,21 +250,43 @@ export function falhar(
       ator: "sistema",
       dados: { tarefaId: linha.id, tipo: linha.tipo, erro: erro.mensagem, classe: erro.tipo },
     });
+    return linha.estado as "pendente" | "revisao_manual";
   });
+}
+
+/**
+ * Quantas tarefas do mesmo tipo e rodada o fluxo já teve, esta incluída. É o `n`
+ * da chave e o teto do laço de QA: contar pareceres não serviria, porque
+ * publicarArtefato deduplica por conteúdo e um refino que devolve os mesmos
+ * bytes devolve a mesma versão, que já tem parecer.
+ */
+export function visitaDaTarefa(db: Banco, tarefa: Tarefa): number {
+  const { n } = db
+    .query(
+      `SELECT COUNT(*) AS n FROM tasks
+       WHERE workflow_id = ? AND tipo = ? AND rodada = ? AND rowid <= (SELECT rowid FROM tasks WHERE id = ?)`,
+    )
+    .get(tarefa.workflowId, tarefa.tipo, tarefa.rodada, tarefa.id) as { n: number };
+  return n;
 }
 
 /** Insere a tarefa que o estado do fluxo exige, se nenhuma equivalente está viva. */
 export function garantirTarefa(db: Banco, fluxo: Fluxo): TarefaId | null {
   const tipo = TAREFA_DO_ESTADO[fluxo.estado];
   if (!tipo) return null;
+  const marcadores = ESTADOS_VIVOS.map(() => "?").join(",");
   return emTransacao(db, () => {
     const viva = db
       .query(
         `SELECT 1 FROM tasks WHERE workflow_id = ? AND tipo = ? AND rodada = ?
-           AND estado IN ('pendente','reivindicada')`,
+           AND estado IN (${marcadores})`,
       )
-      .get(fluxo.id, tipo, fluxo.rodada);
+      .get(fluxo.id, tipo, fluxo.rodada, ...ESTADOS_VIVOS);
     if (viva) return null;
+    const { anteriores } = db
+      .query("SELECT COUNT(*) AS anteriores FROM tasks WHERE workflow_id = ? AND tipo = ? AND rodada = ?")
+      .get(fluxo.id, tipo, fluxo.rodada) as { anteriores: number };
+    const visita = anteriores + 1;
     const id = novaTarefaId();
     const r = db
       .query(
@@ -224,15 +299,15 @@ export function garantirTarefa(db: Banco, fluxo: Fluxo): TarefaId | null {
         tipo,
         PAPEL_DA_TAREFA[tipo],
         fluxo.rodada,
-        `${fluxo.id}:${fluxo.estado}:${fluxo.rodada}`,
-        JSON.stringify({ estado: fluxo.estado, rodada: fluxo.rodada }),
+        `${fluxo.id}:${fluxo.estado}:${fluxo.rodada}:${visita}`,
+        JSON.stringify({ estado: fluxo.estado, rodada: fluxo.rodada, visita }),
       );
     if (r.changes === 0) return null;
     registrarEvento(db, {
       fluxoId: fluxo.id,
       tipo: "tarefa_criada",
       ator: "reconciliador",
-      dados: { tarefaId: id, tipo, estado: fluxo.estado, rodada: fluxo.rodada },
+      dados: { tarefaId: id, tipo, estado: fluxo.estado, rodada: fluxo.rodada, visita },
     });
     return id;
   });

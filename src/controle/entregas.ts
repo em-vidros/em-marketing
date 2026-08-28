@@ -8,7 +8,7 @@
 
 import { createHash } from "node:crypto";
 import type { Adaptadores } from "../adaptadores/tipos";
-import type { FluxoId, VersaoId } from "../modelos/tipos";
+import type { FluxoId, Formato, VersaoId } from "../modelos/tipos";
 import type { Banco } from "./db";
 import { emTransacao } from "./db";
 import { lerFluxo, registrarEvento, transicionar } from "./fluxos";
@@ -23,6 +23,13 @@ interface LinhaEntrega {
   estado: string;
 }
 
+/**
+ * Documento é o arquivo que o Ricardo publica: o mestre no Instagram, o artigo
+ * no blog. A legenda tem canal próprio, numa mensagem copiável, porque um .txt
+ * anexo não se cola no aplicativo do Instagram (PRD §4.7).
+ */
+const PAPEIS_DE_DOCUMENTO = ["master", "artigo"] as const;
+
 function versoesAprovadas(db: Banco, fluxoId: FluxoId): VersaoId[] {
   const aceite = db
     .query(
@@ -31,8 +38,49 @@ function versoesAprovadas(db: Banco, fluxoId: FluxoId): VersaoId[] {
     )
     .get(fluxoId) as { artifact_version_ids: string; opcao: string | null } | null;
   if (!aceite) throw new Error(`fluxo ${fluxoId} não tem aceite registrado`);
-  return aceite.opcao ? [aceite.opcao as VersaoId] : (JSON.parse(aceite.artifact_version_ids) as VersaoId[]);
+  const cobertas = aceite.opcao
+    ? [aceite.opcao as VersaoId]
+    : (JSON.parse(aceite.artifact_version_ids) as VersaoId[]);
+  if (cobertas.length === 0) throw new Error(`aceite do fluxo ${fluxoId} não cobre nenhuma versão`);
+  const marcadores = cobertas.map(() => "?").join(",");
+  const papeis = PAPEIS_DE_DOCUMENTO.map(() => "?").join(",");
+  const versoes = (
+    db
+      .query(
+        `SELECT id FROM artifact_versions
+         WHERE id IN (${marcadores}) AND papel IN (${papeis}) ORDER BY rowid`,
+      )
+      .all(...cobertas, ...PAPEIS_DE_DOCUMENTO) as { id: string }[]
+  ).map((l) => l.id as VersaoId);
+  if (versoes.length === 0) throw new Error(`aceite do fluxo ${fluxoId} não cobre nenhum arquivo entregável`);
+  return versoes;
 }
+
+/** Nome do arquivo com trabalho, formato e versão aprovada (US-5). */
+export function nomeDoDocumento(
+  tema: string,
+  a: { formato: Formato | null; versao: number; mediaTipo: string },
+): string {
+  const slug =
+    tema
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48)
+      .replace(/-+$/, "") || "sem-tema";
+  const ext = EXTENSAO_DO_MEDIA[a.mediaTipo] ?? "bin";
+  return `em-vidros-${slug}-${a.formato ?? "copy"}-v${a.versao}.${ext}`;
+}
+
+const EXTENSAO_DO_MEDIA: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "text/plain": "txt",
+  "text/markdown": "md",
+  "application/json": "json",
+};
 
 export async function executarEntregas(
   db: Banco,
@@ -72,7 +120,7 @@ export async function executarEntregas(
     }
 
     const artefato = lerArtefato(db, versaoId);
-    const nome = `${fluxoId}-${versaoId}.${artefato.mediaTipo.split("/")[1] ?? "bin"}`;
+    const nome = nomeDoDocumento(fluxo.pedido.theme, artefato);
     const envio = await adaptadores.telegram.enviarDocumento(fluxo.chatId, artefato.bytes, nome);
     db.query("UPDATE deliveries SET file_id = ?, atualizado_em = datetime('now') WHERE chave = ?").run(envio.file_id, chave);
 

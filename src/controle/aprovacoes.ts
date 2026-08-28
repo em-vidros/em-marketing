@@ -2,8 +2,10 @@
  * Aprovação ligada ao Telegram do Ricardo. O callback carrega o mínimo que
  * identifica a decisão (fluxo, etapa, ação, rodada, opção); o conjunto exato de
  * versões cobertas é resolvido no servidor a partir de
- * workflow_runs.revisao_pendente, gravado quando a revisão abriu. decidir() roda
- * as cinco checagens numa transação e não escreve nada se qualquer uma falhar.
+ * workflow_runs.revisao_pendente, gravado quando a revisão abriu. As cinco
+ * checagens moram em checar(), rodam numa transação e não escrevem nada se
+ * qualquer uma falhar. validarCallback() é a mesma porta sem escrita nenhuma,
+ * para a conversa saber se vale a pena pedir a instrução do ajuste.
  *
  * Formato: a|<fluxo12>|<st>|<ac>|<rodada>|<opcao12 ou vazio>. O DESIGN omitiu a
  * rodada e a etapa de ângulo do codec, mas exige recusar botão de rodada velha
@@ -11,11 +13,13 @@
  * dois campos as duas promessas não fecham. Pior caso 36 bytes, teto 64.
  */
 
-import type { Estagio, EstadoQualquer, FluxoId, VersaoId } from "../modelos/tipos";
+import type { Estagio, EstadoQualquer, FluxoId, RevisaoPendente, VersaoId } from "../modelos/tipos";
 import type { Banco } from "./db";
 import { emTransacao } from "./db";
+import type { Fluxo } from "./fluxos";
 import { lerFluxo, registrarEvento, transicionar } from "./fluxos";
 import { ID_RE, gerarId } from "./ids";
+import { ESPERA } from "./revisoes";
 import { cancelarTarefasVivas } from "./tarefas";
 
 export type AcaoCallback = "aceitar" | "ajustar" | "recusar_todas" | "cancelar" | "encerrar";
@@ -28,9 +32,17 @@ export interface Callback {
   opcao?: VersaoId;
 }
 
-export type ResultadoDecisao =
-  | { ok: true; estado: EstadoQualquer }
-  | { ok: false; motivo: "nao_autorizado" | "aprovacao_vencida" | "estado_incompativel" | "callback_invalido" };
+export type MotivoRecusa =
+  | "nao_autorizado"
+  | "aprovacao_vencida"
+  | "estado_incompativel"
+  | "callback_invalido";
+
+export type ResultadoDecisao = { ok: true; estado: EstadoQualquer } | { ok: false; motivo: MotivoRecusa };
+
+export type ResultadoValidacao =
+  | { ok: true; callback: Callback; revisao: RevisaoPendente }
+  | { ok: false; motivo: MotivoRecusa };
 
 const STAGE_PARA_CHAR: Record<Estagio, string> = { prototype: "p", package: "k", copy: "c", angle: "g" };
 const CHAR_PARA_STAGE: Record<string, Estagio> = { p: "prototype", k: "package", c: "copy", g: "angle" };
@@ -73,96 +85,133 @@ export function decodificar(data: unknown): Callback | null {
   };
 }
 
-const ESPERA: Record<Estagio, EstadoQualquer> = {
-  prototype: "awaiting_prototype_review",
-  package: "awaiting_package_review",
-  copy: "awaiting_copy_review",
-  angle: "awaiting_angle_selection",
-};
-
 /**
  * Sucessores por etapa e ação, derivados das tabelas de transição. ajustar tem
  * dois saltos porque o sucessor de adjustment_requested depende de onde a
  * revisão estava (DESIGN, Máquinas de estado); os dois saem na mesma transação
  * para reinício não deixar o fluxo parado no meio.
+ *
+ * No protótipo o aceite também salta duas vezes: prototype_approved não tem
+ * tarefa e não é espera humana, então parar nele deixaria o fluxo sem trabalho e
+ * sem ninguém para acordá-lo. O destino do segundo salto vem do formato pedido.
+ *
+ * A opção é obrigatória nas duas ações que apontam para uma peça: aceitar diz
+ * qual protótipo vale, ajustar diz qual peça reabrir. Sem ela o designer da
+ * rodada seguinte não teria base para editar.
  */
 const APOS: Record<
   Estagio,
   {
-    aceitar: EstadoQualquer;
+    aceitar: readonly EstadoQualquer[];
     ajustar?: readonly [EstadoQualquer, EstadoQualquer];
     recusarTodas?: EstadoQualquer;
-    exigeOpcao: boolean;
+    exigeOpcaoNoAceite: boolean;
+    exigeOpcaoNoAjuste: boolean;
   }
 > = {
   prototype: {
-    aceitar: "prototype_approved",
+    aceitar: ["prototype_approved"],
     ajustar: ["adjustment_requested", "prototypes_generating"],
-    recusarTodas: "directions_ready",
-    exigeOpcao: true,
+    recusarTodas: "brief_confirmed",
+    exigeOpcaoNoAceite: true,
+    exigeOpcaoNoAjuste: true,
   },
-  package: { aceitar: "approved_for_manual_delivery", ajustar: ["adjustment_requested", "package_finalizing"], exigeOpcao: false },
-  copy: { aceitar: "copy_approved", ajustar: ["adjustment_requested", "draft_generating"], exigeOpcao: false },
-  angle: { aceitar: "draft_generating", recusarTodas: "angles_ready", exigeOpcao: true },
+  package: {
+    aceitar: ["approved_for_manual_delivery"],
+    ajustar: ["adjustment_requested", "package_finalizing"],
+    exigeOpcaoNoAceite: false,
+    exigeOpcaoNoAjuste: true,
+  },
+  copy: {
+    aceitar: ["copy_approved"],
+    ajustar: ["adjustment_requested", "draft_generating"],
+    exigeOpcaoNoAceite: false,
+    exigeOpcaoNoAjuste: false,
+  },
+  angle: {
+    aceitar: ["draft_generating"],
+    recusarTodas: "angles_ready",
+    exigeOpcaoNoAceite: true,
+    exigeOpcaoNoAjuste: false,
+  },
 };
 
-/** Abre a rodada de revisão: grava revisao_pendente na mesma transação da aresta para awaiting_*. */
-export function abrirRevisao(db: Banco, fluxoId: FluxoId, stage: Estagio, versoes: readonly VersaoId[]): void {
-  if (versoes.length === 0) throw new Error("revisão sem versões");
-  emTransacao(db, () => {
-    const fluxo = lerFluxo(db, fluxoId);
-    if (!fluxo) throw new Error(`fluxo ${fluxoId} não existe`);
-    const marcadores = versoes.map(() => "?").join(",");
-    const { n } = db
-      .query(`SELECT COUNT(*) AS n FROM artifact_versions WHERE workflow_id = ? AND id IN (${marcadores})`)
-      .get(fluxoId, ...versoes) as { n: number };
-    if (n !== versoes.length) throw new Error(`revisão cita versão que não é do fluxo ${fluxoId}`);
-    transicionar(db, {
-      fluxoId,
-      para: ESPERA[stage],
-      ator: "sistema",
-      revisaoPendente: { stage, rodada: fluxo.rodada, versoes: [...versoes] },
-      dados: { stage, versoes },
-    });
-  });
+/** Segundo salto do aceite do protótipo: só o Stories dispensa a revisão de pacote (PRD §4.3). */
+function aposAceitarPrototipo(fluxo: Fluxo): readonly EstadoQualquer[] {
+  return fluxo.pedido.format === "stories"
+    ? ["prototype_approved", "approved_for_manual_delivery"]
+    : ["prototype_approved", "package_finalizing"];
+}
+
+/** As cinco checagens, sem escrever nada. Devolve o fluxo e a revisão que o callback cobre. */
+function checar(
+  db: Banco,
+  e: { deId: number; aprovadorId: number; data: string },
+): { ok: true; cb: Callback; fluxo: Fluxo; revisao: RevisaoPendente } | { ok: false; motivo: MotivoRecusa } {
+  const cb = decodificar(e.data);
+  if (!cb) return { ok: false, motivo: "callback_invalido" };
+  const fluxo = lerFluxo(db, cb.fluxoId);
+  if (!fluxo) return { ok: false, motivo: "callback_invalido" };
+  // revisor é a pessoa, nunca o chat (DESIGN, Aprovação)
+  if (e.deId !== e.aprovadorId) return { ok: false, motivo: "nao_autorizado" };
+  const revisao = fluxo.revisaoPendente;
+  if (fluxo.estado !== ESPERA[cb.stage] || !revisao || revisao.stage !== cb.stage) {
+    return { ok: false, motivo: "estado_incompativel" };
+  }
+  if (cb.rodada !== fluxo.rodada || revisao.rodada !== fluxo.rodada) {
+    return { ok: false, motivo: "aprovacao_vencida" };
+  }
+  if (cb.opcao && !revisao.versoes.includes(cb.opcao)) {
+    return { ok: false, motivo: "aprovacao_vencida" };
+  }
+  const regra = APOS[cb.stage];
+  switch (cb.acao) {
+    case "aceitar":
+      if (regra.exigeOpcaoNoAceite && !cb.opcao) return { ok: false, motivo: "callback_invalido" };
+      break;
+    case "ajustar":
+      if (!regra.ajustar) return { ok: false, motivo: "estado_incompativel" };
+      if (regra.exigeOpcaoNoAjuste && !cb.opcao) return { ok: false, motivo: "callback_invalido" };
+      break;
+    case "recusar_todas":
+      if (!regra.recusarTodas) return { ok: false, motivo: "estado_incompativel" };
+      break;
+    case "encerrar":
+    case "cancelar":
+      break;
+  }
+  return { ok: true, cb, fluxo, revisao };
+}
+
+/** Mesma porta de decidir(), sem escrita: a conversa pergunta antes de pedir a instrução. */
+export function validarCallback(
+  db: Banco,
+  e: { deId: number; aprovadorId: number; data: string },
+): ResultadoValidacao {
+  const r = checar(db, e);
+  return r.ok ? { ok: true, callback: r.cb, revisao: r.revisao } : { ok: false, motivo: r.motivo };
 }
 
 export function decidir(
   db: Banco,
   e: { deId: number; aprovadorId: number; data: string; notas?: string },
 ): ResultadoDecisao {
-  const cb = decodificar(e.data);
-  if (!cb) return { ok: false, motivo: "callback_invalido" };
   return emTransacao(db, () => {
-    const fluxo = lerFluxo(db, cb.fluxoId);
-    if (!fluxo) return { ok: false, motivo: "callback_invalido" } as const;
-    // revisor é a pessoa, nunca o chat (DESIGN, Aprovação)
-    if (e.deId !== e.aprovadorId) return { ok: false, motivo: "nao_autorizado" } as const;
-    const revisao = fluxo.revisaoPendente;
-    if (fluxo.estado !== ESPERA[cb.stage] || !revisao || revisao.stage !== cb.stage) {
-      return { ok: false, motivo: "estado_incompativel" } as const;
-    }
-    if (cb.rodada !== fluxo.rodada || revisao.rodada !== fluxo.rodada) {
-      return { ok: false, motivo: "aprovacao_vencida" } as const;
-    }
-    if (cb.opcao && !revisao.versoes.includes(cb.opcao)) {
-      return { ok: false, motivo: "aprovacao_vencida" } as const;
-    }
-
+    const checagem = checar(db, e);
+    if (!checagem.ok) return { ok: false, motivo: checagem.motivo } as const;
+    const { cb, fluxo, revisao } = checagem;
     const regra = APOS[cb.stage];
+
     let destinos: readonly EstadoQualquer[];
     switch (cb.acao) {
       case "aceitar":
-        if (regra.exigeOpcao && !cb.opcao) return { ok: false, motivo: "callback_invalido" } as const;
-        destinos = [regra.aceitar];
+        destinos = cb.stage === "prototype" ? aposAceitarPrototipo(fluxo) : regra.aceitar;
         break;
       case "ajustar":
-        if (!regra.ajustar) return { ok: false, motivo: "estado_incompativel" } as const;
-        destinos = regra.ajustar;
+        destinos = regra.ajustar!;
         break;
       case "recusar_todas":
-        if (!regra.recusarTodas) return { ok: false, motivo: "estado_incompativel" } as const;
-        destinos = [regra.recusarTodas];
+        destinos = [regra.recusarTodas!];
         break;
       case "encerrar":
         destinos = ["rejected"];

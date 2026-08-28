@@ -23,6 +23,7 @@ function assert(cond: unknown, msg: string): asserts cond {
 const RICARDO = 111;
 const naoUsado = () => Promise.reject(new Error("modelo não entra na fase 1 do arnês"));
 const documentos = new Map<string, Buffer>();
+const nomesEnviados: string[] = [];
 let enviados = 0;
 const adaptadores: Adaptadores = {
   criativo: { direcoes: naoUsado },
@@ -33,8 +34,9 @@ const adaptadores: Adaptadores = {
     enviarMensagem: async () => ({ message_id: 1 }),
     enviarAlbum: async () => ({ message_ids: [1] }),
     enviarFoto: async () => ({ message_id: 1 }),
-    enviarDocumento: async (_chat, arquivo) => {
+    enviarDocumento: async (_chat, arquivo, nome) => {
       enviados++;
+      nomesEnviados.push(nome);
       const fileId = `doc${enviados}`;
       documentos.set(fileId, Buffer.from(arquivo));
       return { message_id: enviados, file_id: fileId };
@@ -86,10 +88,11 @@ function rodar(papel: Parameters<typeof paraWorkers.reivindicar>[0], conteudos: 
       papel: papel === "diretor_de_arte" ? "qa" : papel === "diretor_criativo" ? "direcao" : "master",
       conteudo: Buffer.from(`${c}-${i}`),
       mediaTipo: papel === "designer" ? "image/png" : "application/json",
+      ...(papel === "designer" ? { formato: "feed" as const } : {}),
     }),
   );
   assert(paraWorkers.bater(t.lease), "heartbeat com lease válida falhou");
-  paraWorkers.concluir(t.lease, { versoes });
+  paraWorkers.concluir(t.lease, { tipo: "seguir", versoes });
   return versoes;
 }
 
@@ -98,7 +101,10 @@ reconciliar();
 const atribuida = paraWorkers.reivindicar("diretor_criativo", "w-cc")!;
 assert(atribuida.contexto.marca.brandbook.length > 0, "contexto sem brandbook");
 assert(atribuida.contexto.pedido.theme === "Fechamento de sacada", "contexto sem pedido");
-paraWorkers.concluir(atribuida.lease, { versoes: [paraWorkers.publicarArtefato(atribuida.lease, { papel: "direcao", conteudo: Buffer.from("d1"), mediaTipo: "application/json" })] });
+assert(atribuida.contexto.fluxoId === id && atribuida.contexto.chatId === 10, "contexto sem identidade do fluxo");
+assert(atribuida.contexto.estado === "brief_confirmed" && atribuida.contexto.rodada === 1, "contexto sem estado e rodada");
+assert(atribuida.visita === 1, `primeira tarefa do tipo veio na visita ${atribuida.visita}`);
+paraWorkers.concluir(atribuida.lease, { tipo: "seguir", versoes: [paraWorkers.publicarArtefato(atribuida.lease, { papel: "direcao", conteudo: Buffer.from("d1"), mediaTipo: "application/json" })] });
 assert(inspecionar.fluxo(id)!.estado === "directions_ready", "direção concluída não avançou o fluxo");
 
 const masters = rodar("designer", ["m1", "m2", "m3"]);
@@ -120,14 +126,18 @@ const r = paraTelegram.aoCallback({
   callbackId: "cb1",
   data: codificar({ fluxoId: id, stage: "prototype", acao: "aceitar", rodada: 1, opcao: escolhido }),
 });
-assert(r.ok && r.estado === "prototype_approved", "aceite não aprovou o protótipo");
+// pedido de Feed passa pela revisão de pacote, então o aceite do protótipo para
+// em package_finalizing, não em prototype_approved
+assert(r.ok && r.estado === "package_finalizing", `aceite parou em ${r.ok ? r.estado : r.motivo}`);
 
-// aresta prototype_approved -> approved_for_manual_delivery é da orquestração da
-// Fase 2; aqui o arnês dirige por uma segunda conexão ao mesmo arquivo
+// o resto do caminho até a entrega é dos workers, que são outra suíte; aqui o
+// arnês empurra por uma segunda conexão ao mesmo arquivo
 const { abrirBanco } = await import("../../src/controle/db");
 const { transicionar } = await import("../../src/controle/fluxos");
 const db2 = abrirBanco(join(dir, "t.db"));
-transicionar(db2, { fluxoId: id, para: "approved_for_manual_delivery", ator: "arnes" });
+for (const passo of ["package_qa", "awaiting_package_review", "approved_for_manual_delivery"] as const) {
+  transicionar(db2, { fluxoId: id, para: passo, ator: "arnes" });
+}
 db2.close();
 
 // entrega: um documento, hash do download conferido contra o mestre
@@ -137,6 +147,10 @@ const entregas = inspecionar.entregas(id);
 assert(entregas.length === 1 && entregas[0]!.estado === "confirmada", "entrega não confirmou");
 assert(typeof entregas[0]!.hashConferido === "string" && entregas[0]!.hashConferido.length === 64, "hash do ida e volta não gravou");
 assert(inspecionar.fluxo(id)!.estado === "delivered", "entrega confirmada não marcou delivered");
+assert(
+  nomesEnviados[0] === "em-vidros-fechamento-de-sacada-feed-v1.png",
+  `nome do documento fora do padrão da US-5: ${nomesEnviados[0]}`,
+);
 
 // executar de novo: nenhum reenvio, nenhuma linha nova
 await paraTelegram.executarEntregas(id);
@@ -147,7 +161,7 @@ assert(inspecionar.entregas(id).length === 1, "segunda execução criou outra en
 reconciliar();
 const arquivo = paraWorkers.reivindicar("operacoes", "w-ops");
 assert(arquivo && arquivo.tipo === "arquivar_linear", "delivered não exigiu arquivar_linear");
-paraWorkers.concluir(arquivo.lease, { versoes: [] });
+paraWorkers.concluir(arquivo.lease, { tipo: "seguir", versoes: [] });
 assert(inspecionar.fluxo(id)!.estado === "archived", "arquivar não fechou o fluxo");
 
 // cancelamento autorizado mata o trabalho vivo

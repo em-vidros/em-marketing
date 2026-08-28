@@ -77,6 +77,22 @@ export function fluxosNaoTerminais(db: Banco): Fluxo[] {
   return linhas.map(deLinha);
 }
 
+/**
+ * Fluxo ativo do chat é o último não terminal. A conversa decide o que fazer com
+ * ele a partir do estado, e por isso o estado sai daqui em vez de a regra morar
+ * nesta consulta.
+ */
+export function fluxoAtivoDoChat(db: Banco, chatId: number): Fluxo | null {
+  const marcadores = TERMINAIS.map(() => "?").join(",");
+  const linha = db
+    .query(
+      `SELECT * FROM workflow_runs WHERE chat_id = ? AND estado NOT IN (${marcadores})
+       ORDER BY criado_em DESC, rowid DESC LIMIT 1`,
+    )
+    .get(chatId, ...TERMINAIS) as LinhaFluxo | null;
+  return linha ? deLinha(linha) : null;
+}
+
 export function registrarEvento(
   db: Banco,
   e: { fluxoId: FluxoId; tipo: string; ator: string; dados?: Record<string, unknown> },

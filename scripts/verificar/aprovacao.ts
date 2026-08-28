@@ -12,8 +12,14 @@ import { migrar } from "../../src/controle/migracoes";
 import { criarFluxo, lerFluxo, transicionar } from "../../src/controle/fluxos";
 import { garantirTarefa, reivindicar, concluir } from "../../src/controle/tarefas";
 import { publicarArtefato } from "../../src/controle/artefatos";
-import { abrirRevisao, codificar, decodificar, decidir } from "../../src/controle/aprovacoes";
-import { EfeitoIndeterminado, executarUmaVez } from "../../src/controle/idempotencia";
+import { codificar, decodificar, decidir, validarCallback } from "../../src/controle/aprovacoes";
+import { abrirRevisao } from "../../src/controle/revisoes";
+import {
+  EfeitoIndeterminado,
+  TETO_TENTATIVAS,
+  TetoDeTentativas,
+  executarUmaVez,
+} from "../../src/controle/idempotencia";
 import type { Papel, VersaoId } from "../../src/modelos/tipos";
 
 function assert(cond: unknown, msg: string): asserts cond {
@@ -86,7 +92,7 @@ function rodarTarefa(papel: Papel, conteudos: string[], derivadaDe?: VersaoId): 
       ...(derivadaDe ? { derivadaDe } : {}),
     }),
   );
-  concluir(db, lease, { versoes });
+  concluir(db, lease, { tipo: "seguir", versoes });
   return versoes;
 }
 
@@ -108,22 +114,36 @@ assert(aprovacoes() === 0, "intruso escreveu approval");
 r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("aceitar", 2, protos[0]) });
 assert(!r.ok && r.motivo === "aprovacao_vencida", "rodada futura não caiu em aprovacao_vencida");
 
-// ajustar: uma linha, rodada vira 2, fluxo volta a gerar na mesma transação
+// ajustar no protótipo exige a opção: sem ela o designer não teria base para editar
 r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1), notas: "menos texto" });
+assert(!r.ok && r.motivo === "callback_invalido", "ajustar sem opção passou");
+
+// validarCallback é a mesma porta sem escrever nada
+const antesDeValidar = aprovacoes();
+const v = validarCallback(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1, protos[0]) });
+assert(v.ok && v.callback.acao === "ajustar" && v.revisao.versoes.length === 3, "validarCallback recusou botão válido");
+assert(aprovacoes() === antesDeValidar, "validarCallback escreveu approval");
+assert(
+  !validarCallback(db, { deId: INTRUSO, aprovadorId: RICARDO, data: botao("ajustar", 1, protos[0]) }).ok,
+  "validarCallback deixou o intruso passar",
+);
+
+// ajustar: uma linha, rodada vira 2, fluxo volta a gerar na mesma transação
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1, protos[0]), notas: "menos texto" });
 assert(r.ok && r.estado === "prototypes_generating", "ajustar não voltou a prototypes_generating");
 const f1 = lerFluxo(db, id)!;
 assert(f1.rodada === 2 && f1.revisaoPendente === null, "ajustar não fechou a rodada");
 assert(aprovacoes() === 1, "ajustar não gravou exatamente uma approval");
 
 // sem revisão aberta, qualquer botão é incompatível
-r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1) });
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1, protos[0]) });
 assert(!r.ok && r.motivo === "estado_incompativel", "botão sem revisão aberta passou");
 
 // rodada 2: revisão nova, e o botão do álbum antigo ficou uma rodada atrás
 const [v4] = rodarTarefa("designer", ["p1-ajustado"], protos[0]);
 rodarTarefa("diretor_de_arte", ['{"aprovada":true,"r":2}']);
 abrirRevisao(db, id, "prototype", [v4!]);
-r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1) });
+r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("ajustar", 1, protos[0]) });
 assert(!r.ok && r.motivo === "aprovacao_vencida", "botão de rodada velha não foi recusado");
 
 // aceitar exige opção, e opção da rodada velha não cobre a atual
@@ -134,7 +154,7 @@ assert(!r.ok && r.motivo === "aprovacao_vencida", "opção fora da revisão atua
 
 // aceitar de verdade, e o duplo toque vira no-op
 r = decidir(db, { deId: RICARDO, aprovadorId: RICARDO, data: botao("aceitar", 2, v4) });
-assert(r.ok && r.estado === "prototype_approved", "aceitar não aprovou");
+assert(r.ok && r.estado === "package_finalizing", `aceitar em pedido de Feed parou em ${r.ok ? r.estado : r.motivo}`);
 const aceite = db
   .query("SELECT artifact_version_ids, opcao, reviewer_id FROM approvals WHERE decision = 'accepted'")
   .all() as { artifact_version_ids: string; opcao: string; reviewer_id: number }[];
@@ -162,6 +182,45 @@ try {
   lancou = e instanceof EfeitoIndeterminado;
 }
 assert(lancou && rodou === 1, "chave reservada sem resultado não caiu em EfeitoIndeterminado");
+
+// repetirSeFalhou: chave com erro gravado roda de novo, e o teto fecha o laço
+let quebrado = 0;
+const quebra = async (): Promise<{ ok: boolean }> => {
+  quebrado++;
+  throw new Error("telegram fora do ar");
+};
+for (let i = 1; i <= TETO_TENTATIVAS; i++) {
+  let caiu = false;
+  try {
+    await executarUmaVez(db, "album:x", quebra, { repetirSeFalhou: true });
+  } catch (e) {
+    caiu = !(e instanceof TetoDeTentativas);
+  }
+  assert(caiu, `tentativa ${i} de album:x não repetiu o efeito`);
+}
+assert(quebrado === TETO_TENTATIVAS, `efeito repetível rodou ${quebrado} vezes, esperava ${TETO_TENTATIVAS}`);
+let noTeto = false;
+try {
+  await executarUmaVez(db, "album:x", quebra, { repetirSeFalhou: true });
+} catch (e) {
+  noTeto = e instanceof TetoDeTentativas;
+}
+assert(noTeto && quebrado === TETO_TENTATIVAS, "teto de tentativas não segurou a chave");
+
+// reserva fresca sem erro é efeito em voo: nem o repetível encosta nela
+db.query("INSERT INTO idempotency_keys (chave, tentativas, reservado_em) VALUES ('album:voo', 1, datetime('now'))").run();
+let emVoo = false;
+try {
+  await executarUmaVez(db, "album:voo", quebra, { repetirSeFalhou: true });
+} catch (e) {
+  emVoo = e instanceof EfeitoIndeterminado && !(e instanceof TetoDeTentativas);
+}
+assert(emVoo, "reserva fresca sem erro foi repetida");
+
+// reserva velha sem erro é processo morto no meio: aí repete
+db.query("UPDATE idempotency_keys SET reservado_em = datetime('now', '-11 minutes') WHERE chave = 'album:voo'").run();
+const revivida = await executarUmaVez(db, "album:voo", async () => ({ message_id: 9 }), { repetirSeFalhou: true });
+assert(revivida.novo && revivida.resultado.message_id === 9, "reserva vencida não foi retomada");
 
 db.close();
 rmSync(dir, { recursive: true, force: true });

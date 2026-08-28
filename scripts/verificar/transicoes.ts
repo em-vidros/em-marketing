@@ -83,13 +83,25 @@ transicionar(db, {
   revisaoPendente: { stage: "prototype", rodada: 1, versoes: [] },
 });
 assert(lerFluxo(db, id)!.revisaoPendente?.stage === "prototype", "revisao_pendente não gravou");
+// "recusar todas" volta para brief_confirmed, o estado que exige direcao_criativa
 transicionar(db, {
   fluxoId: id,
-  para: "directions_ready",
+  para: "brief_confirmed",
   ator: "teste",
   incrementaRodada: true,
   revisaoPendente: null,
 });
+let recusaVelha = false;
+try {
+  transicionar(db, { fluxoId: id, para: "directions_ready", ator: "teste" });
+  transicionar(db, { fluxoId: id, para: "prototypes_generating", ator: "teste" });
+  transicionar(db, { fluxoId: id, para: "prototype_qa", ator: "teste" });
+  transicionar(db, { fluxoId: id, para: "awaiting_prototype_review", ator: "teste" });
+  transicionar(db, { fluxoId: id, para: "directions_ready", ator: "teste" });
+} catch (e) {
+  recusaVelha = e instanceof ArestaIlegal;
+}
+assert(recusaVelha, "awaiting_prototype_review ainda aceita a aresta velha para directions_ready");
 const f2 = lerFluxo(db, id)!;
 assert(f2.rodada === 2, "incrementaRodada não somou");
 assert(f2.revisaoPendente === null, "revisaoPendente: null não limpou");

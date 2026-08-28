@@ -125,18 +125,31 @@ export function publicarArtefato(db: Banco, dir: string, lease: Lease, a: NovoAr
   });
 }
 
-export function lerArtefato(
-  db: Banco,
-  id: VersaoId,
-): { bytes: Buffer; mediaTipo: string; sha256: string } {
+export interface ArtefatoLido {
+  bytes: Buffer;
+  mediaTipo: string;
+  sha256: string;
+  formato: Formato | null;
+  versao: number;
+}
+
+export function lerArtefato(db: Banco, id: VersaoId): ArtefatoLido {
   const linha = db
-    .query("SELECT sha256, media_tipo, caminho FROM artifact_versions WHERE id = ?")
-    .get(id) as Pick<LinhaVersao, "sha256" | "media_tipo" | "caminho"> | null;
+    .query("SELECT sha256, media_tipo, caminho, formato, versao FROM artifact_versions WHERE id = ?")
+    .get(id) as
+    | (Pick<LinhaVersao, "sha256" | "media_tipo" | "caminho"> & { formato: string | null; versao: number })
+    | null;
   if (!linha) throw new Error(`versão ${id} não existe`);
   const bytes = readFileSync(linha.caminho);
   const sha = createHash("sha256").update(bytes).digest("hex");
   if (sha !== linha.sha256) {
     throw new Error(`bytes de ${id} não batem com o hash registrado (${linha.caminho})`);
   }
-  return { bytes, mediaTipo: linha.media_tipo, sha256: linha.sha256 };
+  return {
+    bytes,
+    mediaTipo: linha.media_tipo,
+    sha256: linha.sha256,
+    formato: (linha.formato as Formato | null) ?? null,
+    versao: linha.versao,
+  };
 }
