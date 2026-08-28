@@ -19,6 +19,7 @@ const SUITES = [
   "aprovacao",
   "controle",
   "workers",
+  "ponta-a-ponta",
   "reinicio",
 ] as const;
 
