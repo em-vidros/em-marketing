@@ -90,13 +90,13 @@ async function apresentarPrototipo(
     if (!p) throw new Error(`mestre ${m.id} sem preview para o álbum`);
     return o.controle.lerArtefato(p.id).bytes;
   });
+  const unica = mestres.length === 1;
   await o.adaptadores.telegram.enviarAlbum(
     r.chatId,
     previas,
-    brief(r, "Três caminhos para você escolher."),
+    brief(r, unica ? "Versão ajustada para você revisar." : "Três caminhos para você escolher."),
   );
 
-  const unica = mestres.length === 1;
   const linhas = mestres.map((m, i) => {
     const d = direcaoDe(artefatos, m);
     const rotulo = unica ? "Nova versão" : `v${i + 1}`;

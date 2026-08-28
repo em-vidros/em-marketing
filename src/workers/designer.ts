@@ -48,7 +48,7 @@ export function formatoDoPrototipo(contexto: PacoteContexto): Formato {
 }
 
 export function varianteDoLogo(direcao: DirecaoVisual): "cor" | "branco" {
-  return direcao.logo_variant ?? "cor";
+  return direcao.logo_variant;
 }
 
 function ultimo<T>(itens: readonly T[], filtro: (i: T) => boolean): T | null {

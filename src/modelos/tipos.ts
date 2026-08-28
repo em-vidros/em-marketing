@@ -199,8 +199,6 @@ export interface DirecaoVisual {
   /** Qual arquivo de logo entra na arte; logo_rule diz posição e tamanho. */
   logo_variant: "cor" | "branco";
   logo_rule: string;
-  /** Qual arquivo de logo compor. Ausente cai no colorido, que é o uso padrão. */
-  logo_variant?: "cor" | "branco";
   rationale: string;
   prohibited_elements: string[];
 }
