@@ -75,6 +75,8 @@ export interface ResumoDecisao {
   readonly decision: Decisao;
   readonly opcao: VersaoId | null;
   readonly notas: string | null;
+  /** Versões exatas que a decisão cobre (PRD §3.3). */
+  readonly versoes: readonly VersaoId[];
 }
 
 export interface PacoteContexto {
@@ -188,15 +190,23 @@ function decisoesDoFluxo(db: Banco, fluxoId: FluxoId): ResumoDecisao[] {
   return (
     db
       .query(
-        "SELECT stage, rodada, decision, opcao, notas FROM approvals WHERE workflow_id = ? ORDER BY rowid",
+        "SELECT stage, rodada, decision, opcao, notas, artifact_version_ids FROM approvals WHERE workflow_id = ? ORDER BY rowid",
       )
-      .all(fluxoId) as { stage: string; rodada: number; decision: string; opcao: string | null; notas: string | null }[]
+      .all(fluxoId) as {
+      stage: string;
+      rodada: number;
+      decision: string;
+      opcao: string | null;
+      notas: string | null;
+      artifact_version_ids: string;
+    }[]
   ).map((l) => ({
     stage: l.stage as Estagio,
     rodada: l.rodada,
     decision: l.decision as Decisao,
     opcao: (l.opcao as VersaoId | null) ?? null,
     notas: l.notas,
+    versoes: JSON.parse(l.artifact_version_ids) as VersaoId[],
   }));
 }
 

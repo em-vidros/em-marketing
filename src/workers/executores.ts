@@ -317,6 +317,41 @@ async function produzirLegenda(
   });
 }
 
+/**
+ * O QA de pacote devolve `voltar` para cá quando reprova uma peça; sem este passo
+ * a visita seguinte pularia a peça, que já tem parecer, e o laço só gastaria as
+ * visitas até a falha permanente. Feed refinado obriga Stories novo (US-4).
+ */
+async function refinarPacoteReprovado(a: Ambiente): Promise<void> {
+  const ctx = { ...a.tarefa.contexto, artefatos: recarregar(a) };
+  const pacote = conjuntoDoPacote(ctx);
+  for (const master of [pacote.feed, pacote.stories]) {
+    if (!master) continue;
+    const parecer = ultimoParecer(ctx, master.id);
+    if (!parecer || parecer.aprovada) continue;
+    const direcao = direcaoDoMestre(ctx, master);
+    if (!direcao) throw new FalhaPermanente(`mestre ${master.id} não guarda a direção que o gerou`);
+    const formato = master.formato ?? "feed";
+    const peca = await a.adaptadores.designer.editar({
+      base: a.controle.lerArtefato(master.id).bytes,
+      instrucao: instrucaoDeRefino(parecer.violacoes),
+      formato,
+      logo: a.logo(varianteDoLogo(direcao)),
+      ...(master.meta?.refId ? { refId: String(master.meta.refId) } : {}),
+    });
+    conferirLease(a);
+    const novo = await publicarPeca(a.controle, a.tarefa.lease, {
+      png: peca.png,
+      formato,
+      derivadaDe: master.id,
+      meta: { ...(master.meta ?? {}), modelo: peca.modelo, refId: peca.refId ?? null },
+    });
+    if (formato === "feed" && pacote.precisaStories) {
+      await produzirStories(a, a.controle.resumoArtefato(novo.master), INSTRUCAO_STORIES);
+    }
+  }
+}
+
 const finalizarPacote: Executor = async (a) => {
   const ctx = a.tarefa.contexto;
   const pacote = conjuntoDoPacote(ctx);
@@ -352,11 +387,16 @@ const finalizarPacote: Executor = async (a) => {
       await produzirStories(a, feedNovo, INSTRUCAO_STORIES);
     }
   } else {
-    if (pacote.precisaStories && !pacote.stories) {
+    // Stories de rodada anterior ao Feed é Stories do Feed velho: queda entre as
+    // duas publicações do ajuste de Feed deixaria ele passar, e a US-4 proíbe.
+    const storiesVelho = pacote.stories !== null && pacote.stories.rodada < pacote.feed.rodada;
+    if (pacote.precisaStories && (!pacote.stories || storiesVelho)) {
       await produzirStories(a, pacote.feed, INSTRUCAO_STORIES);
     }
     if (pacote.precisaCopy && !pacote.copy) await produzirLegenda(a, pacote.feed);
   }
+
+  await refinarPacoteReprovado(a);
 
   const depois = { ...ctx, artefatos: recarregar(a) };
   const fechado = conjuntoDoPacote(depois);
@@ -380,10 +420,14 @@ function aprovadoParaEntrega(a: Ambiente): { mestres: ResumoArtefato[]; copy: Re
     if (!master) throw new FalhaPermanente(`aceite aponta para ${aceite.opcao}, que não é do fluxo`);
     return { mestres: [master], copy: null };
   }
-  const pacote = conjuntoDoPacote(ctx);
-  const mestres = [pacote.feed, pacote.stories].filter((x): x is ResumoArtefato => x !== null);
+  // O aceite cobre versões exatas (PRD §3.3): peça que caiu no QA não está nele,
+  // e conjuntoDoPacote ainda a devolveria.
+  const cobertos = aceite.versoes
+    .map((id) => ctx.artefatos.find((x) => x.id === id))
+    .filter((x): x is ResumoArtefato => x !== undefined);
+  const mestres = cobertos.filter((x) => x.papel === "master");
   if (mestres.length === 0) throw new FalhaPermanente("pacote aceito sem nenhum mestre");
-  return { mestres, copy: pacote.copy };
+  return { mestres, copy: cobertos.find((x) => x.papel === "copy") ?? null };
 }
 
 const entrega: Executor = async (a) => {
@@ -490,11 +534,14 @@ const arquivarLinear: Executor = async (a) => {
     ),
   );
 
-  await a.controle.executarUmaVez(`${ctx.fluxoId}:linear:aviso`, () =>
-    a.adaptadores.telegram.enviarMensagem(
-      ctx.chatId,
-      `Trabalho arquivado no Linear: ${issue.resultado.url}`,
-    ),
+  await a.controle.executarUmaVez(
+    `${ctx.fluxoId}:linear:aviso`,
+    () =>
+      a.adaptadores.telegram.enviarMensagem(
+        ctx.chatId,
+        `Trabalho arquivado no Linear: ${issue.resultado.url}`,
+      ),
+    { repetirSeFalhou: true },
   );
 
   return { tipo: "seguir", versoes: [], resumo: issue.resultado.url };
