@@ -373,5 +373,5 @@ linha de conversa velha seria pior que perder a linha.
 
 ## Fora da Fase 2
 
-Blog inteiro (Fase 3). Orçamento por pedido (§4.12), que espera o benchmark.
+Blog inteiro (Fase 4, depois da fábrica visível). Orçamento por pedido (§4.12), que espera o benchmark.
 Substituto do Ricardo. Retenção de artefatos. "Marcar como publicado".

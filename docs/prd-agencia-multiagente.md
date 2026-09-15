@@ -4,7 +4,10 @@
 **Data:** 25/08/2026
 **Status:** Rascunho para revisão
 **Responsável pela aprovação:** Ricardo, gerente de marketing
-**Escopo:** Instagram estático e copywriting para o blog
+**Escopo:** Instagram estático, copywriting para o blog e o site da fábrica
+**Revisão de 15/09/2026:** o produto passa a ser tratado como a fábrica de conteúdo
+da agência interna da EM Vidros, com um site que mostra cada pedido andando pelas
+etapas. Mudou §1.2, §1.4, §2.1, US-10, §2.5, §4.1, §4.8, §4.11, §4.13 e §5.
 
 Este PRD amplia o produto descrito em `docs/prd.md`. O PRD atual continua como
 registro da primeira versão do bot. Este documento passa a ser a fonte de verdade
@@ -37,6 +40,12 @@ do código. O Gemini Nano Banana 2 cuidará da geração e da edição das image
 modelo multimodal separado fará o controle visual. Código determinístico cuidará
 da aprovação, dos arquivos, do Linear e da entrega manual.
 
+O produto funciona como a agência de marketing interna da EM Vidros, organizada
+como uma fábrica de conteúdo. Cada pedido é uma ordem de produção que passa por
+etapas fixas, e cada etapa tem um agente responsável. Um site interno mostra essa
+fábrica em um canvas infinito. Cada etapa aparece como um bloco, e o bloco que está
+trabalhando mostra o que acontece naquele momento.
+
 ### 1.3 Success Criteria
 
 | KPI | Meta nos primeiros 30 dias |
@@ -58,6 +67,11 @@ da aprovação, dos arquivos, do Linear e da entrega manual.
 - A publicação no Instagram e no blog continua manual na primeira versão.
 - O Telegram entrega a imagem final como documento para preservar os bytes.
 - A automação futura usará um painel de calendário dentro do Telegram.
+- O Telegram continua sendo o canal do Ricardo para pedir, aprovar e baixar.
+- O site da fábrica só mostra o trabalho na primeira versão. Ele não aprova, não
+  ajusta e não cancela nada.
+- O site roda no servidor da EM Vidros e abre só pela rede Tailscale da empresa.
+  Não há deploy na Vercel nem endereço público.
 
 ## 2. User Experience & Functionality
 
@@ -67,7 +81,7 @@ da aprovação, dos arquivos, do Linear e da entrega manual.
 |---|---|---|
 | Ricardo | Gerente de marketing e aprovador | Pedir, comparar, corrigir, aprovar e baixar o material pelo celular |
 | Time de marketing | Solicitante autorizado | Acompanhar pedidos e usar materiais aprovados |
-| Henrique | Mantenedor | Ver falhas, custos, tentativas e histórico sem abrir o banco manualmente |
+| Henrique | Mantenedor | Ver no site da fábrica as falhas, tentativas e o histórico de cada pedido sem abrir o banco |
 
 Ricardo é o único aprovador na primeira versão. Um substituto só pode aprovar
 quando um administrador registrar uma delegação com início e fim.
@@ -253,6 +267,32 @@ Critérios de aceite:
 - O botão `Cancelar` encerra tarefas que ainda não foram aprovadas.
 - O sistema nunca aprova um trabalho por tempo decorrido.
 
+#### US-10: Acompanhar a fábrica pelo site
+
+> Como Henrique, quero abrir a fábrica e ver cada pedido andando pelas etapas para
+> saber o que está sendo feito agora, o que parou e por quê. O Ricardo vê a mesma
+> tela se entrar na rede Tailscale (§5.4).
+
+Critérios de aceite:
+
+- O site abre em um navegador de um aparelho que está na rede Tailscale da empresa.
+- Fora dessa rede, o site não responde.
+- O pedido aparece como uma linha de blocos em um canvas infinito, uma etapa por
+  bloco, ligados na ordem em que o trabalho anda.
+- O canvas desliza e aproxima com trackpad, roda do mouse e pinça no celular.
+- Cada bloco mostra a etapa, o agente, o estado (`pendente`, `trabalhando`,
+  `concluída`, `aguardando o Ricardo`, `revisão manual`, `falhou`), a tentativa e o
+  tempo gasto.
+- O bloco que está trabalhando se destaca e mostra a atividade em andamento.
+- Ajuste, recusa e reprovação do diretor de arte aparecem como aresta de volta para
+  a etapa que refaz o trabalho.
+- Um bloco aberto mostra a entrada, a saída e o histórico da etapa, incluindo as
+  prévias geradas.
+- Uma mudança de estado aparece no site em até 2 segundos, sem recarregar a página.
+- O link copiado abre o mesmo pedido, a mesma etapa e a mesma aba.
+- Com `prefers-reduced-motion`, as animações viram troca de opacidade.
+- O site não mostra tokens nem o Telegram ID de ninguém, nem dentro do histórico.
+
 ### 2.5 Fora do escopo
 
 Estes itens ficam fora da primeira versão:
@@ -266,7 +306,9 @@ Estes itens ficam fora da primeira versão:
 - Respostas a comentários ou mensagens diretas.
 - Métricas, atribuição comercial e otimização automática.
 - Aprovação por vários níveis ou comitês.
-- Aplicativo web completo.
+- Aprovar, pedir ajuste, cancelar ou baixar o arquivo mestre pelo site.
+- Pedir conteúdo pelo site.
+- Site com endereço público ou hospedado fora do servidor da EM Vidros.
 - Conteúdo para outras marcas.
 
 ## 3. AI System Requirements
@@ -445,11 +487,15 @@ Control Plane
    +--> Worker de design ----------> Nano Banana 2
    +--> Worker de revisão visual --> Modelo multimodal
    +--> Worker de operações -------> Telegram e Linear
+   |
+   +--> API de leitura e eventos ---> Site da fábrica (Tailscale)
 ```
 
 O primeiro lançamento mantém Bun e Elysia. O SQLite continua como banco enquanto
 o sistema rodar em um servidor. Somente o plano de controle abre o SQLite. Os
-workers usam a API interna de controle e nunca montam o arquivo do banco.
+workers usam a API interna de controle e nunca montam o arquivo do banco. O site
+da fábrica segue a mesma regra. Ele lê pela API de leitura do plano de controle e
+não tem banco próprio.
 
 O serviço de artefatos controla o volume durável. Os workers enviam novas versões
 pela API de controle e não compartilham caminhos graváveis. Se os workers forem
@@ -609,6 +655,7 @@ Para o blog, o bot envia uma prévia legível e os arquivos `.md` e `.txt`.
 | Instagram Graph API | Desativada | Agendamento e publicação automáticos |
 | CMS do blog | Desativado | Rascunho ou publicação automáticos |
 | Figma | Desativado | Agente de produção |
+| Tailscale | Acesso ao site da fábrica | Nenhum |
 
 ### 4.9 Publicação manual
 
@@ -667,6 +714,12 @@ O artefato de calendário deve permitir:
 - O plano de controle valida toda saída de agente contra um schema.
 - Os logs ocultam tokens, bytes de imagem e dados privados do Telegram.
 - URLs para download de artefatos são opacas e expiram.
+- O site da fábrica é publicado só em `127.0.0.1` do servidor e chega à rede pelo
+  `tailscale serve`. O endereço público `mkt.emvidros.com.br` nunca encaminha para
+  ele.
+- O site só serve prévias. O arquivo mestre continua saindo só pelo Telegram, com a
+  regra de URL opaca acima.
+- A API de leitura do site não aceita escrita. Nenhuma rota dela muda estado.
 - O prazo de retenção dos artefatos locais deve ser definido antes da
   implementação.
 - O Linear mantém o registro de negócio depois da limpeza local.
@@ -689,6 +742,26 @@ O plano de controle registra estes valores para cada tarefa:
 
 O primeiro benchmark definirá o orçamento padrão por pedido. O produto deve
 parar antes de ultrapassar o orçamento e perguntar a Ricardo se pode continuar.
+
+### 4.13 Site da fábrica
+
+O site é a vista da fábrica. Ele não guarda estado e não decide nada. Tudo que
+mostra vem de três fontes que o plano de controle já tem:
+
+- `workflow_runs` dá o pedido e o estado atual.
+- `tasks` dá a etapa, o agente, a tentativa e a lease.
+- `events` dá a atividade em ordem, pelo `seq`.
+
+As etapas do canvas saem de uma tabela que fica ao lado das máquinas de estado de
+§4.3 e §4.4 e liga cada estado a uma etapa. Estado sem etapa não compila. As arestas
+de volta, como a reprovação do diretor de arte, saem das próprias transições. O site
+desenha o que o plano de controle calcula e não repete regra nenhuma.
+
+O site é feito com Bun 1.4.1, Vite+, Tailwind CSS, Motion, nuqs e bibliotecas de
+componentes como Unlumen UI e beautiful.ui. O acabamento segue a skill
+`apple-design`: resposta no toque, animação por mola interrompível e canvas com
+inércia de rolagem nativa. O desenho técnico mora em
+`.specs/features/fabrica/DESIGN.md`.
 
 ## 5. Risks & Roadmap
 
@@ -726,6 +799,26 @@ Comprovação:
 - O benchmark de dez temas de imagem passa.
 - Ricardo conclui um pedido real pelo celular.
 - O hash do download corresponde ao mestre armazenado.
+
+#### Fábrica visível
+
+Escopo:
+
+- Site da fábrica no servidor, aberto pela rede Tailscale.
+- Canvas infinito com os blocos das etapas do Instagram e do blog.
+- Inspetor de etapa com entrada, saída, prévias e histórico.
+- Atividade ao vivo pelos eventos do plano de controle.
+- Somente leitura.
+
+Comprovação:
+
+- Um pedido rodando no perfil `ensaio` aparece no site e cada mudança de estado
+  chega ao bloco em até 2 segundos.
+- O site abre no MacBook do Henrique pela Tailscale e não abre por
+  `mkt.emvidros.com.br` nem pelo IP público.
+- O link de um pedido com etapa aberta, copiado e colado em outra aba, mostra a
+  mesma tela.
+- Nenhuma resposta do site contém um Telegram ID, e nenhuma rota dele muda o banco.
 
 #### MVP blog
 
@@ -828,6 +921,9 @@ deve aprovar qualquer nova regra de marca.
 - Telegram ID de Ricardo.
 - Chave da API do Linear e etiqueta `Instagram Post`.
 - Volume durável para banco e artefatos.
+- Tailscale ativo no servidor e em cada aparelho que abre o site da fábrica, com os
+  certificados HTTPS ligados no painel da tailnet.
+- Bun 1.4.1 no servidor e na imagem do container.
 - Fontes aprovadas para afirmações técnicas do blog.
 
 ### 5.4 Decisões abertas antes da implementação
@@ -838,6 +934,8 @@ deve aprovar qualquer nova regra de marca.
 - Definir os primeiros dez briefs de imagem e dez briefs de blog.
 - Definir o teto de custo padrão depois do benchmark.
 - Nomear o substituto autorizado de Ricardo.
+- Decidir se o Ricardo entra na rede Tailscale para ver o site pelo celular.
+- Decidir se o site ganha ações (cancelar, aprovar, pedir) depois da primeira versão.
 
 ### 5.5 Regra de liberação
 

@@ -29,7 +29,17 @@ workers, que precisam das chaves, entram depois, com o encaixe pronto.
 |---|---|---|
 | 1. Fundação | Domínio, máquinas de estado, plano de controle, filas com lease, artefatos imutáveis, aprovação versionada | Os três predicados acima |
 | 2. MVP Instagram | Diretor criativo, redator, designer, diretor de arte; três direções; ajuste e recusa; PNG mestre | Benchmark de dez temas; pedido real do Ricardo pelo celular |
-| 3. MVP blog | Três ângulos, artigo, revisão, entrega `.md` e `.txt` | Benchmark de dez temas de blog |
+| 3. Fábrica visível | Site da fábrica no servidor, canvas infinito com as etapas, inspetor de etapa, atividade ao vivo, só leitura, aberto pela Tailscale | As quatro provas do PRD §5.1 "Fábrica visível" |
+| 4. MVP blog | Três ângulos, artigo, revisão, entrega `.md` e `.txt` | Benchmark de dez temas de blog |
+
+## Por que a fábrica visível vem antes do blog
+
+Decidido em 15/09/2026. O produto passou a ser a fábrica de conteúdo da agência
+interna, e a fábrica precisa ser vista trabalhando (PRD §1.2 e US-10). O gate da
+Fase 2 continua preso em coisa de fora do código, a chave da DeepSeek, o billing do
+Gemini e o Telegram ID do Ricardo. O blog depende da mesma chave. O site não. Ele
+lê o que o plano de controle já grava, então se prova inteiro no perfil `ensaio`,
+sem chave de modelo. Desenho em `.specs/features/fabrica/DESIGN.md`.
 
 Fases v1.1 em diante seguem o PRD §5.1 sem alteração.
 
