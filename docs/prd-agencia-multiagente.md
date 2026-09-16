@@ -5,9 +5,12 @@
 **Status:** Rascunho para revisão
 **Responsável pela aprovação:** Ricardo, gerente de marketing
 **Escopo:** Instagram estático, copywriting para o blog e o site da fábrica
-**Revisão de 15/09/2026:** o produto passa a ser tratado como a fábrica de conteúdo
-da agência interna da EM Vidros, com um site que mostra cada pedido andando pelas
-etapas. Mudou §1.2, §1.4, §2.1, US-10, §2.5, §4.1, §4.8, §4.11, §4.13 e §5.
+**Revisão de 16/09/2026:** o produto é a fábrica de conteúdo da agência interna da
+EM Vidros, e o site passa a ser o único canal. O Telegram sai inteiro, de canal de
+pedido a canal de entrega. Quem usa entra no site com e-mail e senha, de qualquer
+lugar, e pede, acompanha, ajusta, aprova e baixa por ali. Mudou §1.2, §1.4, §2.1 a
+§2.5, §3.2, §3.3, §4.1, §4.2, §4.5 a §4.11, §4.13 e §5. A revisão de 15/09, que
+punha o site como vista somente de leitura ao lado do Telegram, fica sem efeito.
 
 Este PRD amplia o produto descrito em `docs/prd.md`. O PRD atual continua como
 registro da primeira versão do bot. Este documento passa a ser a fonte de verdade
@@ -42,9 +45,13 @@ da aprovação, dos arquivos, do Linear e da entrega manual.
 
 O produto funciona como a agência de marketing interna da EM Vidros, organizada
 como uma fábrica de conteúdo. Cada pedido é uma ordem de produção que passa por
-etapas fixas, e cada etapa tem um agente responsável. Um site interno mostra essa
-fábrica em um canvas infinito. Cada etapa aparece como um bloco, e o bloco que está
-trabalhando mostra o que acontece naquele momento.
+etapas fixas, e cada etapa tem um agente responsável.
+
+O site é a fábrica. Quem pede entra com e-mail e senha, escreve o tema, vê o pedido
+andar pelas etapas num canvas, compara as três direções, pede ajuste, aprova e baixa
+o arquivo final ali mesmo. O Telegram não participa de nada disso. A decisão continua
+presa a uma pessoa identificada, só que agora a identidade vem da sessão do site em
+vez do Telegram ID.
 
 ### 1.3 Success Criteria
 
@@ -65,23 +72,29 @@ trabalhando mostra o que acontece naquele momento.
 - Ricardo aceita uma opção, pede ajustes ou recusa todas.
 - A versão aprovada nunca é recriada do zero.
 - A publicação no Instagram e no blog continua manual na primeira versão.
-- O Telegram entrega a imagem final como documento para preservar os bytes.
-- A automação futura usará um painel de calendário dentro do Telegram.
-- O Telegram continua sendo o canal do Ricardo para pedir, aprovar e baixar.
-- O site da fábrica só mostra o trabalho na primeira versão. Ele não aprova, não
-  ajusta e não cancela nada.
-- O site roda no servidor da EM Vidros e abre só pela rede Tailscale da empresa.
-  Não há deploy na Vercel nem endereço público.
+- O site entrega o arquivo mestre por download direto, sem nenhuma recompressão.
+- O site é o único canal. Pedido, acompanhamento, ajuste, aprovação e download saem
+  todos dele.
+- Qualquer pessoa autorizada entra de qualquer lugar, com e-mail e senha. Não há
+  exigência de estar numa rede específica.
+- Aprovar continua sendo ato de uma pessoa nomeada, não de quem tiver o link.
+- O site avisa o que espera decisão dentro dele mesmo. Não há aviso por WhatsApp nem
+  por e-mail na primeira versão.
+- A aplicação inteira roda no servidor da EM Vidros, tela e API no mesmo endereço.
+- A automação futura usará um calendário dentro do próprio site.
 
 ## 2. User Experience & Functionality
 
 ### 2.1 Personas
 
-| Persona | Papel | Necessidade |
+| Persona | Papel no site | Necessidade |
 |---|---|---|
-| Ricardo | Gerente de marketing e aprovador | Pedir, comparar, corrigir, aprovar e baixar o material pelo celular |
-| Time de marketing | Solicitante autorizado | Acompanhar pedidos e usar materiais aprovados |
-| Henrique | Mantenedor | Ver no site da fábrica as falhas, tentativas e o histórico de cada pedido sem abrir o banco |
+| Ricardo | `aprovador` | Pedir, comparar, corrigir, aprovar e baixar o material pelo celular |
+| Time de marketing | `solicitante` | Pedir conteúdo, acompanhar pedidos e baixar o que já foi aprovado |
+| Henrique | `admin` | Cadastrar quem entra e ver falhas, tentativas e histórico sem abrir o banco |
+
+Cada pessoa entra com e-mail e senha e tem um papel. `solicitante` pede e acompanha.
+`aprovador` também decide. `admin` também cadastra pessoas e muda papéis.
 
 Ricardo é o único aprovador na primeira versão. Um substituto só pode aprovar
 quando um administrador registrar uma delegação com início e fim.
@@ -94,10 +107,10 @@ quando um administrador registrar uma delegação com início e fim.
 4. O redator define o headline e o apoio de cada direção.
 5. O designer gera três protótipos com o Nano Banana 2.
 6. O diretor de arte revisa marca, texto, composição, logo e zonas seguras.
-7. Ricardo recebe os protótipos no Telegram.
+7. Ricardo vê os três protótipos no site.
 8. Ricardo aceita uma opção, pede ajustes ou recusa todas.
 9. O sistema preserva a opção aceita e produz os arquivos finais.
-10. Ricardo baixa o arquivo sem perda causada pelo Telegram.
+10. Ricardo baixa o arquivo mestre pelo site.
 11. O sistema arquiva o trabalho no Linear.
 12. Ricardo publica manualmente no Instagram.
 
@@ -127,11 +140,13 @@ Stories juntos antes de aprovar o pacote final.
 
 Critérios de aceite:
 
-- O bot aceita uma mensagem livre em português.
-- O bot exige `Feed`, `Stories` ou `Ambos` antes de gerar imagens.
-- O bot confirma tema, objetivo e formato antes de gastar créditos de imagem.
-- O bot usa o brandbook vigente na data do pedido.
-- O bot não pede que Ricardo escolha paleta, tipografia ou território visual.
+- O site aceita o tema em texto livre, em português.
+- O site exige `Feed`, `Stories` ou `Ambos` antes de gerar imagens.
+- O site mostra tema, objetivo e formato para confirmação antes de gastar créditos
+  de imagem.
+- O pedido usa o brandbook vigente na data em que foi aberto.
+- O site não pede que Ricardo escolha paleta, tipografia ou território visual.
+- Quem não entrou não abre a tela de pedido.
 
 #### US-2: Receber três direções visuais
 
@@ -145,7 +160,8 @@ Critérios de aceite:
 - Cada direção registra composição, paleta, tipografia, elemento principal,
   headline, uso do logo e justificativa.
 - As três direções respeitam `brand/BRANDBOOK.md` e `brand/tokens.json`.
-- O sistema envia os três protótipos em um álbum do Telegram.
+- O site mostra os três protótipos lado a lado, em tamanho que dá para julgar no
+  celular.
 - O sistema identifica as opções como `v1`, `v2` e `v3`.
 - O sistema só envia um protótipo depois que ele passa pelo controle visual.
 - Se uma direção não passar após o limite de tentativas, o sistema informa a
@@ -158,10 +174,11 @@ Critérios de aceite:
 
 Critérios de aceite:
 
-- O Telegram mostra os botões `Aceitar`, `Pedir ajustes` e `Recusar todas`.
-- Somente o Telegram ID de Ricardo ou de um substituto ativo executa essas ações.
+- O site mostra os botões `Aceitar`, `Pedir ajustes` e `Recusar todas`.
+- Somente uma sessão do aprovador ou de um substituto ativo executa essas ações.
+- Uma sessão de `solicitante` vê os botões desabilitados e o motivo.
 - `Aceitar` registra a versão exata do protótipo e encerra as outras opções.
-- `Pedir ajustes` solicita uma instrução em linguagem natural.
+- `Pedir ajustes` abre um campo de instrução em linguagem natural.
 - O designer edita a opção indicada e preserva os elementos não citados.
 - A versão ajustada recebe um novo número e volta para aprovação.
 - `Recusar todas` encerra as três direções atuais.
@@ -179,29 +196,30 @@ Critérios de aceite:
 - O Feed aprovado orienta a adaptação para Stories.
 - O Stories usa o mesmo conceito, as mesmas cores e o mesmo elemento principal.
 - O designer recompõe o Stories em 9:16. O sistema não usa apenas um recorte.
-- Ricardo recebe Feed, Stories e legenda do Feed na revisão final.
+- O site mostra Feed, Stories e legenda do Feed juntos na revisão final.
 - Qualquer mudança feita depois dessa revisão exige nova aprovação.
 
-#### US-5: Baixar a imagem final sem perda na transferência
+#### US-5: Baixar a imagem final sem perda
 
-> Como Ricardo, quero baixar o arquivo final sem compressão do Telegram para
-> publicar a imagem com a melhor qualidade disponível.
+> Como Ricardo, quero baixar o arquivo final na qualidade exata em que ele foi
+> produzido para publicar a melhor imagem disponível.
 
 Critérios de aceite:
 
-- O bot envia uma prévia como foto para facilitar a revisão no celular.
-- Depois da aprovação, o bot envia o arquivo mestre com `sendDocument`.
+- O site mostra prévias leves na revisão, para carregar rápido no celular.
+- Depois da aprovação, o botão de download entrega o arquivo mestre.
 - O mestre usa PNG, sRGB e compressão sem perda.
 - O Feed mede exatamente 1080 por 1350 pixels.
 - O Stories mede exatamente 1080 por 1920 pixels.
 - O sistema também pode entregar um JPEG pronto para Instagram. Esse JPEG não
   substitui o mestre PNG.
-- O SHA-256 do documento baixado é igual ao SHA-256 do artefato armazenado.
+- O SHA-256 do arquivo baixado é igual ao SHA-256 do artefato armazenado.
 - O nome do arquivo contém o trabalho, o formato e a versão aprovada.
-- O sistema não envia o mestre final com `sendPhoto`.
+- Só quem entrou no site baixa o mestre, e o endereço do arquivo não funciona sem
+  sessão.
 
-O Instagram pode recomprimir a imagem durante a publicação. O produto garante
-que o Telegram não degrade o arquivo entregue a Ricardo.
+O Instagram pode recomprimir a imagem durante a publicação. O produto entrega a
+Ricardo o mesmo byte que produziu.
 
 #### US-6: Gerar o texto do Instagram
 
@@ -216,7 +234,7 @@ Critérios de aceite:
 - `#EMVidros` é a primeira hashtag.
 - O texto usa português simples, direto e humanizado.
 - A legenda não inventa preço, estoque, filial, certificação ou especificação.
-- Ricardo pode pedir ajuste apenas na legenda sem invalidar a imagem.
+- Ricardo pede ajuste só na legenda sem invalidar a imagem.
 - Uma mudança no headline da imagem invalida a aprovação visual.
 
 #### US-7: Gerar o texto do blog
@@ -250,8 +268,8 @@ Critérios de aceite:
 
 - O Linear recebe o tema, o brief, as direções, a decisão e os arquivos finais.
 - O histórico registra ajustes e recusas sem apagar versões anteriores.
-- O bot informa que o material está pronto para publicação manual.
-- O bot nunca afirma que publicou no Instagram ou no blog.
+- O site diz que o material está pronto para publicação manual.
+- O site nunca afirma que publicou no Instagram ou no blog.
 - A entrega manual funciona sem credenciais da Meta ou do CMS.
 
 #### US-9: Recuperar falhas
@@ -261,22 +279,20 @@ Critérios de aceite:
 
 Critérios de aceite:
 
-- O bot informa qual etapa falhou e se o sistema tentará novamente.
+- O site mostra qual etapa falhou e se o sistema tentará novamente.
 - Uma tarefa interrompida volta para a fila quando o prazo da execução expira.
 - Repetir uma tarefa não duplica artefatos aprovados, issues ou entregas.
-- O botão `Cancelar` encerra tarefas que ainda não foram aprovadas.
+- O botão `Cancelar` no site encerra tarefas que ainda não foram aprovadas.
 - O sistema nunca aprova um trabalho por tempo decorrido.
 
 #### US-10: Acompanhar a fábrica pelo site
 
-> Como Henrique, quero abrir a fábrica e ver cada pedido andando pelas etapas para
-> saber o que está sendo feito agora, o que parou e por quê. O Ricardo vê a mesma
-> tela se entrar na rede Tailscale (§5.4).
+> Como quem pediu, quero ver o pedido andando pelas etapas para saber o que está
+> sendo feito agora, o que parou e por quê.
 
 Critérios de aceite:
 
-- O site abre em um navegador de um aparelho que está na rede Tailscale da empresa.
-- Fora dessa rede, o site não responde.
+- O site abre em qualquer navegador, de qualquer lugar, com sessão válida.
 - O pedido aparece como uma linha de blocos em um canvas infinito, uma etapa por
   bloco, ligados na ordem em que o trabalho anda.
 - O canvas desliza e aproxima com trackpad, roda do mouse e pinça no celular.
@@ -291,7 +307,27 @@ Critérios de aceite:
 - Uma mudança de estado aparece no site em até 2 segundos, sem recarregar a página.
 - O link copiado abre o mesmo pedido, a mesma etapa e a mesma aba.
 - Com `prefers-reduced-motion`, as animações viram troca de opacidade.
-- O site não mostra tokens nem o Telegram ID de ninguém, nem dentro do histórico.
+- O site não mostra tokens nem segredo nenhum, nem dentro do histórico.
+- O bloco que espera decisão aparece em destaque na lista de pedidos, para quem entra
+  ver sem procurar.
+
+#### US-11: Entrar no site
+
+> Como pessoa autorizada, quero entrar com e-mail e senha para pedir e aprovar sem
+> depender de aplicativo de mensagem.
+
+Critérios de aceite:
+
+- O Henrique cadastra pessoa, e-mail e papel. Ninguém se cadastra sozinho.
+- A pessoa entra com e-mail e senha, e a sessão dura até ela sair ou expirar.
+- A senha fica no banco com hash, nunca em texto.
+- Sessão expirada ou ausente devolve a tela de entrada, e nenhuma rota de dado
+  responde sem sessão.
+- Tentativa repetida de senha errada é barrada por um tempo.
+- O papel decide o que aparece: `solicitante` pede e acompanha, `aprovador` também
+  decide, `admin` também cadastra.
+- Uma decisão registra qual pessoa decidiu, e o histórico mostra isso.
+- Trocar o papel de alguém não muda decisão nenhuma já registrada.
 
 ### 2.5 Fora do escopo
 
@@ -306,9 +342,10 @@ Estes itens ficam fora da primeira versão:
 - Respostas a comentários ou mensagens diretas.
 - Métricas, atribuição comercial e otimização automática.
 - Aprovação por vários níveis ou comitês.
-- Aprovar, pedir ajuste, cancelar ou baixar o arquivo mestre pelo site.
-- Pedir conteúdo pelo site.
-- Site com endereço público ou hospedado fora do servidor da EM Vidros.
+- Qualquer uso do Telegram.
+- Aviso por WhatsApp, e-mail ou push do navegador.
+- Cadastro livre, convite por link e recuperação de senha por e-mail.
+- Aplicativo nativo de celular.
 - Conteúdo para outras marcas.
 
 ## 3. AI System Requirements
@@ -346,7 +383,7 @@ Referências:
 | Redator | Ler guia de voz, catálogo aprovado, fontes e versões anteriores |
 | Designer visual | Ler referências de marca, chamar Nano Banana 2 e enviar artefatos |
 | Diretor de arte | Ler imagem, tokens, headline, formato e rubrica de qualidade |
-| Operações | Telegram, Linear e armazenamento de artefatos |
+| Operações | Site, Linear e armazenamento de artefatos |
 
 Cada worker recebe apenas essas ferramentas. O designer não recebe credenciais do
 Linear. O redator não recebe acesso ao armazenamento interno. Operações não recebe
@@ -359,7 +396,7 @@ permissão para alterar conteúdo aprovado.
 | Campo | Requisito |
 |---|---|
 | `request_id` | Identificador único |
-| `requested_by` | Telegram ID autorizado |
+| `requested_by` | Usuário autenticado com papel `solicitante`, `aprovador` ou `admin` |
 | `kind` | `instagram` ou `blog` |
 | `theme` | Tema informado por Ricardo |
 | `format` | `feed`, `stories`, `both` ou `blog` |
@@ -388,7 +425,7 @@ permissão para alterar conteúdo aprovado.
 | Campo | Requisito |
 |---|---|
 | `decision_id` | Identificador único |
-| `reviewer_id` | Telegram ID de Ricardo ou substituto ativo |
+| `reviewer_id` | Usuário aprovador ou substituto ativo, tirado da sessão |
 | `stage` | `prototype`, `package` ou `copy` |
 | `artifact_version_ids` | Versões que a decisão cobre |
 | `decision` | `accepted`, `adjustment_requested` ou `rejected` |
@@ -473,7 +510,7 @@ Critério de liberação:
 ### 4.1 Visão geral da arquitetura
 
 ```text
-Telegram
+Site (tela e API no mesmo endereço)
    |
    v
 Control Plane
@@ -486,16 +523,17 @@ Control Plane
    +--> Worker de redação ---------> DeepSeek V4 Pro
    +--> Worker de design ----------> Nano Banana 2
    +--> Worker de revisão visual --> Modelo multimodal
-   +--> Worker de operações -------> Telegram e Linear
+   +--> Worker de operações -------> Linear e arquivos
    |
-   +--> API de leitura e eventos ---> Site da fábrica (Tailscale)
+   +--> API de leitura e eventos ---> Canvas da fábrica, ao vivo
 ```
 
 O primeiro lançamento mantém Bun e Elysia. O SQLite continua como banco enquanto
 o sistema rodar em um servidor. Somente o plano de controle abre o SQLite. Os
 workers usam a API interna de controle e nunca montam o arquivo do banco. O site
-da fábrica segue a mesma regra. Ele lê pela API de leitura do plano de controle e
-não tem banco próprio.
+segue a mesma regra. Ele fala com o plano de controle pela API e não tem banco
+próprio. As contas e sessões de quem usa moram no mesmo banco, porque quem valida a
+sessão é o mesmo processo que já é dono do estado.
 
 O serviço de artefatos controla o volume durável. Os workers enviam novas versões
 pela API de controle e não compartilham caminhos graváveis. Se os workers forem
@@ -509,13 +547,13 @@ eventos validados pelo plano de controle.
 
 #### Plano de controle
 
-- Receives validated Telegram events.
+- Receives validated requests from the site.
 - Creates workflows and tasks.
 - Builds an immutable context package for each task.
 - Enforces state transitions.
 - Validates approvals.
 - Applies budgets and retry limits.
-- Exposes status to Telegram.
+- Exposes status to the site.
 
 #### Execução dos workers
 
@@ -530,11 +568,11 @@ eventos validados pelo plano de controle.
 - Stores masters, previews, copy, metadata and hashes.
 - Never overwrites an approved version.
 - Creates derived previews without changing the master.
-- Delivers approved masters through Telegram documents.
+- Delivers approved masters as downloads to authenticated sessions.
 
 #### Serviço de aprovação
 
-- Resolves the reviewer role from Telegram ID.
+- Resolves the reviewer role from the authenticated session.
 - Rejects callbacks for old versions.
 - Records decisions as append-only events.
 - Invalidates approval when covered content changes.
@@ -604,6 +642,8 @@ failed
 | `deliveries` | Downloads, arquivo no Linear e publicação futura |
 | `events` | Histórico append-only do fluxo |
 | `delegations` | Substituição temporária do aprovador |
+| `users` | Pessoa, e-mail, hash da senha e papel |
+| `sessions` | Sessão ativa de quem entrou |
 
 ### 4.6 Execução durável
 
@@ -613,87 +653,87 @@ failed
 - O reconciliador procura tarefas presas e entregas incompletas.
 - Uma tarefa respeita limites de tentativas, duração e custo.
 - Uma falha permanente vai para uma fila de revisão manual.
-- Repetir `sendDocument` não cria outra entrega quando a anterior já foi
-  confirmada pelo Telegram.
+- Baixar o mesmo arquivo duas vezes não cria outra entrega. O download lê o artefato
+  imutável e registra o acesso.
 - Repetir o arquivo no Linear não cria outro anexo com a mesma chave.
 
-### 4.7 Experiência no Telegram
+### 4.7 Experiência no site
 
 #### Revisão dos protótipos
 
-O bot envia:
+A tela de revisão mostra:
 
-1. Um brief curto.
-2. As três prévias em um álbum.
-3. Uma mensagem com os nomes das direções e justificativas curtas.
-4. Botões para cada opção.
-5. Botões para ajuste, recusa e cancelamento.
+1. O brief curto.
+2. As três prévias lado a lado, que abrem em tela cheia.
+3. O nome de cada direção e a justificativa curta.
+4. Um botão de aceitar por opção.
+5. Botões de ajuste, recusa de todas e cancelamento.
 
-O callback contém o fluxo, a etapa e a versão do artefato. O plano de controle
-recusa o callback quando qualquer parte não corresponde mais à revisão atual.
+Cada botão carrega o fluxo, a etapa, a rodada e a versão do artefato. O plano de
+controle recusa a decisão quando qualquer parte não corresponde mais à revisão
+atual, e a tela mostra o que mudou em vez de um erro seco.
 
-#### Download final
+#### Entrega final
 
-O bot envia:
+A tela de entrega mostra:
 
 1. A prévia aprovada.
-2. O PNG mestre como documento do Telegram.
+2. O botão de baixar o PNG mestre.
 3. O JPEG preparado para o Instagram, quando configurado.
-4. A legenda do Feed em uma mensagem separada e copiável.
+4. A legenda do Feed num campo com botão de copiar.
 5. O link do Linear.
 
-Para o blog, o bot envia uma prévia legível e os arquivos `.md` e `.txt`.
+Para o blog, a tela mostra o artigo legível e os arquivos `.md` e `.txt` para baixar.
 
 ### 4.8 Integrações
 
 | Integração | Primeira versão | Futuro |
 |---|---|---|
-| Telegram Bot API | Pedido, aprovação e entrega | Mini App de agendamento |
+| Telegram Bot API | Desativada, o código sai da árvore | Nenhum |
 | DeepSeek API | Direção e texto | Devbot e análise |
 | Gemini API | Geração e revisão visual | Imagens de entrada para motion |
 | Linear API | Arquivo e histórico | Planejamento de campanhas |
 | Instagram Graph API | Desativada | Agendamento e publicação automáticos |
 | CMS do blog | Desativado | Rascunho ou publicação automáticos |
 | Figma | Desativado | Agente de produção |
-| Tailscale | Acesso ao site da fábrica | Nenhum |
+| Endereço público do site | Tailscale Funnel enquanto a borda do Caddy não sai | `mkt.emvidros.com.br` |
 
 ### 4.9 Publicação manual
 
 O primeiro lançamento não exige credenciais da Meta ou do CMS. Ricardo baixa o
-mestre aprovado e publica. O bot registra `delivered`, não `published`.
+mestre aprovado no site e publica.
 
-Se Ricardo quiser registrar a publicação manual, ele pode pressionar `Marcar
-como publicado`. A ação guarda a data e a URL opcional do Instagram. Ela não
-entra em contato com o Instagram.
+O sistema registra `delivered`, não `published`. Se Ricardo quiser registrar a
+publicação manual, ele aperta `Marcar como publicado` no site. A ação guarda a data e
+a URL opcional do Instagram. Ela não entra em contato com o Instagram.
 
 ### 4.10 Agendamento automático futuro
 
 A publicação automática no Instagram entra depois que o fluxo manual estiver
 estável.
 
-O teclado de botões do Telegram não oferece um calendário completo. A versão
-futura abrirá um artefato de agendamento incorporado como Telegram Mini App.
+A versão futura abre um calendário dentro do próprio site, na mesma sessão.
 
 O fluxo de agendamento funcionará assim:
 
 1. Ricardo aprova o pacote final.
-2. O bot mostra `Baixar`, `Publicar manualmente` e `Agendar`.
-3. `Agendar` abre o artefato de calendário dentro do Telegram.
+2. O site mostra `Baixar`, `Publicar manualmente` e `Agendar`.
+3. `Agendar` abre o calendário do site.
 4. O artefato recebe o `workflow_id` e os `artifact_version_ids` aprovados.
 5. Ricardo escolhe data e hora em `America/Fortaleza`.
-6. O artefato mostra Feed, Stories, legenda e horário interpretado.
+6. O calendário mostra Feed, Stories, legenda e horário interpretado.
 7. Ricardo confirma em `Agendar publicação`.
 8. O plano de controle cria um agendamento idempotente para as versões aprovadas.
 9. No horário marcado, o publicador cria o contêiner de mídia no Instagram.
 10. O publicador espera o processamento, publica e registra os IDs do Instagram.
-11. O bot informa a Ricardo o sucesso ou a falha exata.
+11. O site mostra a Ricardo o sucesso ou a falha exata.
 12. Se a publicação falhar, os arquivos continuam disponíveis para postagem
     manual.
 
 Alterar um artefato depois do agendamento cancela o horário. Ricardo deve aprovar
 e agendar a nova versão.
 
-O artefato de calendário deve permitir:
+O calendário deve permitir:
 
 - Feed e Stories no mesmo horário.
 - Feed e Stories em horários diferentes.
@@ -704,22 +744,26 @@ O artefato de calendário deve permitir:
 
 ### 4.11 Segurança e privacidade
 
-- O webhook do Telegram valida o segredo antes de interpretar o evento.
-- Uma lista de acesso limita o uso a Telegram IDs conhecidos.
+- O site fica atrás de HTTPS e só responde dado a uma sessão válida.
+- A senha fica com hash forte, e a sessão vive num cookie `HttpOnly`, `Secure` e
+  `SameSite=Lax`. Tela e API dividem o mesmo endereço, então o cookie nunca é de
+  terceiro.
+- O Henrique cria as contas. Não existe cadastro aberto.
+- Tentativa repetida de senha errada é barrada por tempo, e a barra vale por conta e
+  por origem.
 - Somente Ricardo ou um substituto ativo aprova conteúdo.
 - Cada worker tem credenciais separadas.
 - O publicador será o único componente com credenciais da Meta.
 - O publicador do blog será o único componente com credenciais do CMS.
 - Textos externos e URLs são entradas não confiáveis.
 - O plano de controle valida toda saída de agente contra um schema.
-- Os logs ocultam tokens, bytes de imagem e dados privados do Telegram.
-- URLs para download de artefatos são opacas e expiram.
-- O site da fábrica é publicado só em `127.0.0.1` do servidor e chega à rede pelo
-  `tailscale serve`. O endereço público `mkt.emvidros.com.br` nunca encaminha para
-  ele.
-- O site só serve prévias. O arquivo mestre continua saindo só pelo Telegram, com a
-  regra de URL opaca acima.
-- A API de leitura do site não aceita escrita. Nenhuma rota dela muda estado.
+- Os logs ocultam senha, cookie de sessão e bytes de imagem.
+- O download de artefato exige sessão válida. O identificador do artefato não é
+  segredo e não vale nada sozinho.
+- Prévia e mestre saem pela mesma regra: só com sessão válida, e o endereço do
+  arquivo não vale nada sem ela.
+- O site tem uma porta só para decisão, e ela confere sessão, papel, rodada e versão
+  antes de mudar qualquer coisa.
 - O prazo de retenção dos artefatos locais deve ser definido antes da
   implementação.
 - O Linear mantém o registro de negócio depois da limpeza local.
@@ -745,8 +789,9 @@ parar antes de ultrapassar o orçamento e perguntar a Ricardo se pode continuar.
 
 ### 4.13 Site da fábrica
 
-O site é a vista da fábrica. Ele não guarda estado e não decide nada. Tudo que
-mostra vem de três fontes que o plano de controle já tem:
+O site é a fábrica inteira, de fora. Ele não guarda estado: quem decide continua
+sendo o plano de controle, e o site só manda a intenção de quem está logado. O que
+ele mostra vem de três fontes que o plano de controle já tem:
 
 - `workflow_runs` dá o pedido e o estado atual.
 - `tasks` dá a etapa, o agente, a tentativa e a lease.
@@ -757,11 +802,16 @@ As etapas do canvas saem de uma tabela que fica ao lado das máquinas de estado 
 de volta, como a reprovação do diretor de arte, saem das próprias transições. O site
 desenha o que o plano de controle calcula e não repete regra nenhuma.
 
-O site é feito com Bun 1.4.1, Vite+, Tailwind CSS, Motion, nuqs e bibliotecas de
-componentes como Unlumen UI e beautiful.ui. O acabamento segue a skill
-`apple-design`: resposta no toque, animação por mola interrompível e canvas com
-inércia de rolagem nativa. O desenho técnico mora em
-`.specs/features/fabrica/DESIGN.md`.
+As ações do site são poucas e todas passam pelas mesmas regras que o Telegram usava:
+abrir pedido, confirmar brief, aceitar, pedir ajuste, recusar todas, cancelar, marcar
+como publicado e baixar. Cada uma carrega fluxo, etapa, rodada e versão, e o plano de
+controle recusa o que não corresponde à revisão aberta.
+
+O site é feito com Bun na última versão, Vite+, Tailwind CSS, Motion, nuqs e
+bibliotecas de componentes como Unlumen UI e beautiful.ui. O login usa better-auth,
+que é o padrão da casa para app em Bun. O acabamento segue a skill `apple-design`:
+resposta no toque, animação por mola interrompível e canvas com inércia de rolagem
+nativa. O desenho técnico mora em `.specs/features/fabrica/DESIGN.md`.
 
 ## 5. Risks & Roadmap
 
@@ -775,13 +825,14 @@ Escopo:
 - Plano de controle como único escritor.
 - Leases duráveis para as tarefas.
 - Versões imutáveis dos artefatos.
-- Aprovação vinculada ao Telegram ID de Ricardo.
+- Aprovação vinculada à identidade de Ricardo, que na entrega desta fase era o
+  Telegram ID e passou a ser a conta do site.
 
 Comprovação:
 
 - Um fluxo simulado sobrevive a uma reinicialização em cada estado.
 - Uma aprovação vencida não aprova um artefato novo.
-- Executar a mesma entrega duas vezes cria um documento no Telegram.
+- Executar a mesma entrega duas vezes cria um arquivo entregue, não dois.
 
 #### MVP Instagram
 
@@ -791,8 +842,12 @@ Escopo:
 - Três direções visuais.
 - Feed, Stories e `Ambos`.
 - Ciclos de ajuste e recusa.
-- PNG mestre sem perda por `sendDocument`.
+- PNG mestre sem perda.
 - Entrega manual e arquivo no Linear.
+
+Esta fase foi construída com o Telegram como canal e o código está pronto desde
+28/08/2026, mas o gate nunca abriu. A fase seguinte troca o canal antes de o
+benchmark rodar, então a comprovação abaixo acontece pelo site.
 
 Comprovação:
 
@@ -800,25 +855,26 @@ Comprovação:
 - Ricardo conclui um pedido real pelo celular.
 - O hash do download corresponde ao mestre armazenado.
 
-#### Fábrica visível
+#### Fábrica no site
 
 Escopo:
 
-- Site da fábrica no servidor, aberto pela rede Tailscale.
-- Canvas infinito com os blocos das etapas do Instagram e do blog.
-- Inspetor de etapa com entrada, saída, prévias e histórico.
-- Atividade ao vivo pelos eventos do plano de controle.
-- Somente leitura.
+- Entrada com e-mail e senha, papéis e cadastro pelo Henrique.
+- Pedido, confirmação de brief, aceite, ajuste, recusa e cancelamento pelo site.
+- Download do mestre e da legenda pelo site.
+- Canvas infinito com os blocos das etapas, inspetor de etapa e atividade ao vivo.
+- Endereço público, sem exigir rede da empresa.
+- Telegram apagado da árvore, incluindo webhook, conversa, apresentador e entrega.
 
 Comprovação:
 
-- Um pedido rodando no perfil `ensaio` aparece no site e cada mudança de estado
-  chega ao bloco em até 2 segundos.
-- O site abre no MacBook do Henrique pela Tailscale e não abre por
-  `mkt.emvidros.com.br` nem pelo IP público.
-- O link de um pedido com etapa aberta, copiado e colado em outra aba, mostra a
-  mesma tela.
-- Nenhuma resposta do site contém um Telegram ID, e nenhuma rota dele muda o banco.
+- Ricardo faz um pedido, pede um ajuste, aprova e baixa o mestre, tudo pelo celular,
+  sem Telegram e sem ajuda de desenvolvedor.
+- Cada mudança de estado chega ao bloco em até 2 segundos.
+- Uma decisão de rodada vencida é recusada, e uma sessão sem papel de aprovador não
+  decide nada.
+- Sem sessão, nenhuma rota de dado e nenhum arquivo respondem.
+- `grep -ri telegram src/ scripts/` não acha nada.
 
 #### MVP blog
 
@@ -840,7 +896,7 @@ Comprovação:
 
 Escopo:
 
-- Artefato de calendário em Telegram Mini App.
+- Calendário dentro do site.
 - Publicador pela Instagram Graph API.
 - Horários separados para Feed e Stories.
 - Cancelamento, novas tentativas e alternativa manual.
@@ -904,26 +960,26 @@ deve aprovar qualquer nova regra de marca.
 |---|---|---|
 | Nano Banana altera a composição durante um ajuste | Ricardo recebe uma peça diferente | Usar a imagem aprovada como referência e pedir uma edição localizada |
 | O modelo redesenha o logo | Violação da marca | Usar o logo oficial como referência e bloquear o QA reprovado |
-| Telegram comprime a imagem | Menor qualidade de publicação | Entregar o mestre com `sendDocument` e conferir o SHA-256 |
+| O navegador ou o proxy altera o arquivo baixado | Menor qualidade de publicação | Servir o mestre como download binário e conferir o SHA-256 |
 | O artigo inventa fatos de produto | Informação pública incorreta | Exigir fontes aprovadas e marcar dados ausentes como pendência |
 | Dois workers atualizam o mesmo trabalho | Estado duplicado ou inválido | Manter o plano de controle como único escritor e usar leases |
 | Um processo para depois de uma entrega externa | Entrega duplicada após reinício | Usar chaves de idempotência e reconciliar recibos do provedor |
 | Ajustes repetidos aumentam o custo dos modelos | Esgotamento dos créditos | Aplicar orçamento por pedido e perguntar antes de continuar |
 | DeepSeek ou Gemini altera a API | Workers quebrados | Manter adaptadores atrás de contratos estáveis |
 | Ricardo fica indisponível | Trabalho pendente | Permitir substituto temporário e nunca aprovar automaticamente |
+| Site público com conta fraca | Alguém de fora pede ou aprova | Conta criada só pelo Henrique, senha com hash, barra por tentativa e sessão curta |
+| Ninguém abre o site e o pedido dorme | Pedido parado sem ninguém saber | Lista de pendências em destaque na entrada, e aviso externo entra na fase seguinte se doer |
 | A Meta recusa a publicação automática | Horário perdido | Manter o arquivo manual e avisar Ricardo imediatamente |
 
 ### 5.3 Dependências
 
 - Chave da API da DeepSeek com créditos.
 - Projeto da API do Gemini com cobrança ativa para Nano Banana 2.
-- Token do bot do Telegram e webhook.
-- Telegram ID de Ricardo.
+- Endereço público com HTTPS para o site.
+- Contas de quem usa, criadas pelo Henrique.
 - Chave da API do Linear e etiqueta `Instagram Post`.
 - Volume durável para banco e artefatos.
-- Tailscale ativo no servidor e em cada aparelho que abre o site da fábrica, com os
-  certificados HTTPS ligados no painel da tailnet.
-- Bun 1.4.1 no servidor e na imagem do container.
+- Bun na última versão, no servidor e na imagem do container.
 - Fontes aprovadas para afirmações técnicas do blog.
 
 ### 5.4 Decisões abertas antes da implementação
@@ -933,13 +989,16 @@ deve aprovar qualquer nova regra de marca.
 - Escolher o modelo multimodal usado como diretor de arte.
 - Definir os primeiros dez briefs de imagem e dez briefs de blog.
 - Definir o teto de custo padrão depois do benchmark.
-- Nomear o substituto autorizado de Ricardo.
-- Decidir se o Ricardo entra na rede Tailscale para ver o site pelo celular.
-- Decidir se o site ganha ações (cancelar, aprovar, pedir) depois da primeira versão.
+- Nomear o substituto autorizado de Ricardo. A delegação está no PRD desde agosto e
+  nunca existiu no código.
+- Escolher o endereço definitivo do site, entre destravar `mkt.emvidros.com.br` no
+  Caddy e ficar no endereço do Tailscale Funnel.
+- Decidir se o aviso externo entra, e por qual canal, se a lista de pendências não
+  bastar.
 
 ### 5.5 Regra de liberação
 
 A primeira versão só está pronta quando Ricardo consegue pedir um pacote do
 Instagram e um artigo de blog, revisar ambos pelo celular, pedir um ajuste,
 aprovar a versão correta e baixar os arquivos finais sem ajuda de um
-desenvolvedor.
+desenvolvedor. Tudo isso no site, entrando com a conta dele, de qualquer rede.

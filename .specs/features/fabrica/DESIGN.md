@@ -1,100 +1,147 @@
-# Design da Fase 3 (fábrica visível)
+# Design da Fase 3 (fábrica no site)
 
-Spec: `docs/prd-agencia-multiagente.md` §1.2, §1.4, US-10, §4.11, §4.13 e §5.1 "Fábrica
-visível". Referência visual: `docs/referencia-fabrica.png`. Escrito em 15/09/2026,
-antes de qualquer código. Nada daqui está implementado.
+Spec: `docs/prd-agencia-multiagente.md` US-1 a US-11, §4.7, §4.11, §4.13 e §5.1
+"Fábrica no site". Referência visual: `docs/referencia-fabrica.png`. Reescrito em
+16/09/2026, quando o site deixou de ser vista de leitura e passou a substituir o
+Telegram. Nada daqui está implementado.
 
 ## O que muda para quem usa
 
-Hoje o único jeito de saber em que ponto está um pedido é o Telegram do Ricardo ou o
-banco. Ao fim da fase, o Henrique abre o site da fábrica no MacBook e vê cada pedido
-como uma linha de blocos num canvas, um bloco por etapa. O bloco que está trabalhando
-se destaca, mostra o agente e a tentativa, e o que acontece chega em até 2 segundos.
-Clicar num bloco abre a entrada, a saída e as prévias daquela etapa.
+Hoje o Ricardo só existiria para o produto dentro de um bot do Telegram que nunca
+chegou a entrar no ar. Ao fim da fase, ele abre um endereço no navegador do celular,
+entra com e-mail e senha, escreve o tema, vê o pedido andar pelas etapas num canvas,
+compara as três direções, pede ajuste em texto livre, aprova e baixa o PNG mestre.
+O time de marketing entra com conta própria e faz o mesmo, menos aprovar arte, e
+pode cancelar o pedido que abriu. O Henrique
+cadastra as contas e vê onde cada pedido parou.
 
-O Ricardo continua pedindo, aprovando e baixando pelo Telegram. O site não muda nada
-no fluxo dele. Se ele entrar na rede Tailscale, vê a mesma fábrica pelo celular.
+Ninguém precisa estar numa rede específica. Basta o link e a conta.
 
-## Onde roda: no servidor, não na Vercel
+## Endereço público
 
-Dá para deixar o site rodando no servidor e abrir quando quiser, e é o que eu faria.
-O estado inteiro mora no SQLite do plano de controle, dentro deste servidor. Um front
-na Vercel precisaria de uma API de leitura exposta na internet, com autenticação,
-CORS e o fluxo de eventos atravessando a rede pública. Seria também um segundo
-caminho de deploy, fora do padrão ghcr e Watchtower da casa. Tudo isso para mostrar
-dado que já está a um `127.0.0.1` de distância.
+O site é tela e API no mesmo endereço, servidos pelo mesmo processo Bun. Isso não é
+detalhe de implementação, é o que mantém o cookie de sessão sendo cookie de primeira
+parte. Separar tela e API em domínios diferentes faria o Safari do iPhone tratar o
+cookie do better-auth como cookie de terceiro e bloquear, e o Ricardo não conseguiria
+nem entrar.
 
-O acesso é pela Tailscale, que em 15/09/2026 já está ativa no servidor
-(`emvidros-srv.tail585ce3.ts.net`, 100.79.186.27) e no MacBook do Henrique.
+Por isso descartei hospedar a tela na Vercel. Ela resolveria o endereço da tela e
+deixaria o problema inteiro na API, que continua no servidor com o SQLite, os
+workers e os arquivos. Seriam dois deploys, um domínio a mais e o login quebrado no
+aparelho de quem mais usa.
 
-```
-MacBook (tailnet)
-   |  https://emvidros-srv.tail585ce3.ts.net
-   v
-tailscale serve  (certificado emitido pela Tailscale)
-   |
-   v
-127.0.0.1:3011  listener de leitura do plano de controle
-```
+No primeiro momento o endereço público sai pelo Tailscale Funnel, que publica o
+`127.0.0.1` do servidor num endereço `ts.net` com certificado da Tailscale, aberto
+para qualquer pessoa com o link, sem exigir Tailscale de quem acessa e sem tocar no
+Caddy compartilhado. Ligar o Funnel é uma mudança na política da tailnet, feita pelo
+Henrique.
 
-O comando fica assim, e só roda na implementação:
+O destino é `mkt.emvidros.com.br`, que já tem vhost em `/etc/caddy/sites/` e já está
+em `/etc/caddy/allowed-hosts`, apontando para a porta 3010. Ele está travado por um
+problema que não é deste projeto: em 16/09/2026 o ACME falha nos dois desafios para
+todo o wildcard `*.emvidros.com.br`, e o Caddyfile registra que as portas 80 e 443
+chegam por um proxy acima. Enquanto isso não for resolvido, nenhum site da empresa
+tira certificado novo. Trocar o Funnel pelo domínio depois é mudar para onde o
+`reverse_proxy` aponta, sem mexer no app.
 
-```
-sudo tailscale serve --bg http://127.0.0.1:3011
-```
+## Login
 
-Antes dele, alguém com acesso ao painel da Tailscale liga os certificados HTTPS da
-tailnet. Em 15/09/2026 o `tailscale status --json` do servidor mostra
-`CertDomains: null`, e sem isso o `serve` não emite certificado. O `serve` atende
-dentro do próprio `tailscaled` e não abre socket na 443 do host, então não disputa
-porta com o Caddy. O passo 5 confirma isso na prática.
+`better-auth` é o padrão da casa para app em Bun, e o template de projeto novo já
+manda usar. O em-hub e o portal de aprovação rodam com ele.
 
-Sem Tailscale no aparelho, o túnel SSH é o mesmo site em `localhost` de verdade:
-`ssh -L 3011:127.0.0.1:3011 emvidros` e depois `http://localhost:3011`.
+- E-mail e senha, sem cadastro aberto. O Henrique cria a conta e escolhe o papel.
+- Sessão em cookie `HttpOnly`, `Secure` e `SameSite=Lax`.
+- As tabelas de conta e sessão ficam no mesmo SQLite do plano de controle, porque
+  quem valida a sessão é o mesmo processo que já é dono do estado.
+- Quem abre o banco continua sendo só `src/controle/db.ts`. O better-auth recebe a
+  conexão que já existe, e o schema dele entra como migração nossa, gerada uma vez
+  pela CLI dele e colada em `migracoes.ts`. Sem isso o gate de fronteira do
+  `bun run verificar`, que proíbe `bun:sqlite` fora de `db.ts`, reprova com razão.
+- O endereço público entra em `baseURL` e `trustedOrigins` do better-auth, e o
+  cookie sai `Secure` porque o Funnel termina o TLS. Trocar o Funnel pelo domínio é
+  trocar essas duas variáveis e para onde o proxy aponta, nada no código.
+- A barra por tentativa conta por conta e por IP, e o IP vem do `X-Forwarded-For` que
+  o Funnel escreve. Confiar nesse cabeçalho só vale porque nada além do proxy alcança
+  a porta.
+- Papéis: `solicitante` pede e acompanha, `aprovador` também decide, `admin` também
+  cadastra. O papel é coluna da conta, e a autorização mora no plano de controle, não
+  na tela.
+- Toda decisão grava a conta que decidiu. `approvals.reviewer_id` deixa de ser
+  Telegram ID e passa a apontar para a conta.
 
-Descartei o subdomínio público. Ele passaria pelo Caddy compartilhado, que termina o
-HTTPS de seis sites de produção, e exigiria login no site. A Tailscale entrega a
-restrição de rede sem código nosso.
+## O que sai junto com o Telegram
 
-A restrição é só de rede. Qualquer aparelho da tailnet e qualquer túnel SSH veem
-todos os pedidos. Para um site que só lê, basta. Se um dia vierem ações, o cabeçalho
-`Tailscale-User-Login` só vale quando a requisição passou pelo `serve`, porque pelo
-túnel SSH qualquer um escreve esse cabeçalho. Ação nenhuma pode confiar nele sem
-resolver isso antes.
+Regra de migrar e apagar: o canal antigo não fica de reserva. Sai na mesma leva em
+que o site passa a fazer o trabalho dele. Isso é possível sem susto porque o bot
+nunca entrou no ar: o webhook nunca foi registrado e a allowlist de chats está vazia
+desde sempre.
+
+`grep -rli telegram src/ scripts/` acha 23 arquivos hoje. Somem inteiros:
+
+- `src/telegram/conversa.ts`, 565 linhas de máquina de conversa por chat. A etapa de
+  conversa vira estado de tela mais o estado do fluxo, que já existe.
+- `src/adaptadores/telegram.ts`, 197 linhas.
+- `src/workers/apresentador.ts`, 223 linhas, que empacotava revisão em álbum e
+  botões. O site lê a revisão aberta direto do plano de controle.
+- `src/controle/conversas.ts`, a tabela de conversa por chat.
+
+Perdem a parte de Telegram: `src/adaptadores/fake.ts`, `tipos.ts` e `index.ts` (a
+porta `PortaTelegram`), `src/controle/entregas.ts` (a entrega por `sendDocument`
+vira download), `src/controle/api.ts` (`EntradaTelegram`), `src/controle/fluxos.ts`
+(`fluxoAtivoDoChat`), `src/workers/executores.ts`, `src/server.ts` (webhook, segredo
+e allowlist) e nove arquivos de `scripts/verificar/`. A suíte `ponta-a-ponta`, que
+hoje dirige o loop com updates sintéticos do Telegram, é reescrita para dirigir o
+mesmo loop por HTTP com sessão. Ela não some: é a prova do passo 3.
+
+Migração 004, na mesma leva:
+
+- `workflow_runs.chat_id` e `workflow_runs.solicitante_id` são `INTEGER NOT NULL`
+  hoje. Viram uma coluna só, `conta_id TEXT`, apontando para a conta que pediu.
+- `approvals.reviewer_id` é `INTEGER` e vira `TEXT` com o mesmo destino.
+- `events.ator` grava `telegram:<id>`; os registros antigos ficam como estão, porque
+  a tabela é append-only, e os novos gravam `conta:<id>`.
+- `deliveries` perde o que descreve canal e `file_id` do Telegram.
+- A tabela `conversas` cai, como a migração 003 fez com as cinco tabelas do bot v1.
+- As variáveis `TELEGRAM_*` e `APROVADOR_TELEGRAM_ID` saem do `.env.example` e do env
+  de produção.
+
+O banco de produção hoje não tem fluxo nenhum de valor, então a migração converte o
+que houver e não precisa de ponte para os dois formatos.
+
+O que não muda é o miolo: máquinas de estado, plano de controle como escritor único,
+fila com lease, artefatos imutáveis e aprovação versionada continuam iguais. O canal
+sempre foi periferia, e é isso que faz esta troca caber numa fase.
 
 ## Processo, porta e banco
 
-O site não é um serviço novo. O PRD §4.1 diz que só o plano de controle abre o
-SQLite, então a leitura fica dentro do mesmo processo Bun que já roda os workers.
+O site não é serviço novo. O PRD §4.1 diz que só o plano de controle abre o SQLite,
+então tela, API e sessão ficam no mesmo processo Bun que já roda os workers.
 
-- O `src/server.ts` sobe um segundo listener Elysia na porta `PORT_FABRICA` (padrão
-  3001), só com rotas `GET` e os arquivos estáticos do site.
-- O compose publica essa porta em `127.0.0.1:3011` do host. Dentro do container o
-  listener escuta em todas as interfaces, como o do webhook. A porta 3010 continua só
-  com o webhook.
-- O vhost público `mkt.emvidros.com.br` aponta para a 3010 e nunca vê o site. Quem
-  garante isso é a porta separada, não uma regra no Caddy.
-- Banco não muda. Continua o SQLite do plano de controle em `data/`, e o site não
-  ganha banco próprio. O Postgres central (`emvidros-postgres`) só entraria se
-  aparecesse um segundo escritor, e o desenho proíbe isso. Se perder o histórico de
-  um dia passar a importar, a conversa é migrar para `db_em_marketing` no Postgres
-  central, que tem PITR.
+Com o Telegram fora, sobra uma superfície HTTP só. O listener continua sendo o de
+hoje, publicado em `127.0.0.1:3010`, e o Funnel aponta para ele. Some o webhook, some
+o segredo e some a allowlist de chat. A rota `/health` fica pública, o que é o que
+ela já era pelo vhost, e não devolve nada além de `ok` e o instante.
 
-Mudar `Dockerfile` e `compose.yml` passa pelo Henrique. A implementação deixa o
-trecho pronto e não edita esses arquivos.
+Banco não muda de lugar. Continua o SQLite do plano de controle em `data/`, agora com
+as tabelas de conta e sessão junto. O Postgres central só entraria se aparecesse um
+segundo escritor, e o desenho proíbe isso.
+
+Mexer em `Dockerfile` e `compose.yml` passa pelo Henrique, e o classificador barra a
+edição. A implementação deixa o trecho pronto e diz onde está.
 
 ## Formato do dado
 
-A tela inteira é uma função de quatro tabelas que já existem, `workflow_runs`,
-`tasks`, `events` e `artifact_versions`. Nenhuma coluna nova.
+A tela inteira é função de quatro tabelas que já existem, `workflow_runs`, `tasks`,
+`events` e `artifact_versions`, mais as duas do login.
 
 ```ts
 type EtapaId = string & { readonly __marca: "etapa" };
+type ContaId = Id<"conta">;
 
 interface Etapa {
   id: EtapaId;
   titulo: string;            // "Direção criativa"
-  papel: Papel | "ricardo";  // quem trabalha nela
+  papel: Papel | "humano";   // quem trabalha nela
 }
 
 /**
@@ -107,7 +154,7 @@ type EstadoBloco =
   | "pendente"
   | "trabalhando"
   | "concluida"
-  | "aguardando_ricardo"
+  | "aguardando_decisao"
   | "revisao_manual"
   | "falhou";
 
@@ -133,23 +180,39 @@ interface VistaFluxo {
   rodada: number;
   blocos: Bloco[];
   arestas: Aresta[];
+  /** O que a sessão atual pode fazer agora. A tela não decide isso sozinha. */
+  acoes: Acao[];
   ultimoSeq: number;
 }
+
+type Acao =
+  | { tipo: "confirmar_brief" }
+  | { tipo: "aceitar"; opcoes: VersaoId[] }
+  | { tipo: "ajustar" }
+  | { tipo: "recusar_todas" }
+  | { tipo: "cancelar" }
+  | { tipo: "baixar"; versoes: VersaoId[] }
+  /** Só grava data e URL em deliveries. Não é transição de estado. */
+  | { tipo: "marcar_publicado" };
 ```
+
+A lista `acoes` sai do estado do fluxo cruzado com o papel da conta. A tela desenha
+botão para o que vier e não inventa nenhum. O plano de controle confere de novo na
+hora de executar, porque tela não é lugar de autorização.
 
 A tabela etapa por estado do Instagram, derivada de `TAREFA_DO_ESTADO` e
 `PAPEL_DA_TAREFA`:
 
 | Etapa | Papel | Estados |
 |---|---|---|
-| Pedido | ricardo | `requested` |
+| Pedido | humano | `requested` |
 | Direção criativa | diretor_criativo | `brief_confirmed` |
 | Protótipos | designer | `directions_ready`, `prototypes_generating` |
 | Controle visual | diretor_de_arte | `prototype_qa` |
-| Revisão do Ricardo | ricardo | `awaiting_prototype_review` |
+| Revisão do Ricardo | humano | `awaiting_prototype_review` |
 | Pacote | designer | `package_finalizing` |
 | Controle do pacote | diretor_de_arte | `package_qa` |
-| Revisão do pacote | ricardo | `awaiting_package_review` |
+| Revisão do pacote | humano | `awaiting_package_review` |
 | Entrega | operacoes | `approved_for_manual_delivery` |
 | Linear | operacoes | `delivered` |
 
@@ -168,64 +231,76 @@ atravessando os estados transitórios, até chegar num estado parado. Cada camin
 um estado parado a outro vira uma aresta entre as etapas dos dois. É `retorno`
 quando a etapa de destino vem antes da de origem na tabela, e `avanco` no resto.
 Assim `prototype_qa → prototypes_generating` sai como retorno de Controle visual
-para Protótipos. `awaiting_package_review → adjustment_requested → package_finalizing`
-sai como retorno de Revisão do pacote para Pacote. Essas são as linhas tracejadas de
-reparo da referência.
-
-O bloco em `revisao_manual` é o que a tarefa em `tasks.estado = 'revisao_manual'`
-vira. É o caso em que alguém precisa olhar, e por isso não se confunde com `falhou`.
+para Protótipos, e `awaiting_package_review → adjustment_requested →
+package_finalizing` sai como retorno de Revisão do pacote para Pacote. São as linhas
+tracejadas de reparo da referência.
 
 `vistaDoFluxo` é função pura no plano de controle. O site não recalcula regra
 nenhuma. Ele desenha o que recebe.
 
-## API de leitura
+## API
 
-Todas `GET`, no listener de `PORT_FABRICA`.
+Tudo no mesmo endereço, atrás de sessão. Sem sessão, qualquer rota devolve 401, e a
+raiz devolve a tela de entrada.
 
 ```
-/api/fluxos                                  pedidos, os ativos primeiro
-/api/fluxos/:id                              VistaFluxo
-/api/fluxos/:id/etapas/:etapa                tentativas, entrada, saída e versões de artefato da etapa
-/api/artefatos/:versaoId/previa              bytes de uma versão com papel = 'preview'
-/api/fluxos/:id/eventos                      SSE
+POST /api/entrar                       e-mail e senha, better-auth
+POST /api/sair
+GET  /api/eu                           conta e papel da sessão
+
+GET  /api/fluxos                       pedidos que a conta pode ver, pendências primeiro
+POST /api/fluxos                       abre um pedido (tema, formato, objetivo)
+GET  /api/fluxos/:id                   VistaFluxo, com as ações permitidas
+GET  /api/fluxos/:id/etapas/:etapa     tentativas, entrada, saída e versões da etapa
+GET  /api/fluxos/:id/eventos           SSE
+POST /api/fluxos/:id/decisao           confirmar brief, aceitar, ajustar, recusar, cancelar
+GET  /api/artefatos/:versaoId/previa   bytes de uma versão com papel 'preview'
+GET  /api/artefatos/:versaoId/mestre   download do mestre, com nome de arquivo
+
+POST /api/contas                       admin cria conta e papel
 ```
+
+`POST /api/fluxos/:id/decisao` é a única porta de decisão sobre conteúdo e recebe
+fluxo, etapa, rodada e versões, os mesmos campos que o callback do Telegram
+carregava. Cancelar continua sendo caminho próprio (`cancelar` em
+`src/controle/api.ts`), porque quem abriu o pedido pode encerrar o próprio pedido sem
+ser aprovador.
+
+As regras de `src/controle/aprovacoes.ts` continuam valendo inteiras, da recusa de
+rodada vencida ao destino de cada ação. Dois trechos são reescritos, e vale saber
+qual: `checar()` compara o autor com um `APROVADOR_TELEGRAM_ID` numérico do ambiente,
+e passa a resolver o papel da conta da sessão; e o `data` de 64 bytes do callback do
+Telegram deixa de ser decodificado, porque os mesmos campos chegam no corpo do POST.
+
+A chave de idempotência do corpo reusa `executarUmaVez` de
+`src/controle/idempotencia.ts`. Hoje o segundo toque cai em `aprovacao_vencida`,
+porque a revisão pendente já zerou, e a tela mostraria erro onde não houve erro.
+
+O SSE consulta `events` por `seq > cursor` a cada 500 ms, manda os eventos novos e a
+`VistaFluxo` inteira de novo. Com dez blocos o payload é pequeno, e o cliente não
+precisa de um redutor que duplique a máquina de estados. Na reconexão, o navegador
+manda `Last-Event-ID` com o último `seq`.
 
 A rota de prévia recusa qualquer papel que não seja `preview`. O protótipo é gravado
-com `papel: "master"` (`src/workers/designer.ts`), e servir "o protótipo" seria servir
-o mestre. A regra de URL opaca que expira do PRD §4.11 vale para o download do
-mestre, que não passa por este site.
+com `papel: "master"` (`src/workers/designer.ts`), então servir "o protótipo" seria
+servir o mestre sem querer. O mestre tem rota própria, que exige sessão e registra o
+download como entrega.
 
-O SSE consulta `events` por `seq > cursor` a cada 500 ms. A cada lote, manda os
-eventos novos e a `VistaFluxo` inteira de novo. Com dez blocos o payload é pequeno, e
-o cliente não precisa de um redutor que duplique a máquina de estados. Na reconexão,
-o navegador manda `Last-Event-ID` com o último `seq`.
+## Telas
 
-Os workers rodam no mesmo processo, então dava para avisar o SSE direto na escrita do
-evento. Fico com a consulta por `seq`, que continua certa se um papel virar processo
-separado, como o PRD §4.2 prevê.
+- **Entrar.** E-mail, senha e nada mais.
+- **Pedidos.** Lista com o que espera decisão em cima, e o botão de pedir.
+- **Pedido.** Canvas com os blocos, inspetor de etapa à direita e atividade embaixo.
+- **Revisão.** As três prévias lado a lado, justificativa de cada direção, e os
+  botões de aceitar, ajustar, recusar todas e cancelar.
+- **Entrega.** Prévia aprovada, download do mestre, legenda com botão de copiar e o
+  link do Linear.
+- **Contas.** Só para `admin`, com e-mail, papel e criação.
 
-O Telegram ID aparece em dois formatos no banco. Um é coluna (`chat_id`,
-`solicitante_id`, `reviewer_id`). O outro vai dentro de `events.ator`, como
-`telegram:<id>` (`src/controle/aprovacoes.ts`, `src/controle/api.ts`). Toda resposta
-passa por um filtro que tira as colunas e troca o `ator` por `ricardo` ou
-`solicitante`. A prova do passo 3 procura os IDs do pedido em todo byte devolvido.
+Fica de fora da referência: pausar a execução, sandboxes e arrastar blocos para
+reorganizar. O layout é calculado, e salvar posição manual seria estado sem dono.
 
-## Tela
-
-Três regiões, tiradas da referência e com menos coisa.
-
-- **Topo.** Tema do pedido, estado, rodada, tempo ativo e o seletor de pedido.
-- **Canvas.** Os blocos em linha, arestas de avanço e de retorno, controles de zoom
-  e o botão "Seguir etapa".
-- **Inspetor.** Painel à direita, aberto quando há `etapa` na URL, com as abas
-  Detalhes, Saída e Atividade.
-- **Faixa inferior recolhível.** Atividade do pedido e as prévias geradas.
-
-Fica de fora da referência: pausar e cancelar, menu de aprovações, sandboxes e
-arrastar blocos para reorganizar. O layout é calculado, e salvar posição manual seria
-estado sem dono.
-
-O estado da tela que vale compartilhar mora na URL, via nuqs:
+O estado de tela que vale compartilhar mora na URL, via nuqs:
 `?fluxo=<id>&etapa=<id>&aba=detalhes|saida|atividade`. A posição da câmera não entra.
 
 ## Sensação nativa
@@ -238,73 +313,85 @@ A skill `apple-design` vale na implementação inteira. O que ela decide aqui:
 - **Câmera que segue e para de seguir.** Quando a etapa em andamento muda, a câmera
   anda até ela com mola `bounce: 0, duration: 0.4`. Se a pessoa arrastou o canvas, a
   câmera para de seguir até ela tocar em "Seguir etapa".
-- **Resposta no toque.** Bloco pressionado escala para 0,97 no `pointerdown`.
-- **Mola interrompível.** Inspetor e faixa inferior abrem com mola `bounce: 0`. Sem
-  `@keyframes` em nada que a pessoa toca.
+- **Resposta no toque.** Bloco e botão pressionados escalam para 0,97 no
+  `pointerdown`, não no clique.
+- **Decisão sem espera.** Aceitar, ajustar e recusar marcam o estado na hora e
+  confirmam quando a resposta chega. Se o plano de controle recusar, a tela volta e
+  diz o motivo.
+- **Mola interrompível.** Inspetor, revisão e faixa inferior abrem com mola
+  `bounce: 0`. Sem `@keyframes` em nada que a pessoa toca.
 - **Bloco trabalhando.** Barra indeterminada fina na base do bloco e borda em teal
   `#2C7A75`. Nada pisca.
-- **Mudança de estado.** O selo do bloco troca com `layout` do Motion, sem salto.
 - **Movimento reduzido.** Com `prefers-reduced-motion`, tudo vira troca de opacidade
   e a câmera pula direto.
 
 ## Stack
 
-Versões conferidas em 15/09/2026.
+Versões conferidas em 16/09/2026.
 
 | Peça | Versão | Nota |
 |---|---|---|
-| Bun | 1.4.1 | Pedida pelo Henrique. A 1.4.2 já saiu. O servidor tem 1.4.0 e o `Dockerfile` usa `oven/bun:1.3-slim` |
-| Vite+ (`vite-plus`, CLI `vp`) | 0.3.2, beta | MIT, da VoidZero. Usa Bun como gerenciador de pacotes. Rodar o `vp` com Bun como runtime não está confirmado, porque ele gerencia o próprio Node |
+| Bun | sempre a última | Regra do Henrique de 16/09/2026. Host já em 1.4.2, e as 13 suítes passam nela. `Dockerfile` e CI seguem `oven/bun:latest` |
+| better-auth | padrão da casa | Já roda no em-hub e no portal de aprovação, e o template de projeto novo manda usar |
+| Vite+ (`vite-plus`, CLI `vp`) | 0.3.2, beta | MIT, da VoidZero. Usa Bun como gerenciador de pacotes, e gerencia o próprio Node para o build |
 | React | 19 | Exigido por Motion, nuqs, Unlumen UI e beautiful.ui |
 | Tailwind CSS | 4.3.3 | Pelo plugin `@tailwindcss/vite`. O Vite+ não traz Tailwind |
 | Motion | 13.3.0 | `import { motion } from "motion/react"` |
 | nuqs | 2.10.1 | `nuqs/adapters/react`, sem React Router |
-| @xyflow/react | 12.11.6 | MIT. A marca "React Flow" no canto só sai com assinatura Pro. Num site interno, fica |
+| @xyflow/react | 12.11.6 | MIT. A marca "React Flow" no canto só sai com assinatura Pro |
 | Unlumen UI | registry shadcn | Componentes com Tailwind e Motion. Licença própria: o gratuito pode uso comercial, redistribuir é proibido. Sete dos 235 itens dependem de `next` e ficam de fora |
 | beautiful.ui | registry shadcn | 27 componentes para interface de agente, entre eles flowchart e approval card. MIT segundo o site. Exige Tailwind v4, e o `foundation.css` importa um `shadow-plugin` que não declara |
 
 O `vp` precisa de Node, e a imagem de produção só tem Bun. O `Dockerfile` ganha um
-estágio só para o site, com o Node que o `vp` pedir, que roda `vp build` e gera
-`web/dist`. A imagem final copia `web/dist` desse estágio e o Elysia serve os
-arquivos. O container em produção não roda Node nem Vite.
+estágio só para o site, que roda `vp build` e gera `web/dist`. A imagem final copia
+`web/dist` e o Elysia serve os arquivos. O container em produção não roda Node nem
+Vite.
 
-O site mora em `web/`, dentro deste repositório. Ele importa os tipos de
+O site mora em `web/`, dentro deste repositório, e importa os tipos de
 `src/modelos/tipos.ts` direto, então `VistaFluxo` tem uma definição só.
 
 ## Ordem de implementação
 
 Cada passo termina numa prova e só então o próximo começa. A prova da fase inteira é
-a do PRD §5.1 "Fábrica visível". As daqui são as dos passos.
+a do PRD §5.1 "Fábrica no site".
 
-1. **Bun 1.4.1 na imagem.** Prova: `bun run verificar` verde em 1.4.1 dentro da
-   imagem, não só no shell. É o passo de maior risco, porque `bun:sqlite`, `sharp` e o
-   teste de SIGKILL mudam de runtime junto.
-2. **Protótipo do canvas.** Dez blocos falsos em React Flow contra os mesmos dez no
-   flowchart do beautiful.ui, os dois com Vite+ e Tailwind. Prova: o escolhido e o
-   motivo escritos neste arquivo, depois de testar no trackpad do MacBook e num
-   celular. O protótipo é estrutura temporária e sai da árvore no passo 4.
-3. **Vista no plano de controle.** Tabela etapa por estado, `vistaDoFluxo`, rotas
-   `GET` e SSE no listener de `PORT_FABRICA`. Prova: suíte nova no `bun run
-   verificar` roda um pedido `ensaio` de formato único e um de `both`, e confere a
-   vista em cada transição. A mesma suíte procura os Telegram IDs do pedido nas
-   respostas e confere que `POST` em qualquer rota não muda o banco. A mensagem de
-   `src/workers/executores.ts` que diz que o blog chega na Fase 3 passa a dizer Fase 4.
-4. **Site.** `web/` com canvas, inspetor, atividade e nuqs. Prova: um pedido `ensaio`
-   aparece andando e cada mudança chega ao bloco em até 2 segundos. Um link com etapa
-   aberta, colado em outra aba, mostra a mesma tela.
-5. **Acesso.** Trecho do `Dockerfile` e do compose entregue ao Henrique, certificados
-   HTTPS ligados na tailnet e o `tailscale serve`. Prova: o site abre no MacBook pela
-   tailnet, o Caddy continua servindo a 443 dos outros sites, e `curl` por
-   `mkt.emvidros.com.br` e pelo IP público não chega ao site.
+1. **Bun na última versão.** `Dockerfile` e CI em `oven/bun:latest`. Prova:
+   `bun run verificar` verde dentro da imagem, não só no shell. No host já passou em
+   1.4.2, 13 suítes em 54,6 s, em 16/09/2026.
+2. **Contas e sessão.** better-auth no plano de controle, tabelas de conta e sessão,
+   papel, e o `admin` criando gente. Prova: suíte nova no `bun run verificar` entra
+   com senha certa, é barrada com senha errada, é barrada por tentativa repetida, e
+   nenhuma rota de dado responde sem cookie.
+3. **Decisão pelo site.** `POST /api/fluxos/:id/decisao` sobre as regras que já
+   existem em `aprovacoes.ts`, mais a lista `acoes` na vista. Prova: a suíte roda um
+   pedido `ensaio` inteiro por HTTP, sem Telegram, incluindo rodada vencida recusada,
+   `solicitante` sem poder aprovar e duplo toque virando uma decisão só.
+4. **Telegram apagado.** Os cinco arquivos, o webhook, a migração que derruba
+   `conversas` e as variáveis de ambiente. Prova: `grep -ri telegram src/ scripts/`
+   não acha nada e as suítes continuam verdes.
+5. **Site.** `web/` com entrada, lista, canvas, inspetor, revisão e entrega. Prova:
+   um pedido `ensaio` vai do tema ao download pelo navegador, com cada mudança
+   chegando ao bloco em até 2 segundos.
+6. **Endereço público.** Funnel ligado, `Dockerfile` e compose entregues ao Henrique.
+   Prova: o Ricardo abre o link no celular dele, entra, pede, ajusta, aprova e baixa.
+   É também a prova da fase.
 
 ## Decisões abertas
 
-- Se o Ricardo entra na tailnet para ver a fábrica pelo celular.
-- Se o site ganha ações (cancelar, aprovar, pedir) depois desta fase. Se ganhar, a
-  identidade vem do `Tailscale-User-Login`, com o furo do túnel SSH resolvido, e a
-  aprovação continua presa a quem o PRD §2.1 autoriza.
+- Endereço definitivo, entre destravar `mkt.emvidros.com.br` e ficar no Funnel.
+- Aviso externo quando algo espera decisão. Fora desta fase por escolha do Henrique
+  em 16/09/2026. Entra se a lista de pendências não bastar, e o candidato é o
+  WhatsApp pela Evolution API, que já roda no servidor.
+- Retenção dos artefatos locais, que o PRD §4.11 deixa em aberto desde agosto.
 
 ## Fora da Fase 3
 
-Qualquer escrita pelo site. Pedido pelo site. Endereço público. Custo por tarefa no
-inspetor, que espera o orçamento do PRD §4.12. Layout salvo por arraste.
+Publicação automática. Calendário e agendamento. Blog, que é a Fase 4. Cadastro
+livre, convite por link e recuperação de senha. Aviso externo. Custo por tarefa no
+inspetor, que espera o orçamento do PRD §4.12. Delegação de aprovador, que o PRD
+promete desde agosto e o código nunca teve.
+
+Sessão que expira no meio do SSE fecha a conexão com 401, e a tela leva de volta para
+a entrada em vez de ficar parada mostrando estado velho. O `EventSource` manda o
+cookie sozinho porque tela e API dividem a origem, que é mais um motivo para elas não
+se separarem.

@@ -6,8 +6,8 @@
 > `.specs/features/agencia-multiagente/PLANO.md`.
 >
 > - [x] **Fundação do MVP** — os três predicados do §5.1 provados sem chave de API. `bun run verificar`, 10 suítes, no CI.
-> - [ ] **MVP Instagram** — código completo em 2026-08-28 (adaptadores reais, workers, conversa do Telegram, bot v1 apagado; 13 suítes em `bun run verificar`). Gate pendente: DNS de `mkt.emvidros.com.br`, `setWebhook`, Telegram ID do Ricardo, chave da DeepSeek e billing do Gemini; depois o benchmark de dez temas e o pedido real pelo celular.
-> - [ ] **Fábrica visível**, decidida em 2026-09-15 e só documentada. Site da fábrica rodando no servidor e aberto pela Tailscale, canvas infinito com um bloco por etapa e atividade ao vivo, só leitura. Desenho em `.specs/features/fabrica/DESIGN.md`. Gate: as quatro provas do PRD §5.1 "Fábrica visível".
+> - [ ] **MVP Instagram**, código completo em 2026-08-28 (adaptadores reais, workers, conversa do Telegram, bot v1 apagado; 13 suítes em `bun run verificar`). O gate nunca abriu e o canal mudou: `setWebhook`, Telegram ID e allowlist deixam de valer, e o benchmark de dez temas roda pelo site, na fase seguinte. Continua faltando chave da DeepSeek e billing do Gemini.
+> - [ ] **Fábrica no site**, decidida em 2026-09-16 e só documentada. O site substitui o Telegram: conta com e-mail e senha, pedido, revisão, aprovação e download por ali, canvas das etapas ao vivo, endereço público. Desenho em `.specs/features/fabrica/DESIGN.md`. Gate: as cinco provas do PRD §5.1 "Fábrica no site".
 > - [ ] **MVP blog** — três ângulos, artigo, revisão, entrega `.md` e `.txt`.
 
 ## v1 do bot (histórico)

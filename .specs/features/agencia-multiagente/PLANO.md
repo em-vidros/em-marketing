@@ -10,7 +10,7 @@ três rodam sem nenhuma chave de API.
 
 1. Um fluxo simulado sobrevive a uma reinicialização em cada estado.
 2. Uma aprovação vencida não aprova um artefato novo.
-3. Executar a mesma entrega duas vezes cria exatamente um documento no Telegram.
+3. Executar a mesma entrega duas vezes cria exatamente um arquivo entregue.
 
 ## Por que a fundação vem antes dos agentes
 
@@ -28,18 +28,24 @@ workers, que precisam das chaves, entram depois, com o encaixe pronto.
 | Fase | Escopo | Prova |
 |---|---|---|
 | 1. Fundação | Domínio, máquinas de estado, plano de controle, filas com lease, artefatos imutáveis, aprovação versionada | Os três predicados acima |
-| 2. MVP Instagram | Diretor criativo, redator, designer, diretor de arte; três direções; ajuste e recusa; PNG mestre | Benchmark de dez temas; pedido real do Ricardo pelo celular |
-| 3. Fábrica visível | Site da fábrica no servidor, canvas infinito com as etapas, inspetor de etapa, atividade ao vivo, só leitura, aberto pela Tailscale | As quatro provas do PRD §5.1 "Fábrica visível" |
+| 2. MVP Instagram | Diretor criativo, redator, designer, diretor de arte; três direções; ajuste e recusa; PNG mestre | Benchmark de dez temas; pedido real do Ricardo pelo celular. O código fechou em 28/08/2026 e o gate passou a depender do canal novo, então ele fecha junto com a Fase 3 |
+| 3. Fábrica no site | Conta com e-mail e senha, pedido, revisão, aprovação e download pelo site, canvas das etapas ao vivo, endereço público, Telegram apagado | As cinco provas do PRD §5.1 "Fábrica no site" |
 | 4. MVP blog | Três ângulos, artigo, revisão, entrega `.md` e `.txt` | Benchmark de dez temas de blog |
 
-## Por que a fábrica visível vem antes do blog
+## Por que o site vem antes do blog
 
-Decidido em 15/09/2026. O produto passou a ser a fábrica de conteúdo da agência
-interna, e a fábrica precisa ser vista trabalhando (PRD §1.2 e US-10). O gate da
-Fase 2 continua preso em coisa de fora do código, a chave da DeepSeek, o billing do
-Gemini e o Telegram ID do Ricardo. O blog depende da mesma chave. O site não. Ele
-lê o que o plano de controle já grava, então se prova inteiro no perfil `ensaio`,
-sem chave de modelo. Desenho em `.specs/features/fabrica/DESIGN.md`.
+Decidido em 15/09/2026 e ampliado em 16/09/2026, quando o Henrique trocou o canal: o
+site deixa de ser vista de leitura e passa a substituir o Telegram inteiro.
+
+A Fase 2 entregou o código do MVP Instagram em 28/08/2026, mas o gate nunca abriu, e
+metade do que falta é do Telegram: DNS para o webhook, ID do Ricardo e allowlist de
+chat. Trocar o canal agora apaga esses três bloqueios em vez de destravá-los. O que o
+Telegram exigia de fora, o site resolve com uma conta e um link.
+
+O blog depende da chave da DeepSeek, que continua sem prazo. O site não depende de
+chave de modelo nenhuma: prova o caminho inteiro no perfil `ensaio`, com arte falsa.
+
+Desenho em `.specs/features/fabrica/DESIGN.md`.
 
 Fases v1.1 em diante seguem o PRD §5.1 sem alteração.
 
@@ -62,5 +68,6 @@ quiserem.
   §4.10 diz `America/Fortaleza`. Os dois são UTC-3 sem horário de verão, então o
   instante não muda. `America/Fortaleza` é o certo para MA e PI, e o Pará é
   `America/Belem`, também UTC-3. Adotar `America/Fortaleza` e corrigir o código.
-- **Entrega idempotente.** O §5.1 escreve "Executar a mesma entrega duas vezes cria
-  um documento no Telegram". Lido como exatamente um, que é o que o §4.6 pede.
+- **Entrega idempotente.** O §5.1 escrevia "Executar a mesma entrega duas vezes cria
+  um documento no Telegram". Lido como exatamente um, que é o que o §4.6 pede. Com o
+  Telegram fora, o documento vira o arquivo entregue e a regra continua igual.
