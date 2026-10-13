@@ -3,7 +3,7 @@ import type { PostPronto } from "../../agent/fila";
 import { apiCalendario } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { criarAgenda } from "../componentes/calendario/agenda";
-import { Bolha, seletorDe, type Aberto, type AcoesDaBolha } from "../componentes/calendario/Bolha";
+import { Bolha, seletorDe, type Aberto, type AcoesDaBolha, type Faixa } from "../componentes/calendario/Bolha";
 import { ContextoCalendario, PROVISORIO, type Calendario as Ctx, type Provisorio, type Selecao, type Visao } from "../componentes/calendario/contexto";
 import { ano, diaDe, hoje, inicioDaSemana, nomeDaSemana, nomeDoMes, numeroDoDia, primeiroDoMes, somarDias, somarMeses, type Dia } from "../componentes/calendario/datas";
 import { enviarAoAbrir } from "../componentes/calendario/enviarAoAbrir";
@@ -113,10 +113,17 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
   }, []);
 
   // Como no Mac, a grade nova troca num corte seco e os itens aparecem uns 50 ms depois dela.
+  // Segurando a seta, os períodos passam rápido demais para isso: os itens aparecem na hora.
+  const ultimaEntrada = useRef(0);
   useLayoutEffect(() => {
     if (!entrando) return;
-    for (const el of raiz.current?.querySelectorAll(".cal-vista .cal-item") ?? [])
-      el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 90, delay: 50, easing: "ease-out", fill: "backwards" });
+    const agora = performance.now();
+    const seguida = agora - ultimaEntrada.current < 200;
+    ultimaEntrada.current = agora;
+    for (const el of raiz.current?.querySelectorAll(".cal-vista .cal-item") ?? []) {
+      for (const a of el.getAnimations()) a.finish();
+      if (!seguida) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 90, delay: 50, easing: "ease-out", fill: "backwards" });
+    }
   }, [entrando]);
 
   useEffect(() => {
@@ -155,13 +162,22 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
 
   const selecionar = useCallback((s: Selecao) => setSelecao(s), []);
 
-  // A seleção mora no foco: as setas, o Enter e o Delete partem do elemento focado.
+  // A seleção mora no foco: as setas, o Enter e o Delete partem do elemento focado. O foco só
+  // segue a seleção quando ela muda, o popover fecha ou o elemento focado some da tela; clicar
+  // num botão da tela (Semana, Hoje) não devolve o foco para o item.
+  const focada = useRef<string | null>(null);
   useEffect(() => {
-    if (aberto) return;
+    if (aberto) {
+      focada.current = null;
+      return;
+    }
     const el = elementoDa(selecao);
-    if (el && document.activeElement !== el) el.focus({ preventScroll: visao === "mes" });
-    // O elemento focado saiu da tela (troca de visão, item apagado): o foco volta para a tela, não para o body.
-    else if (!el && (document.activeElement === document.body || !document.activeElement?.isConnected)) raiz.current?.focus({ preventScroll: true });
+    const chave = selecao ? JSON.stringify(selecao) : null;
+    const perdido = document.activeElement === document.body || !document.activeElement?.isConnected;
+    if (el && (focada.current !== chave || perdido)) {
+      if (document.activeElement !== el) el.focus({ preventScroll: visao === "mes" });
+      focada.current = chave;
+    } else if (!el && perdido) raiz.current?.focus({ preventScroll: true });
   });
 
   function elementoDa(s: Selecao): HTMLElement | null {
@@ -196,7 +212,8 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
     if (item) setSelecao({ tipo: "item", chave, dia: lugarDe(item).dia });
     abrir({ tipo: "item", chave, ancora: seletorDe(chave) });
   };
-  const abrirDia = (d: Dia) => abrir({ tipo: "dia", dia: d, ancora: `[data-itens-de="${d}"]` });
+  const abrirDia = (d: Dia, opcoes: { ancora?: string; faixa?: Faixa } = {}) =>
+    abrir({ tipo: "dia", dia: d, ancora: opcoes.ancora ?? `[data-itens-de="${d}"]`, faixa: opcoes.faixa });
   const criar = (lugar: Lugar) => {
     setSelecao({ tipo: "dia", dia: lugar.dia });
     abrir({ tipo: "nova", lugar });
@@ -232,6 +249,12 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
     },
     criarComChefe: (p) => void criarComChefe(p),
     confirmarMover: (a, lugar) => void agenda.mover(a, lugar),
+    preverMover: (a, lugar) => {
+      agenda.prever(a, lugar);
+      setSelecao({ tipo: "item", chave: chaveDe(a), dia: lugar.dia });
+      mostrar(lugar.dia);
+      abrir({ tipo: "mover", item: a, lugar });
+    },
     desistirDeMover: (a) => agenda.descartarPrevia(chaveDe(a)),
     agendar: async (post, midia, publicaEm) => {
       const falha = await agenda.agendar(post, midia, publicaEm);
@@ -372,6 +395,7 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
     criar,
     irParaDia,
     descer: arrasto.descer,
+    arrastando: arrasto.ativo,
     arrastada: arrasto.arrastada,
     assentando: arrasto.assentando,
     alvo: arrasto.alvo,
@@ -391,7 +415,7 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
       <div ref={raiz} tabIndex={-1} data-escopo="calendario" className="flex min-h-0 min-w-0 flex-1 bg-superficie outline-none">
         <main id="conteudo" className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-none flex-col gap-2 px-4 pt-3 pb-2 sm:px-5">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <BotaoMenu abrir={abrirMenu} />
               <div className="flex flex-1 justify-start sm:justify-center">
                 <Segmentado tipo="abas" rotulo="Visão do calendário" opcoes={VISOES} valor={visao} aoMudar={(v) => setVisao(v)} idDoPainel="cal-painel" />
@@ -400,15 +424,16 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
                 type="button"
                 aria-pressed={largo ? prontosAberto : undefined}
                 aria-haspopup={largo ? undefined : "dialog"}
+                aria-label={compacto ? `Prontos para agendar, ${quantosProntos}` : undefined}
                 onClick={alternarProntos}
                 className="pressiona flex h-9 flex-none cursor-pointer items-center gap-2 rounded-full border border-linha-forte px-3.5 text-[13px] font-medium text-tinta-2 hover:bg-hover hover:text-tinta aria-pressed:bg-ativo aria-pressed:text-tinta"
               >
-                Prontos
+                {compacto ? <Bandeja /> : "Prontos"}
                 {quantosProntos > 0 && <span className="rounded-full bg-tinta px-1.5 text-[11px] leading-[18px] text-sobre-tinta tabular">{quantosProntos}</span>}
               </button>
             </div>
             <div className="flex items-end justify-between gap-3">
-              <Titulo visao={visao} mes={visao === "mes" ? mesVisivel : primeiroDoMes(dias[Math.min(3, dias.length - 1)]!)} dia={dias[0]!} />
+              <Titulo visao={visao} mes={visao === "mes" ? mesVisivel : primeiroDoMes(dias[Math.min(3, dias.length - 1)]!)} dia={dias[0]!} compacto={compacto} />
               <nav aria-label="Período" className="flex flex-none items-center gap-1">
                 <Dica rotulo="Período anterior" atalho="cal-esquerda" lado="bottom">
                   <button type="button" aria-label="Período anterior" onClick={() => andarPeriodo(-1)} className="cal-nav">
@@ -461,15 +486,16 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
   );
 }
 
-function Titulo({ visao, mes, dia }: { visao: Visao; mes: Dia; dia: Dia }) {
+/** No celular o dia perde o ano, que já está implícito, para o título caber inteiro. */
+function Titulo({ visao, mes, dia, compacto }: { visao: Visao; mes: Dia; dia: Dia; compacto: boolean }) {
   return (
-    <h1 className="min-w-0 truncate text-[22px]/tight tracking-[-0.02em] sm:text-[26px]">
+    <h1 className="min-w-0 text-[22px]/tight tracking-[-0.02em] text-balance sm:text-[26px]">
       {visao === "dia" ? (
         <>
           <span className="font-semibold">
             {numeroDoDia(dia)} de {nomeDoMes(dia)}
-          </span>{" "}
-          <span className="font-normal">{ano(dia)}</span>
+          </span>
+          {!compacto && <span className="font-normal"> {ano(dia)}</span>}
           <span className="mt-0.5 block text-[15px] font-normal tracking-normal text-tinta-2">{capitalizar(nomeDaSemana(dia))}</span>
         </>
       ) : (
@@ -478,6 +504,14 @@ function Titulo({ visao, mes, dia }: { visao: Visao; mes: Dia; dia: Dia }) {
         </>
       )}
     </h1>
+  );
+}
+
+function Bandeja() {
+  return (
+    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 9.5 4 3.5h8l1.5 6M2.5 9.5v3h11v-3M2.5 9.5h3.25a2.25 2.25 0 0 0 4.5 0h3.25" />
+    </svg>
   );
 }
 

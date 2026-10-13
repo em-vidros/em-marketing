@@ -3,11 +3,11 @@ import { createContext, useContext, useEffect, useId, useRef, useState, type Rea
 import type { PostPronto } from "../../../agent/fila";
 import type { Pilar, TipoMidia } from "../../../db";
 import { PILARES, MIDIA } from "../peca";
-import { diaPorExtenso, epochDe, minutosDaHora, minutosDe, momentoPorExtenso, textoDaHora, type Dia } from "./datas";
+import { diaDe, diaPorExtenso, epochDe, hoje, somarDias, minutosDaHora, minutosDe, momentoPorExtenso, textoDaHora, type Dia } from "./datas";
 import { PASSADO } from "./arrasto";
 import { useCalendario } from "./contexto";
-import { Alerta, Relogio, Visto } from "./Item";
-import { chaveDe, lugarDe, rotuloDe, tituloDe, tituloDoPost, type AgendadoPendente, type Chave, type ItemAgendado, type ItemCalendario, type ItemPauta, type Lugar } from "./itens";
+import { Alerta, IconeDo, Relogio, tomDe, Visto } from "./Item";
+import { chaveDe, ehMovel, lugarDe, rotuloDe, tituloDe, tituloDoPost, type AgendadoPendente, type Chave, type ItemAgendado, type ItemCalendario, type ItemPauta, type Lugar } from "./itens";
 
 /** O que o popover mostra, e onde se ancora (um seletor, para seguir o elemento entre renders). */
 export type Aberto =
@@ -15,7 +15,13 @@ export type Aberto =
   | { tipo: "nova"; lugar: Lugar }
   | { tipo: "mover"; item: AgendadoPendente; lugar: Lugar }
   | { tipo: "agendar"; post: PostPronto; lugar: Lugar; ancora: string }
-  | { tipo: "dia"; dia: Dia; ancora: string };
+  | { tipo: "dia"; dia: Dia; ancora: string; faixa?: Faixa };
+
+/** Um trecho do dia em minutos, [de, ate): o "+N" da grade de horas abre só o grupo dele. */
+export interface Faixa {
+  de: number;
+  ate: number;
+}
 
 export const seletorDe = (chave: string) => `[data-chave="${CSS.escape(chave)}"]`;
 
@@ -42,6 +48,8 @@ export interface AcoesDaBolha {
   apagarPauta: (p: ItemPauta) => void;
   criarComChefe: (p: ItemPauta) => void;
   confirmarMover: (a: AgendadoPendente, lugar: Lugar) => void;
+  /** Mostra o agendado no lugar novo e pede a confirmação, como depois de arrastar. */
+  preverMover: (a: AgendadoPendente, lugar: Lugar) => void;
   desistirDeMover: (a: AgendadoPendente) => void;
   /** Devolve o motivo da recusa, para a confirmação mostrar ao lado dos campos. */
   agendar: (post: PostPronto, midia: TipoMidia, publicaEm: number) => Promise<string | null>;
@@ -60,7 +68,7 @@ export function Bolha({ aberto, acoes }: { aberto: Aberto | null; acoes: AcoesDa
   const inicial = useRef<HTMLElement | null>(null);
 
   return (
-    <Popover.Root open={aberto !== null} onOpenChange={(a) => !a && acoes.fechar()} onOpenChangeComplete={(a) => !a && setMostrado(null)}>
+    <Popover.Root modal="trap-focus" open={aberto !== null} onOpenChange={(a) => !a && acoes.fechar()} onOpenChangeComplete={(a) => !a && setMostrado(null)}>
       <Popover.Portal>
         {atual && (
           <Popover.Positioner
@@ -84,6 +92,7 @@ export function Bolha({ aberto, acoes }: { aberto: Aberto | null; acoes: AcoesDa
                   <path d="M0 8 8 .5 16 8" fill="var(--color-superficie)" stroke="var(--color-linha-forte)" />
                 </svg>
               </Popover.Arrow>
+              <Popover.Close className="sr-only">Fechar</Popover.Close>
               <NoPopover.Provider value>
                 <Conteudo key={chaveDoAberto(atual)} aberto={atual} acoes={acoes} inicial={inicial} />
               </NoPopover.Provider>
@@ -108,7 +117,7 @@ function Conteudo({ aberto, acoes, inicial }: { aberto: Aberto; acoes: AcoesDaBo
     case "agendar":
       return <FormAgendar post={aberto.post} lugar={aberto.lugar} aoAgendar={acoes.agendar} aoCancelar={acoes.fechar} inicial={inicial} />;
     case "dia":
-      return <ListaDoDia dia={aberto.dia} ancora={aberto.ancora} acoes={acoes} inicial={inicial} />;
+      return <ListaDoDia dia={aberto.dia} faixa={aberto.faixa} ancora={aberto.ancora} acoes={acoes} inicial={inicial} />;
     case "item": {
       const item = c.leitura.achar(aberto.chave);
       if (!item) return <p className="text-tinta-2">Este item saiu do calendário.</p>;
@@ -123,9 +132,9 @@ function Conteudo({ aberto, acoes, inicial }: { aberto: Aberto; acoes: AcoesDaBo
 const rotuloCampo = "text-xs font-medium text-tinta-2";
 const campo =
   "h-9 w-full min-w-0 rounded-[10px] bg-superficie px-2.5 text-base text-tinta shadow-[inset_0_0_0_1px_var(--color-borda-campo)] outline-none focus-visible:shadow-[inset_0_0_0_2px_var(--color-tinta)] sm:text-sm";
-const botaoPrincipal = "pressiona inline-flex h-9 cursor-pointer items-center justify-center rounded-full bg-tinta px-4 font-medium text-sobre-tinta hover:bg-tinta/85";
-const botaoSecundario = "pressiona inline-flex h-9 cursor-pointer items-center justify-center rounded-full px-3.5 font-medium text-tinta-2 hover:bg-hover hover:text-tinta";
-const botaoPerigo = "pressiona inline-flex h-9 cursor-pointer items-center justify-center rounded-full px-3.5 font-medium text-erro hover:bg-erro/8";
+const botaoPrincipal = "pressiona inline-flex h-9 whitespace-nowrap cursor-pointer items-center justify-center rounded-full bg-tinta px-4 font-medium text-sobre-tinta hover:bg-tinta/85";
+const botaoSecundario = "pressiona inline-flex h-9 whitespace-nowrap cursor-pointer items-center justify-center rounded-full px-3.5 font-medium text-tinta-2 hover:bg-hover hover:text-tinta";
+const botaoPerigo = "pressiona inline-flex h-9 whitespace-nowrap cursor-pointer items-center justify-center rounded-full px-3.5 font-medium text-erro hover:bg-erro/8";
 
 /** Dentro do popover o título dá nome ao diálogo; na folha do celular o Dialog já tem o dele. */
 const NoPopover = createContext(false);
@@ -137,7 +146,7 @@ function Titulo({ children }: { children: ReactNode }) {
 
 function Campos({ dia, hora, aoDia, aoHora, idBase, horaOpcional }: { dia: Dia; hora: string; aoDia: (d: Dia) => void; aoHora: (h: string) => void; idBase: string; horaOpcional?: boolean }) {
   return (
-    <div className="grid grid-cols-[1fr_7.5rem] gap-2">
+    <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
       <label htmlFor={`${idBase}-dia`} className="flex flex-col gap-1">
         <span className={rotuloCampo}>Dia</span>
         <input id={`${idBase}-dia`} type="date" required value={dia} onChange={(e) => e.target.value && aoDia(e.target.value as Dia)} className={`${campo} tabular`} />
@@ -218,15 +227,23 @@ function EditorPauta({ pauta, lugar, acoes, inicial }: { pauta?: ItemPauta; luga
       <Titulo>{pauta ? "Pauta" : "Nova pauta"}</Titulo>
       <label htmlFor={`${id}-titulo`} className="flex flex-col gap-1">
         <span className={rotuloCampo}>Título</span>
-        <input
-          ref={inicial as RefObject<HTMLInputElement>}
+        {/* Cresce com o texto, como o título do evento no Mac; Enter grava em vez de quebrar a linha. */}
+        <textarea
+          ref={inicial as RefObject<HTMLTextAreaElement>}
           id={`${id}-titulo`}
           value={titulo}
-          onChange={(e) => setTitulo(e.target.value)}
+          rows={1}
+          onChange={(e) => setTitulo(e.target.value.replace(/\n/g, " "))}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
           placeholder="Box de vidro entregue no Calhau"
           maxLength={200}
           autoComplete="off"
-          className={campo}
+          className={`${campo} h-auto max-h-32 resize-none py-[7px] leading-snug [field-sizing:content] [overflow-wrap:anywhere]`}
         />
       </label>
       <Campos dia={dia} hora={hora} aoDia={setDia} aoHora={setHora} idBase={id} horaOpcional />
@@ -249,10 +266,10 @@ function EditorPauta({ pauta, lugar, acoes, inicial }: { pauta?: ItemPauta; luga
           onChange={(e) => setNota(e.target.value)}
           rows={3}
           maxLength={5000}
-          className={`${campo} h-auto resize-none py-2 leading-snug`}
+          className={`${campo} h-auto max-h-[40dvh] min-h-[4.5rem] resize-none overflow-y-auto py-2 leading-snug [field-sizing:content] [overflow-wrap:anywhere]`}
         />
       </label>
-      <div className="flex items-center justify-between gap-2 pt-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <button type="button" onClick={() => void comChefe()} className={botaoPrincipal}>
           {pauta?.conversaId ? "Abrir a conversa" : "Criar com o Chefe"}
         </button>
@@ -295,45 +312,91 @@ function Cabecalho({ capa, titulo, linha }: { capa: string | null; titulo: strin
   );
 }
 
+/** O erro da Meta vem cru, em inglês: os casos conhecidos ganham o que fazer, o resto mostra o texto. */
+function explicarFalha(erro: string | null): string {
+  if (erro && /access token|#190|session has expired|oauth/i.test(erro)) return "O acesso ao Instagram expirou. Reconecte a conta do Instagram e agende o post de novo.";
+  if (erro && /propor|aspect ratio/i.test(erro)) return "O Instagram recusou a proporção da imagem. Ajuste a peça e agende de novo.";
+  return "O Instagram recusou a publicação. Confira o motivo abaixo e agende de novo.";
+}
+
 function DetalheAgendado({ item, acoes, inicial }: { item: ItemAgendado; acoes: AcoesDaBolha; inicial: RefObject<HTMLElement | null> }) {
+  const c = useCalendario();
+  const id = useId();
   const quando = `${MIDIA[item.midia]} · ${momentoPorExtenso(item.publicaEm)}`;
-  return (
-    <div className="flex flex-col gap-3">
-      <Cabecalho capa={item.capa} titulo={tituloDe(item)} linha={quando} />
-      {item.status === "failed" ? (
-        <>
-          <div role="note" className="flex flex-col gap-1 rounded-[12px] bg-erro/6 p-3 text-erro">
-            <span className="flex items-center gap-1.5 font-medium">
-              <Alerta />A publicação falhou
-            </span>
-            <p className="line-clamp-6 text-[13px] text-tinta-2 [overflow-wrap:anywhere]">{item.erro ?? "O Instagram não disse o motivo."}</p>
-          </div>
-          <p className="text-[13px] text-pretty text-tinta-2">Para tentar de novo, agende o post outra vez pelos Prontos.</p>
-          <div className="flex justify-end">
-            <button ref={inicial as RefObject<HTMLButtonElement>} type="button" onClick={() => (acoes.fechar(), acoes.cancelar(item))} className={botaoSecundario}>
-              Dispensar
+  const [dia, setDia] = useState<Dia>(diaDe(item.publicaEm));
+  const [hora, setHora] = useState(textoDaHora(minutosDe(item.publicaEm)));
+  const [erro, setErro] = useState<string | null>(null);
+  const pronto = c.leitura.prontos?.find((p) => p.postId === item.postId && p.midias.includes(item.midia)) ?? null;
+
+  if (item.status === "failed") {
+    // De novo no mesmo horário se ainda dá; se já passou, amanhã na mesma hora.
+    const amanha = epochDe(somarDias(hoje(c.agora), 1), minutosDe(item.publicaEm));
+    const novo = item.publicaEm > c.agora ? item.publicaEm : amanha;
+    return (
+      <div className="flex flex-col gap-3">
+        <Cabecalho capa={item.capa} titulo={tituloDe(item)} linha={quando} />
+        <div role="note" className="flex flex-col gap-1.5 rounded-[12px] bg-erro/6 p-3">
+          <span className="flex items-center gap-1.5 font-medium text-erro">
+            <Alerta />A publicação falhou
+          </span>
+          <p className="text-[13px] text-pretty text-tinta">{explicarFalha(item.erro)}</p>
+          {item.erro && <p className="line-clamp-4 text-xs text-tinta-2 [overflow-wrap:anywhere]">{item.erro}</p>}
+        </div>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button ref={inicial as RefObject<HTMLButtonElement>} type="button" onClick={() => (acoes.fechar(), acoes.cancelar(item))} className={botaoSecundario}>
+            Dispensar
+          </button>
+          {pronto && (
+            <button
+              type="button"
+              onClick={() => acoes.abrir({ tipo: "agendar", post: pronto, lugar: { dia: diaDe(novo), minutos: minutosDe(novo) }, ancora: seletorDe(chaveDe(item)) })}
+              className={botaoPrincipal}
+            >
+              Agendar de novo
             </button>
-          </div>
-        </>
-      ) : item.status === "publishing" ? (
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (item.status === "publishing")
+    return (
+      <div className="flex flex-col gap-3">
+        <Cabecalho capa={item.capa} titulo={tituloDe(item)} linha={quando} />
         <p className="flex items-center gap-1.5 text-tinta-2">
           <Relogio />
           Publicando agora.
         </p>
-      ) : (
-        <>
-          <p className="flex items-center gap-1.5 text-[13px] text-tinta-2">
-            <Relogio />
-            Agendado. Arraste no calendário para mudar o horário.
-          </p>
-          <div className="flex justify-end">
-            <button ref={inicial as RefObject<HTMLButtonElement>} type="button" onClick={() => (acoes.fechar(), acoes.cancelar(item))} className={botaoPerigo}>
-              Cancelar agendamento
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+      </div>
+    );
+
+  const minutos = minutosDaHora(hora);
+  const mudou = minutos !== null && epochDe(dia, minutos) !== item.publicaEm;
+  function mudarHorario(e: React.FormEvent) {
+    e.preventDefault();
+    if (minutos === null || !ehMovel(item)) return;
+    if (epochDe(dia, minutos) <= Date.now()) return setErro(PASSADO);
+    acoes.preverMover(item, { dia, minutos });
+  }
+
+  return (
+    <form onSubmit={mudarHorario} className="flex flex-col gap-3">
+      <Cabecalho capa={item.capa} titulo={tituloDe(item)} linha={quando} />
+      <Campos dia={dia} hora={hora} aoDia={(d) => (setDia(d), setErro(null))} aoHora={(h) => (setHora(h), setErro(null))} idBase={id} />
+      <p className="text-[13px] text-pretty text-tinta-2">Arraste no calendário ou troque o dia e a hora aqui. A mudança pede confirmação.</p>
+      <p role="alert" className="text-[13px] text-erro empty:hidden">
+        {erro}
+      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button type="button" onClick={() => (acoes.fechar(), acoes.cancelar(item))} className={botaoPerigo}>
+          Cancelar agendamento
+        </button>
+        <button ref={inicial as RefObject<HTMLButtonElement>} type="submit" disabled={!mudou} className={`${botaoPrincipal} disabled:cursor-default disabled:opacity-40`}>
+          Mudar horário
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -386,7 +449,7 @@ function ConfirmarMover({ item, lugar, acoes, inicial }: { item: AgendadoPendent
       <p className="text-[13px] text-pretty text-tinta-2 [overflow-wrap:anywhere]">
         Muda o horário em que {tituloDe(item)} sai no Instagram. Horário atual: {momentoPorExtenso(item.publicaEm)}.
       </p>
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
         <button type="button" onClick={acoes.fechar} className={botaoSecundario}>
           Cancelar
         </button>
@@ -468,7 +531,7 @@ export function FormAgendar({
       <p id={erroId} role="alert" className="text-[13px] text-erro empty:hidden">
         {erro}
       </p>
-      <div className="flex justify-end gap-2">
+      <div className="flex flex-wrap justify-end gap-2">
         <button type="button" onClick={aoCancelar} className={botaoSecundario}>
           Cancelar
         </button>
@@ -480,12 +543,13 @@ export function FormAgendar({
   );
 }
 
-function ListaDoDia({ dia, ancora, acoes, inicial }: { dia: Dia; ancora: string; acoes: AcoesDaBolha; inicial: RefObject<HTMLElement | null> }) {
+function ListaDoDia({ dia, faixa, ancora, acoes, inicial }: { dia: Dia; faixa?: Faixa; ancora: string; acoes: AcoesDaBolha; inicial: RefObject<HTMLElement | null> }) {
   const c = useCalendario();
-  const itens = c.leitura.porDia.get(dia) ?? [];
+  const doDia = c.leitura.porDia.get(dia) ?? [];
+  const itens = faixa ? doDia.filter((i) => (lugarDe(i).minutos ?? -1) >= faixa.de && (lugarDe(i).minutos ?? -1) < faixa.ate) : doDia;
   return (
     <div className="flex flex-col gap-2">
-      <Titulo>{diaPorExtenso(dia)}</Titulo>
+      <Titulo>{faixa ? `${diaPorExtenso(dia)}, a partir das ${textoDaHora(faixa.de)}` : diaPorExtenso(dia)}</Titulo>
       {itens.length === 0 ? (
         <p className="text-tinta-2">Nada marcado neste dia.</p>
       ) : (
@@ -499,10 +563,11 @@ function ListaDoDia({ dia, ancora, acoes, inicial }: { dia: Dia; ancora: string;
                   type="button"
                   aria-label={rotuloDe(i)}
                   onClick={() => acoes.abrir({ tipo: "item", chave: chaveDe(i), ancora })}
-                  data-tom={i.tipo === "data" ? "data" : (i.tipo !== "publicado" && i.pilar) || "nenhum"}
-                  className="cal-linha-lista realce flex min-h-9 w-full cursor-pointer items-center gap-2 rounded-[10px] px-2 text-left hover:bg-hover"
+                  data-tom={tomDe(i)}
+                  className="cal-linha-lista realce flex min-h-10 w-full cursor-pointer items-center gap-2 rounded-[10px] px-2 text-left hover:bg-hover"
                 >
                   <span aria-hidden="true" className="cal-barra-lista" />
+                  <IconeDo item={i} />
                   <span className="min-w-0 flex-1 truncate">{tituloDe(i)}</span>
                   <span className="flex-none text-xs text-tinta-3 tabular">{minutos === null ? "dia todo" : textoDaHora(minutos)}</span>
                 </button>
@@ -511,7 +576,7 @@ function ListaDoDia({ dia, ancora, acoes, inicial }: { dia: Dia; ancora: string;
           })}
         </ul>
       )}
-      <button type="button" onClick={() => acoes.abrir({ tipo: "nova", lugar: { dia, minutos: null } })} className={`${botaoSecundario} self-start`}>
+      <button type="button" onClick={() => acoes.abrir({ tipo: "nova", lugar: { dia, minutos: faixa ? faixa.de : null } })} className={`${botaoSecundario} self-start`}>
         Nova pauta
       </button>
     </div>

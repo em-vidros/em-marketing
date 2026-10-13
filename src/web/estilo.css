@@ -367,7 +367,7 @@ a.linha:focus-visible {
 }
 
 [data-tom] {
-  --barra: #8f8f8f;
+  --barra: var(--color-borda-campo);
   --fundo: var(--color-hover);
   --texto: #3d3d3d;
 }
@@ -404,7 +404,7 @@ a.linha:focus-visible {
 [data-tom="data"] {
   --barra: var(--color-tinta-3);
   --fundo: var(--color-ativo);
-  --texto: #3b3833;
+  --texto: var(--color-pilar-marca-texto);
 }
 
 .cal-item {
@@ -480,19 +480,18 @@ a.linha:focus-visible {
 }
 .cal-bloco .cal-hora {
   color: inherit;
-  opacity: 0.8;
 }
-/* Coluna estreita: o título fica, a hora e depois a capa saem (a hora segue no nome acessível). */
+/* Coluna estreita: o título fica, a capa e depois a hora saem (a hora segue no nome acessível). */
 .cal-bloco {
   container-type: inline-size;
 }
 @container (max-width: 150px) {
-  .cal-bloco > .cal-hora {
+  .cal-bloco > .cal-capa {
     display: none;
   }
 }
 @container (max-width: 96px) {
-  .cal-bloco > .cal-capa {
+  .cal-bloco > .cal-hora {
     display: none;
   }
 }
@@ -512,7 +511,6 @@ a.linha:focus-visible {
 }
 .cal-item[data-selecionado] .cal-hora {
   color: inherit;
-  opacity: 0.85;
 }
 .cal-item[data-selecionado]::before {
   background: currentColor;
@@ -545,7 +543,7 @@ a.linha:focus-visible {
   padding: 0 4px;
   border-radius: 999px;
   background: var(--color-hoje);
-  color: #fff;
+  color: var(--color-sobre-tinta);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -625,7 +623,8 @@ a.linha:focus-visible {
 }
 @media (max-width: 39.99rem) {
   .cal-horas[data-dias="7"] {
-    --coluna-min: 112px;
+    /* Duas colunas e meia: a metade que aparece avisa que a semana continua de lado. */
+    --coluna-min: calc((100vw - 56px) / 2.5);
     scroll-snap-type: x mandatory;
   }
 }
@@ -680,7 +679,7 @@ a.linha:focus-visible {
   padding: 0 6px;
   border-radius: 999px;
   background: var(--color-hoje);
-  color: #fff;
+  color: var(--color-sobre-tinta);
   font-size: 11px;
   font-weight: 600;
   line-height: 18px;
@@ -733,7 +732,7 @@ a.linha:focus-visible {
   padding: 1px 6px;
   border-radius: 999px;
   background: var(--color-tinta);
-  color: #fff;
+  color: var(--color-sobre-tinta);
   font-size: 11px;
   font-weight: 600;
   line-height: 16px;
@@ -808,6 +807,12 @@ a.linha:focus-visible {
   outline: 2px solid var(--color-tinta);
   outline-offset: 2px;
 }
+@media (pointer: coarse) {
+  .cal-chip {
+    height: 40px;
+    padding: 0 14px;
+  }
+}
 .cal-chip[data-indisponivel] {
   opacity: 0.45;
   cursor: not-allowed;
@@ -816,8 +821,8 @@ a.linha:focus-visible {
 .cal-nav {
   display: grid;
   place-items: center;
-  min-width: 36px;
-  height: 32px;
+  min-width: 40px;
+  height: 40px;
   border-radius: 999px;
   background: var(--color-hover);
   color: var(--color-tinta);
@@ -841,7 +846,7 @@ a.linha:focus-visible {
   padding: 6px 10px;
   border-radius: 10px;
   background: var(--color-tinta);
-  color: #fff;
+  color: var(--color-sobre-tinta);
   font-size: 12px;
   line-height: 16px;
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);

@@ -64,7 +64,7 @@ export function ordem(a: ItemCalendario, b: ItemCalendario): number {
   const la = lugarDe(a);
   const lb = lugarDe(b);
   if ((la.minutos === null) !== (lb.minutos === null)) return la.minutos === null ? -1 : 1;
-  return (la.minutos ?? 0) - (lb.minutos ?? 0) || PESO[a.tipo] - PESO[b.tipo] || tituloDe(a).localeCompare(tituloDe(b), "pt-BR");
+  return (la.minutos ?? 0) - (lb.minutos ?? 0) || PESO[a.tipo] - PESO[b.tipo] || tituloDe(a).localeCompare(tituloDe(b), "pt-BR", { numeric: true });
 }
 
 /** Peça de foto real não tem headline: o número do post a identifica. */
@@ -92,7 +92,7 @@ export function rotuloDe(i: ItemCalendario): string {
   const partes = [`${NOME_DO_TIPO[i.tipo]}: ${tituloDe(i)}`, minutos === null ? "dia inteiro" : textoDaHora(minutos)];
   if (i.tipo === "agendado") partes.push(i.status === "failed" ? "falhou" : i.status === "publishing" ? "publicando agora" : i.midia === "STORIES" ? "stories" : "feed");
   const pilar = pilarDe(i);
-  if (pilar) partes.push(`pilar ${pilar}`);
+  if (pilar) partes.push(`pilar ${pilar.charAt(0)}${pilar.slice(1).toLowerCase()}`);
   return partes.join(", ");
 }
 

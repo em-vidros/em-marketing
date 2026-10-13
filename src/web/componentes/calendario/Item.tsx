@@ -33,7 +33,7 @@ const Estrela = () => (
 );
 
 /** O ícone que diz o estado sem depender da cor. */
-function IconeDo({ item }: { item: ItemCalendario }) {
+export function IconeDo({ item }: { item: ItemCalendario }) {
   if (item.tipo === "agendado") return item.status === "failed" ? <Alerta /> : <Relogio />;
   if (item.tipo === "publicado") return <Visto />;
   if (item.tipo === "data") return <Estrela />;
@@ -41,7 +41,7 @@ function IconeDo({ item }: { item: ItemCalendario }) {
 }
 
 /** Tom do item: o pilar dá a cor; falha, publicado e data editorial têm o próprio. */
-const tomDe = (i: ItemCalendario) =>
+export const tomDe = (i: ItemCalendario) =>
   i.tipo === "data" ? "data" : i.tipo === "publicado" ? "publicado" : i.tipo === "agendado" && i.status === "failed" ? "falha" : (pilarDe(i) ?? "nenhum");
 
 type Variante = "linha" | "bloco" | "pilula";
@@ -131,5 +131,12 @@ export function BlocoProvisorio({ variante, estilo }: { variante: Variante; esti
   );
 }
 
-/** No mês compacto do celular, um ponto por item, na cor do tom. */
-export const Ponto = ({ item }: { item: ItemCalendario }) => <span aria-hidden="true" data-tom={tomDe(item)} className="cal-ponto" />;
+/** No mês compacto do celular, um ponto por item, na cor do tom; a falha vira o alerta, para não depender da cor. */
+export const Ponto = ({ item }: { item: ItemCalendario }) =>
+  tomDe(item) === "falha" ? (
+    <span aria-hidden="true" className="flex text-erro">
+      <Alerta />
+    </span>
+  ) : (
+    <span aria-hidden="true" data-tom={tomDe(item)} className="cal-ponto" />
+  );

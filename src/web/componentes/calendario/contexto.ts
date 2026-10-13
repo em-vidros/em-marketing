@@ -25,10 +25,12 @@ export interface Calendario {
   selecao: Selecao;
   selecionar: (s: Selecao) => void;
   abrirItem: (chave: Chave) => void;
-  abrirDia: (dia: Dia) => void;
+  abrirDia: (dia: Dia, opcoes?: { ancora?: string; faixa?: { de: number; ate: number } }) => void;
   criar: (lugar: Lugar) => void;
   irParaDia: (dia: Dia) => void;
   descer: (e: PointerEvent<HTMLElement>, fonte: Fonte) => void;
+  /** Um arrasto em andamento: o mês não encaixa a rolagem embaixo do ponteiro. */
+  arrastando: boolean;
   /** O original esmaece enquanto o fantasma anda. */
   arrastada: Chave | null;
   /** O destino fica invisível até o fantasma assentar nele. */

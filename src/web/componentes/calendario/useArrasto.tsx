@@ -120,10 +120,6 @@ export function useArrasto(o: Opcoes) {
 
   /** Sem `v`, a mola parte da velocidade que o valor já tem: é o redirecionamento no meio do caminho. */
   async function molaPara(r: Retangulo, v?: { x: number; y: number }) {
-    if (reduzirMovimento) {
-      await animate(opacidade, 0, FADE);
-      return;
-    }
     await Promise.all([
       animate(x, r.left, v ? { ...MOLA_POSICAO, velocity: v.x } : MOLA_POSICAO),
       animate(y, r.top, v ? { ...MOLA_POSICAO, velocity: v.y } : MOLA_POSICAO),
@@ -134,7 +130,28 @@ export function useArrasto(o: Opcoes) {
     ]);
   }
 
+  /** Com movimento reduzido o pouso é um cruzamento de 150 ms: o fantasma some enquanto o destino aparece. */
+  async function assentarSemMovimento(a: Extract<Arrasto, { fase: "soltando" }>) {
+    const { soltura, fonte } = a;
+    const o = opcoes.current;
+    const destino = fonte.tipo === "item" ? chaveDe(fonte.item) : PROVISORIO;
+    if (soltura.tipo !== "voltar") {
+      if (fonte.tipo === "pronto") o.preparar(fonte.post, soltura.lugar);
+      else if (soltura.tipo === "mover") void o.agenda.mover(fonte.item, soltura.lugar);
+      else o.agenda.prever(fonte.item, soltura.lugar);
+      await proximoQuadro();
+    }
+    const el = document.querySelector<HTMLElement>(`[data-chave="${destino}"]`);
+    const entrada = el?.animate([{ opacity: soltura.tipo === "voltar" ? 0.35 : 0 }, { opacity: 1 }], { duration: 150, easing: "ease-out", fill: "forwards" });
+    await animate(opacidade, 0, FADE);
+    terminar();
+    entrada?.cancel();
+    if (soltura.tipo === "voltar" && soltura.motivo && el) o.recusar(soltura.motivo, el.getBoundingClientRect());
+    if (soltura.tipo === "confirmar") o.confirmar(fonte, soltura.lugar);
+  }
+
   async function assentar(a: Extract<Arrasto, { fase: "soltando" }>) {
+    if (reduzirMovimento) return assentarSemMovimento(a);
     const { soltura, fonte, velocidade } = a;
     const o = opcoes.current;
     if (soltura.tipo === "voltar") {
@@ -151,7 +168,7 @@ export function useArrasto(o: Opcoes) {
     else o.agenda.prever(fonte.item, soltura.lugar);
     // A mola sai no mesmo quadro em que o ponteiro soltou, rumo ao encaixe calculado da grade;
     // depois do render ela é redirecionada para o elemento de verdade, sem perder a velocidade.
-    const estimada = reduzirMovimento ? null : caixaDoEncaixe(a.ponto, soltura.lugar);
+    const estimada = caixaDoEncaixe(a.ponto, soltura.lugar);
     const indo = estimada ? molaPara(estimada, velocidade) : null;
     setAssentando(destino);
     await proximoQuadro();
@@ -170,22 +187,28 @@ export function useArrasto(o: Opcoes) {
     origem.current = null;
   }
 
-  function rolarNaBorda() {
+  /** Perto da borda a grade rola numa velocidade fixa por segundo, igual em 60 e em 120 Hz. */
+  function rolarNaBorda(antes: number) {
     const a = estado.current;
     const p = ultimo.current;
     if (a.fase !== "arrastando" || !p) return;
+    const agora = performance.now();
     const grade = document.querySelector<HTMLElement>(".cal-horas, .cal-mes");
     if (grade) {
       const r = grade.getBoundingClientRect();
       // Só rola com o ponteiro dentro da grade: vindo da coluna de prontos, ele passa por cima dela.
       const dentro = p.x >= r.left && p.x <= r.right && p.y >= r.top && p.y <= r.bottom;
       const passo = !dentro ? 0 : p.y < r.top + BORDA_ROLAGEM ? p.y - r.top - BORDA_ROLAGEM : p.y > r.bottom - BORDA_ROLAGEM ? p.y - r.bottom + BORDA_ROLAGEM : 0;
-      if (passo !== 0) {
-        grade.scrollTop += passo / 4;
-        despachar({ tipo: "mover", ponto: { ...p, t: performance.now() }, alvo: alvoEm(p.x, p.y, a) });
-      }
+      if (passo !== 0) grade.scrollTop += passo * 15 * (Math.min(agora - antes, 50) / 1000);
     }
-    requestAnimationFrame(rolarNaBorda);
+    requestAnimationFrame(() => rolarNaBorda(agora));
+  }
+
+  /** A grade rolou sob um ponteiro parado (borda, roda do mouse): o alvo segue o conteúdo. */
+  function aoRolarDuranteArrasto() {
+    const a = estado.current;
+    const p = ultimo.current;
+    if (a.fase === "arrastando" && p) despachar({ tipo: "mover", ponto: { ...p, t: performance.now() }, alvo: alvoEm(p.x, p.y, a) });
   }
 
   function descer(e: PointerDoReact<HTMLElement>, fonte: Fonte) {
@@ -210,7 +233,7 @@ export function useArrasto(o: Opcoes) {
       if (depois.fase !== "arrastando") return;
       if (a.fase === "pressionado") {
         levantar(depois);
-        requestAnimationFrame(rolarNaBorda);
+        requestAnimationFrame(() => rolarNaBorda(performance.now()));
       }
       x.set(ponto.x - depois.pegada.x);
       y.set(ponto.y - depois.pegada.y);
@@ -240,7 +263,9 @@ export function useArrasto(o: Opcoes) {
     window.addEventListener("pointerup", aoSoltar);
     window.addEventListener("pointercancel", aoCancelar);
     window.addEventListener("keydown", aoTeclar, { capture: true });
+    window.addEventListener("scroll", aoRolarDuranteArrasto, { capture: true, passive: true });
     limpar.current = () => {
+      window.removeEventListener("scroll", aoRolarDuranteArrasto, { capture: true });
       window.removeEventListener("pointermove", aoMover);
       window.removeEventListener("pointerup", aoSoltar);
       window.removeEventListener("pointercancel", aoCancelar);
@@ -278,6 +303,7 @@ export function useArrasto(o: Opcoes) {
   return {
     descer,
     fantasma,
+    ativo: visivel,
     alvo,
     assentando,
     arrastada: vista.fase === "arrastando" || vista.fase === "soltando" ? (vista.fonte.tipo === "item" ? chaveDe(vista.fonte.item) : null) : null,

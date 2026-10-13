@@ -1,6 +1,6 @@
 import { animate, useReducedMotion, type AnimationPlaybackControls } from "motion/react";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { diasEntre, ehFimDeSemana, hoje, inicioDaSemana, mesCurto, numeroDoDia, primeiroDoMes, somarDias, type Dia } from "./datas";
+import { diaPorExtenso, diasEntre, ehFimDeSemana, hoje, inicioDaSemana, mesCurto, numeroDoDia, primeiroDoMes, somarDias, type Dia } from "./datas";
 import { useCalendario } from "./contexto";
 import { BlocoProvisorio, Item, Ponto } from "./Item";
 import { chaveDe, type ItemCalendario } from "./itens";
@@ -137,11 +137,22 @@ export function Mes({ pedido, aoVerMes, aoVerFaixa }: { pedido: PedidoDoMes; aoV
   function aoRolar() {
     cancelAnimationFrame(quadro.current);
     quadro.current = requestAnimationFrame(ler);
+    // Durante um arrasto a grade fica onde a pessoa deixou; encaixar moveria o dia sob o ponteiro.
+    if (c.arrastando) return;
     if (mola.current?.state === "running") return;
     clearTimeout(espera.current);
     espera.current = setTimeout(encaixar, 160);
   }
   const pararMola = () => mola.current?.stop();
+  useEffect(() => {
+    if (c.arrastando) {
+      clearTimeout(espera.current);
+      mola.current?.stop();
+      return;
+    }
+    espera.current = setTimeout(encaixar, 160);
+    return () => clearTimeout(espera.current);
+  }, [c.arrastando]);
   useEffect(() => () => (clearTimeout(espera.current), mola.current?.stop()), []);
 
   const semanas = Array.from({ length: SEMANAS }, (_, i) => somarDias(inicio, i * 7));
@@ -164,6 +175,7 @@ export function Mes({ pedido, aoVerMes, aoVerFaixa }: { pedido: PedidoDoMes; aoV
         onWheel={pararMola}
         onTouchStart={pararMola}
         onPointerDown={pararMola}
+        onKeyDown={pararMola}
         className="cal-mes min-h-0 flex-1 overflow-y-auto overscroll-contain"
       >
         {linha > 0 &&
@@ -235,6 +247,7 @@ function Casa({ dia, hj, mes, capacidade }: { dia: Dia; hj: Dia; mes: Dia; capac
               type="button"
               data-mais={dia}
               tabIndex={c.selecao?.tipo === "mais" && c.selecao.dia === dia ? 0 : -1}
+              aria-label={`+${escondidos} mais, ${diaPorExtenso(dia)}`}
               onClick={(e) => (e.stopPropagation(), c.abrirDia(dia))}
               onDoubleClick={(e) => e.stopPropagation()}
               className="cal-mais"

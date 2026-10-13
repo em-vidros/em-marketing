@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type PointerEvent } from "react";
-import { ehFimDeSemana, encaixarNoDia, hoje, minutosDe, numeroDoDia, semanaCurta, textoDaHora, type Dia } from "./datas";
+import { diaPorExtenso, ehFimDeSemana, encaixarNoDia, hoje, minutosDe, numeroDoDia, semanaCurta, textoDaHora, type Dia } from "./datas";
 import { useCalendario } from "./contexto";
 import { BlocoProvisorio, Item } from "./Item";
 import { chaveDe, DURACAO, faixas, lugarDe, MAX_FAIXAS, type ItemCalendario } from "./itens";
@@ -10,6 +10,8 @@ import { rotuloDoDia } from "./rotulos";
 const HORA = 60;
 /** Abre rolado até as 8:00, com um respiro em cima. */
 const ABRE_EM = 8 * HORA - 8;
+/** A largura mínima de uma faixa lado a lado para o título ainda caber. */
+const LARGURA_DA_FAIXA = 60;
 /** Na faixa de dia inteiro cabem 3 linhas; o resto vira "+N". */
 const MAX_DIA_INTEIRO = 3;
 
@@ -82,7 +84,7 @@ function Cabeca({ dia, hj }: { dia: Dia; hj: Dia }) {
         type="button"
         onClick={() => c.irParaDia(dia)}
         aria-label={`Ver o dia: ${rotuloDoDia(dia, (c.leitura.porDia.get(dia) ?? []).length, hj)}`}
-        className="pressiona flex h-8 cursor-pointer items-center gap-1.5 rounded-full px-2 text-[15px] text-tinta-2 hover:bg-hover"
+        className="pressiona flex h-9 cursor-pointer items-center gap-1.5 rounded-full px-2.5 text-[15px] text-tinta-2 hover:bg-hover"
       >
         <span>{semanaCurta(dia)}</span>
         <span className={ehHoje ? "cal-hoje" : "text-tinta tabular"}>{numeroDoDia(dia)}</span>
@@ -103,9 +105,8 @@ function DiaInteiro({ dia, hj }: { dia: Dia; hj: Dia }) {
   // Na semana, o dia selecionado mora aqui: é a faixa que recebe o foco, como a casa no mês.
   return (
     <div
-      role="button"
-      aria-pressed={selecionado}
-      aria-label={rotuloDoDia(dia, (c.leitura.porDia.get(dia) ?? []).length, hj)}
+      role="group"
+      aria-label={`${rotuloDoDia(dia, (c.leitura.porDia.get(dia) ?? []).length, hj)}${selecionado ? ", selecionado" : ""}`}
       tabIndex={selecionado ? 0 : -1}
       data-dia={dia}
       data-dia-foco={dia}
@@ -124,7 +125,14 @@ function DiaInteiro({ dia, hj }: { dia: Dia; hj: Dia }) {
       ))}
       {provisorio && <BlocoProvisorio variante="pilula" />}
       {itens.length > mostrar && (
-        <button type="button" data-mais={dia} tabIndex={-1} onClick={(e) => (e.stopPropagation(), c.abrirDia(dia))} className="cal-mais">
+        <button
+          type="button"
+          data-mais={dia}
+          tabIndex={-1}
+          aria-label={`+${itens.length - mostrar} mais, dia todo, ${diaPorExtenso(dia)}`}
+          onClick={(e) => (e.stopPropagation(), c.abrirDia(dia))}
+          className="cal-mais"
+        >
           +{itens.length - mostrar} mais
         </button>
       )}
@@ -137,6 +145,16 @@ function Coluna({ dia, hj, agora }: { dia: Dia; hj: Dia; agora: number | null })
   const comHora = (c.leitura.porDia.get(dia) ?? []).filter((i) => !semHora(i));
   const posicoes = faixas(comHora.map((i) => ({ chave: chaveDe(i), minutos: lugarDe(i).minutos! })));
   const [criando, setCriando] = useState<{ inicio: number; fim: number; ponto: number } | null>(null);
+  // Cada faixa precisa de uns 60px para o título caber; numa coluna estreita sobram menos faixas e o resto vira "+N".
+  const coluna = useRef<HTMLDivElement>(null);
+  const [maxFaixas, setMaxFaixas] = useState(MAX_FAIXAS);
+  useLayoutEffect(() => {
+    const el = coluna.current;
+    if (!el) return;
+    const obs = new ResizeObserver(() => setMaxFaixas(Math.max(1, Math.min(MAX_FAIXAS, Math.floor(el.clientWidth / LARGURA_DA_FAIXA)))));
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
   const provisorio = c.provisorio?.lugar.dia === dia && c.provisorio.lugar.minutos !== null ? c.provisorio.lugar.minutos : null;
   const alvo = c.alvo?.dia === dia && c.alvo.minutos !== null ? c.alvo.minutos : null;
 
@@ -159,19 +177,25 @@ function Coluna({ dia, hj, agora }: { dia: Dia; hj: Dia; agora: number | null })
     else c.selecionar({ tipo: "dia", dia });
   }
 
-  // Itens que passam da quarta faixa de um grupo viram um "+N" no lugar dela.
+  // Itens que passam da última faixa que cabe viram um "+N" no lugar dela, que abre só aquele grupo.
+  const escondido = (f: { faixa: number; faixas: number }) => f.faixas > maxFaixas && f.faixa >= maxFaixas - 1;
+  const grupos = new Map<number, { de: number; ate: number }>();
   const escondidos = new Map<number, { minutos: number; n: number }>();
   for (const i of comHora) {
     const f = posicoes.get(chaveDe(i))!;
-    if (f.faixas > MAX_FAIXAS && f.faixa >= MAX_FAIXAS - 1) {
+    const m = lugarDe(i).minutos!;
+    const g = grupos.get(f.grupo);
+    grupos.set(f.grupo, { de: Math.min(g?.de ?? m, m), ate: Math.max(g?.ate ?? 0, m + DURACAO) });
+    if (escondido(f)) {
       const atual = escondidos.get(f.grupo);
-      escondidos.set(f.grupo, { minutos: Math.min(atual?.minutos ?? Infinity, lugarDe(i).minutos!), n: (atual?.n ?? 0) + 1 });
+      escondidos.set(f.grupo, { minutos: Math.min(atual?.minutos ?? Infinity, m), n: (atual?.n ?? 0) + 1 });
     }
   }
-  const largura = (faixas: number) => 100 / Math.min(faixas, MAX_FAIXAS);
+  const largura = (faixas: number) => 100 / Math.min(faixas, maxFaixas);
 
   return (
     <div
+      ref={coluna}
       data-dia={dia}
       data-solta="horas"
       data-itens-de={dia}
@@ -185,7 +209,7 @@ function Coluna({ dia, hj, agora }: { dia: Dia; hj: Dia; agora: number | null })
     >
       {comHora.map((i) => {
         const f = posicoes.get(chaveDe(i))!;
-        if (f.faixas > MAX_FAIXAS && f.faixa >= MAX_FAIXAS - 1) return null;
+        if (escondido(f)) return null;
         const w = largura(f.faixas);
         return (
           <Item
@@ -197,15 +221,18 @@ function Coluna({ dia, hj, agora }: { dia: Dia; hj: Dia; agora: number | null })
         );
       })}
       {[...escondidos].map(([grupo, { minutos, n }]) => {
-        const w = largura(MAX_FAIXAS + 1);
+        const w = largura(maxFaixas + 1);
+        const ancora = `${dia}-${grupo}`;
         return (
           <button
             key={grupo}
             type="button"
             data-mais={dia}
+            data-mais-grupo={ancora}
             tabIndex={-1}
-            onClick={() => c.abrirDia(dia)}
-            style={{ top: minutos, left: `calc(${(MAX_FAIXAS - 1) * w}% + 1px)`, width: `calc(${w}% - 3px)` }}
+            aria-label={`+${n} itens, ${diaPorExtenso(dia)}, a partir das ${textoDaHora(minutos)}`}
+            onClick={() => c.abrirDia(dia, { ancora: `[data-mais-grupo="${ancora}"]`, faixa: grupos.get(grupo) })}
+            style={{ top: minutos, left: `calc(${(maxFaixas - 1) * w}% + 1px)`, width: `calc(${w}% - 3px)` }}
             className="cal-mais cal-mais-bloco"
           >
             +{n}
