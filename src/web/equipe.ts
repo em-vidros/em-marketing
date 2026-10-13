@@ -4,8 +4,10 @@ import { ehAprovacao, ehDelegacao, especialistaDa, passosDe, type Mensagem, type
 export type EstadoBot =
   | { tipo: "parado"; texto: string }
   | { tipo: "trabalhando"; texto: string }
-  /** Esperando alguém: você (aprovação) ou outro bot. Ponto âmbar no avatar. */
-  | { tipo: "esperando"; texto: string };
+  /** Esperando você: há uma aprovação pendente. Só este estado ganha o ponto âmbar no avatar. */
+  | { tipo: "esperando"; texto: string }
+  /** O Chefe esperando um especialista. Sem ponto: quem tem de agir é o bot, não você. */
+  | { tipo: "delegando"; texto: string };
 
 export type EstadosDaEquipe = Record<BotId, EstadoBot>;
 
@@ -40,7 +42,7 @@ export function estadosDaEquipe(atividade: readonly ResumoTarefa[], mensagens: r
   const trabalhando = BOT_IDS.find((id) => id !== "chefe" && estados[id].tipo === "trabalhando");
   if (ultima?.parts.some((p) => ehAprovacao(p) && p.state === "approval-requested"))
     estados.chefe = { tipo: "esperando", texto: "Esperando você" };
-  else if (trabalhando) estados.chefe = { tipo: "esperando", texto: `Esperando o ${BOTS[trabalhando].nome}` };
+  else if (trabalhando) estados.chefe = { tipo: "delegando", texto: `Esperando o ${BOTS[trabalhando].nome}` };
   else if (respondendo) estados.chefe = { tipo: "trabalhando", texto: "Respondendo" };
 
   return estados;
