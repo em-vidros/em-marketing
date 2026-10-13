@@ -170,3 +170,6 @@ interface Modelo { id: ModelId; nome: string; disponivel: boolean }  // disponiv
 - O código continua dono das tools de cada bot e do contexto de marca. O usuário edita o papel, não o que o bot pode fazer;
 - Sem versão gravada, o bot usa o padrão do código. "Restaurar padrão" grava uma versão com o texto do código;
 - Apagar uma conversa não apaga o post nem as artes da Biblioteca.
+- Editar uma mensagem do usuário troca o texto, descarta o que veio depois e o bot responde de novo. Apagar a mensagem do usuário tira o turno inteiro; apagar uma do bot tira só ela. Nenhum dos dois apaga tarefa, post, fila ou arte. Enquanto o bot responde, editar e apagar dão 409.
+
+Limite conhecido: o estado do post (agent/post.ts) é da conversa, não das mensagens. Editar ou apagar uma mensagem não volta o post à etapa de antes: se o turno removido escolheu a arte ou registrou no Linear, o post continua escolhido ou registrado, e o bot vê esse estado no turno seguinte.
