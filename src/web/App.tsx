@@ -108,7 +108,7 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
         <TelaConversa
           key={conversaId}
           id={conversaId}
-          nova={rota.tela === "nova"}
+          nova={conversaId === novoId}
           aoMudar={setVivo}
           aoTerminarTurno={aoTerminarTurno}
           abrirMenu={abrirMenu}
