@@ -6,21 +6,23 @@ import { Teclas } from "./menu/Teclas";
 
 const MIDIA = { IMAGE: "Feed", STORIES: "Stories" } as const;
 
-const quando = new Intl.DateTimeFormat("pt-BR", {
-  weekday: "long",
-  day: "numeric",
-  month: "long",
-  hour: "2-digit",
-  minute: "2-digit",
-  timeZone: "America/Sao_Paulo",
-});
+const opcoes: Intl.DateTimeFormatOptions = { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" };
+const esteAno = new Intl.DateTimeFormat("pt-BR", opcoes);
+const comAno = new Intl.DateTimeFormat("pt-BR", { ...opcoes, year: "numeric" });
+const anoDe = new Intl.DateTimeFormat("pt-BR", { year: "numeric", timeZone: "America/Sao_Paulo" });
+/** O ano só entra quando não é o atual. */
+const quando = {
+  format: (d: Date) => (Number.isNaN(d.getTime()) ? "data inválida" : (anoDe.format(d) === anoDe.format(Date.now()) ? esteAno : comAno).format(d)),
+};
 
 function pergunta(p: ParteAprovacao) {
   const midia = p.input?.media_type ? MIDIA[p.input.media_type] : "";
   if (p.type === "tool-publicar_agora") return { titulo: "Publicar agora no Instagram?", detalhe: `${midia}. Sai na hora, sem volta.` };
   // Enquanto a entrada chega pelo stream, a data ainda está pela metade e não vira Date válida.
   const data = new Date(p.input && "publish_at" in p.input ? (p.input.publish_at ?? "") : "");
-  return { titulo: "Agendar a publicação?", detalhe: Number.isNaN(data.getTime()) ? `${midia}.` : `${midia}, ${quando.format(data)}.` };
+  if (Number.isNaN(data.getTime())) return { titulo: "Agendar a publicação?", detalhe: `${midia}.` };
+  const passou = data.getTime() < Date.now() ? " Esse horário já passou. Recuse e peça outro." : "";
+  return { titulo: "Agendar a publicação?", detalhe: `${midia}, ${quando.format(data)}.${passou}` };
 }
 
 function desfecho(p: ParteAprovacao): { texto: string; erro?: boolean } | null {
@@ -77,7 +79,7 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
       className="group/aprovacao rounded-cartao border border-linha bg-superficie px-4 py-3.5 text-sm/normal outline-offset-2 focus-visible:outline-2 focus-visible:outline-tinta"
     >
       <p className="font-medium">{titulo}</p>
-      <p className="text-tinta-2">{detalhe}</p>
+      <p className="text-pretty text-tinta-2">{detalhe}</p>
       {pendente ? (
         <div className="mt-3 flex justify-end gap-2">
           <button
@@ -107,9 +109,9 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
         </div>
       ) : (
         fim && (
-          <p role="status" className="mt-2 flex items-center gap-2">
+          <p role="status" className="mt-2 flex items-start gap-2">
             <IconeDaFase fase={fim.erro ? "falhou" : faseDa(parte)} />
-            <span className={fim.erro ? "text-erro" : COR_DO_ROTULO[faseDa(parte)]}>{fim.texto}</span>
+            <span className={`min-w-0 [overflow-wrap:anywhere] ${fim.erro ? "text-erro" : COR_DO_ROTULO[faseDa(parte)]}`}>{fim.texto}</span>
           </p>
         )
       )}

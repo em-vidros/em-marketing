@@ -239,7 +239,7 @@ function Prompt({
         spellCheck
         aria-invalid={problema ? true : undefined}
         aria-describedby={`${id}-conta ${problema ? `${id}-erro` : ""}`}
-        className={`${estiloCampo} min-h-64 resize-none overflow-hidden font-mono text-[13px]/relaxed sm:text-[13px]/relaxed`}
+        className={`${estiloCampo} max-h-[60vh] min-h-64 resize-none overflow-y-auto overscroll-contain font-mono text-[13px]/relaxed sm:text-[13px]/relaxed`}
       />
       <div className="flex items-start justify-between gap-3">
         <Problema id={`${id}-erro`} texto={problema} />
@@ -457,7 +457,7 @@ function Versoes({
                     <span className="group-open:hidden">Ver o texto</span>
                     <span className="hidden group-open:inline">Esconder o texto</span>
                   </summary>
-                  <div className="mt-2 flex flex-col gap-1 rounded-[10px] bg-fundo px-3 py-2.5 text-[13px]">
+                  <div className="mt-2 flex flex-col gap-1 rounded-[10px] bg-fundo px-3 py-2.5 text-[13px] [overflow-wrap:anywhere]">
                     <p>
                       <span className="text-tinta-3">Nome:</span> {v.nome}
                     </p>

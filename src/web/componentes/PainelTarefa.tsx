@@ -22,7 +22,7 @@ function Transcricao({ mensagens, aoVivo, noAr }: { mensagens: readonly UIMessag
     <>
       {mensagens.map((m) =>
         m.role === "user" ? (
-          <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line text-tinta">
+          <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line text-tinta [overflow-wrap:anywhere]">
             {m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}
           </div>
         ) : (
@@ -72,7 +72,7 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
       <div className="flex items-center gap-2.5 px-4 py-3">
         {bot && <Avatar bot={bot} tamanho={30} estado={aoVivo ? "trabalhando" : "parado"} />}
         <span className="flex min-w-0 flex-col">
-          <h2 className="font-semibold">Tarefa de {nome}</h2>
+          <h2 className="truncate font-semibold">Tarefa de {nome}</h2>
           <span className="text-xs text-tinta-3">
             {tarefa ? `Pedida por ${nomes.chefe.nome} às ${hora.format(tarefa.criadaEm)}` : `Pedida por ${nomes.chefe.nome}`}
           </span>
@@ -95,7 +95,7 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
         ) : (
           <Transcricao mensagens={mensagens} aoVivo={aoVivo} noAr={status === "trabalhando"} />
         )}
-        {tarefa?.status === "falhou" && tarefa.erro && <p className="text-[13px] text-erro">{tarefa.erro}</p>}
+        {tarefa?.status === "falhou" && tarefa.erro && <p className="text-[13px] text-erro [overflow-wrap:anywhere]">{tarefa.erro}</p>}
       </div>
     </div>
   );

@@ -6,7 +6,8 @@ import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
-import { dataCurta, dataEHora, dia, hora, MIDIA } from "../componentes/peca";
+import { semMarkdown } from "../componentes/texto";
+import { dataCurta, dataEHora, dia, hora, jaPassou, MIDIA } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
 import { aoClicarLink } from "../rota";
 import { passosDe } from "../tipos";
@@ -146,11 +147,8 @@ function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
   const peca = a.headline ? `"${a.headline}"` : "a peça";
   const onde = a.tipo ? ` no ${MIDIA[a.tipo].toLowerCase()}` : "";
   const titulo = `${a.acao === "publicar_agora" ? "Publicar agora" : "Agendar"} ${peca}${onde}`;
-  const detalhes = [
-    chefe.nome,
-    a.acao === "agendar_publicacao" && a.publicarEm ? dataEHora.format(new Date(a.publicarEm)) : null,
-    a.pilar ? `pilar ${a.pilar}` : null,
-  ].filter(Boolean);
+  const quando = a.acao === "agendar_publicacao" && a.publicarEm ? new Date(a.publicarEm) : null;
+  const detalhes = [chefe.nome, quando ? dataEHora.format(quando) : null, a.pilar ? `pilar ${a.pilar}` : null].filter(Boolean);
   return (
     <a
       href={linkDaConversa(a.conversaId)}
@@ -159,8 +157,9 @@ function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
     >
       <Capa url={a.capa} headline={null} className="w-[52px] rounded-lg" />
       <span className="flex min-w-0 flex-[1_1_240px] flex-col">
-        <span className="font-medium text-pretty">{titulo}</span>
+        <span className="font-medium text-pretty [overflow-wrap:anywhere]">{titulo}</span>
         <span className="text-[13px] text-tinta-3">{detalhes.join(" · ")}</span>
+        {quando && jaPassou(quando) && <span className="text-[13px] text-esperando-texto">Horário já passou. Escolha outro na conversa.</span>}
       </span>
       <span className="rounded-full bg-tinta px-4 py-2 font-medium text-sobre-tinta">Revisar na conversa</span>
     </a>
@@ -169,7 +168,7 @@ function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
 
 function LinhaFeita({ tarefa: t, quando }: { tarefa: TarefaFeita; quando: string }) {
   const { nome } = useNomesDosBots()[t.botId];
-  const texto = t.status === "falhou" ? `falhou. ${t.erro ?? t.pedido}` : (t.resumo ?? t.pedido);
+  const texto = t.status === "falhou" ? `falhou. ${semMarkdown(t.erro ?? t.pedido)}` : semMarkdown(t.resumo ?? "") || "Concluída";
   return (
     <a
       href={linkDaConversa(t.conversaId)}
@@ -207,7 +206,7 @@ function PainelAgendado() {
               headline={a.headline}
               detalhe={[a.pilar, MIDIA[a.tipo]].filter(Boolean).join(" · ")}
               quando={dataCurta.format(new Date(a.publicarEm))}
-              estado={ESTADO_FILA[a.status]}
+              estado={a.status === "pending" && jaPassou(new Date(a.publicarEm)) ? { rotulo: "Horário já passou", cor: "text-esperando-texto" } : ESTADO_FILA[a.status]}
               motivo={a.status === "failed" ? (a.erro ?? "O Instagram não disse o motivo.") : undefined}
             />
           ))}
@@ -245,6 +244,7 @@ function LinhaDePeca({
       <span className="flex flex-col items-end text-right">
         <span className="text-xs text-tinta-2 tabular">{quando}</span>
         {estado && <span className={`text-xs ${estado.cor}`}>{estado.rotulo}</span>}
+        {href && <span className="text-xs text-tinta-2 underline decoration-linha-forte underline-offset-2">Abrir no Instagram</span>}
       </span>
       {motivo && <span className="col-start-2 col-end-4 text-[13px] text-pretty text-erro [overflow-wrap:anywhere]">Não publicou. {motivo}</span>}
     </>
@@ -288,7 +288,7 @@ function LinhaPublicada({ publicacao: p }: { publicacao: Publicacao }) {
     <LinhaDePeca
       capa={p.capa}
       headline={p.headline}
-      detalhe={[p.pilar, MIDIA[p.tipo], p.permalink ? "Abrir no Instagram" : null].filter(Boolean).join(" · ")}
+      detalhe={[p.pilar, MIDIA[p.tipo]].filter(Boolean).join(" · ")}
       quando={dataCurta.format(new Date(p.publicadaEm))}
       href={p.permalink ?? undefined}
     />

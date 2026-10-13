@@ -53,6 +53,9 @@ const ROTULO: Record<Situacao["tipo"], { texto: string; cor: string }> = {
   falhou: { texto: "Falhou", cor: "text-erro" },
 };
 
+/** O cartão mostra os últimos passos; a lista inteira fica no painel da tarefa. */
+const MAX_LINHAS = 5;
+
 export const tarefaIdDa = (p: ParteDelegacao) => (p.state === "output-available" ? p.output.tarefaId : null);
 
 export function CartaoTarefa({
@@ -75,7 +78,7 @@ export function CartaoTarefa({
     if (p.state === "output-error") return { tipo: "falhou", erro: p.errorText };
     if (p.state !== "output-available") return { tipo: "fila" };
     const s = p.output;
-    if (s.status === "concluida") return { tipo: "concluida", resumo: s.resumo };
+    if (s.status === "concluida") return { tipo: "concluida", resumo: s.resumo.trim() };
     if (s.status === "falhou") return { tipo: "falhou", erro: s.erro };
     if (s.status === "na_fila") return { tipo: "fila" };
     const atividade = atividadeDe(s.mensagem, true);
@@ -105,11 +108,11 @@ export function CartaoTarefa({
     <section aria-label={`Tarefa de ${nome}`} className="overflow-hidden rounded-cartao border border-linha bg-superficie text-sm/normal">
       <div className="flex items-center gap-2.5 px-3.5 py-2.5">
         <Avatar bot={bot} tamanho={22} estado={situacao.tipo === "trabalhando" ? "trabalhando" : "parado"} />
-        <span className="font-medium">{nome}</span>
-        <span aria-live="polite" className={`min-w-0 truncate ${ROTULO[situacao.tipo].cor}`}>
+        <span className="min-w-0 truncate font-medium">{nome}</span>
+        <span aria-live="polite" className={`flex-none ${ROTULO[situacao.tipo].cor}`}>
           {ROTULO[situacao.tipo].texto}
         </span>
-        {situacao.tipo === "trabalhando" && <span className="tabular font-mono text-xs text-tinta-3">{tempo}</span>}
+        {situacao.tipo === "trabalhando" && <span className="tabular flex-none font-mono text-xs text-tinta-3">{tempo}</span>}
         {tarefaId && (
           <button
             type="button"
@@ -122,15 +125,22 @@ export function CartaoTarefa({
           </button>
         )}
       </div>
-      <LinhasDeTarefa linhas={linhas} className="border-t border-linha" />
-      {situacao.tipo === "concluida" && (
+      {linhas.length > MAX_LINHAS && (
+        <p className="border-t border-linha px-3.5 py-2 text-[13px] text-tinta-3">
+          +{linhas.length - MAX_LINHAS} {linhas.length - MAX_LINHAS === 1 ? "passo anterior" : "passos anteriores"}
+        </p>
+      )}
+      <LinhasDeTarefa linhas={linhas.slice(-MAX_LINHAS)} inicio={Math.max(0, linhas.length - MAX_LINHAS)} className="border-t border-linha" />
+      {situacao.tipo === "concluida" && situacao.resumo && (
         <div className="border-t border-linha px-3.5 py-3">
           <div className="line-clamp-4 text-tinta-2">
             <Markdown texto={situacao.resumo} className="block [&>*+*]:mt-1.5" />
           </div>
         </div>
       )}
-      {situacao.tipo === "falhou" && <p className="border-t border-linha px-3.5 py-3 text-erro">{situacao.erro}</p>}
+      {situacao.tipo === "falhou" && (
+        <p className="line-clamp-3 border-t border-linha px-3.5 py-3 text-erro [overflow-wrap:anywhere]">{situacao.erro}</p>
+      )}
     </section>
   );
 }

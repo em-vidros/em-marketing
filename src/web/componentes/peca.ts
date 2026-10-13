@@ -19,6 +19,18 @@ export const MIDIA: Record<TipoMidia, string> = { IMAGE: "Feed", STORIES: "Stori
 
 const FUSO = "America/Sao_Paulo";
 
+const anoDe = new Intl.DateTimeFormat("pt-BR", { year: "numeric", timeZone: FUSO });
+
+/** Uma data que o banco ou o modelo mandou torta vira "Data inválida" em vez de derrubar a tela. */
+const INVALIDA = "Data inválida";
+const valida = (d: Date | number) => !Number.isNaN(new Date(d).getTime());
+
+/** O ano só aparece quando não é o atual: "16 out" este ano, "16 out 2027" fora dele. */
+const ano = (d: Date | number) => {
+  const a = anoDe.format(d);
+  return a === anoDe.format(Date.now()) ? "" : ` ${a}`;
+};
+
 const comDia = (weekday: "long" | "short") =>
   new Intl.DateTimeFormat("pt-BR", { weekday, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: FUSO });
 
@@ -26,8 +38,9 @@ const comDia = (weekday: "long" | "short") =>
 function semPeso(formato: Intl.DateTimeFormat) {
   return {
     format(d: Date | number) {
+      if (!valida(d)) return INVALIDA;
       const p = Object.fromEntries(formato.formatToParts(d).map((x) => [x.type, x.value]));
-      return `${p.weekday!.replace("-feira", "").replace(".", "")}, ${p.day} ${p.month!.replace(".", "")}, ${p.hour}:${p.minute}`;
+      return `${p.weekday!.replace("-feira", "").replace(".", "")}, ${p.day} ${p.month!.replace(".", "")}${ano(d)}, ${p.hour}:${p.minute}`;
     },
   };
 }
@@ -38,11 +51,15 @@ export const dataEHora = semPeso(comDia("long"));
 /** "qui, 16 out, 18:00", para as linhas com pouco espaço. */
 export const dataCurta = semPeso(comDia("short"));
 
-export const hora = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+const soHora = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+export const hora = { format: (d: Date | number) => (valida(d) ? soHora.format(d) : INVALIDA) };
 
 const diaEMes = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", timeZone: FUSO });
 
 /** "10 out" */
 export const dia = {
-  format: (d: Date | number) => diaEMes.format(d).replace(" de ", " ").replace(".", ""),
+  format: (d: Date | number) => (valida(d) ? diaEMes.format(d).replace(" de ", " ").replace(".", "") + ano(d) : INVALIDA),
 };
+
+/** Um agendamento cujo horário já ficou para trás: a interface avisa em vez de fingir que vai sair. */
+export const jaPassou = (d: Date | number) => valida(d) && new Date(d).getTime() < Date.now();

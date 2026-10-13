@@ -246,7 +246,7 @@ function Detalhe({ peca: p, fechar }: { peca: Peca; fechar: () => void }) {
   return (
     <>
     <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-      <span className="mr-auto text-xs text-tinta-3">{[detalheDa(p), STATUS_POST[p.status].rotulo].filter(Boolean).join(" · ")}</span>
+      <span className="mr-auto min-w-0 text-xs text-tinta-3 [overflow-wrap:anywhere]">{[detalheDa(p), STATUS_POST[p.status].rotulo].filter(Boolean).join(" · ")}</span>
       <button
         ref={fecharRef}
         type="button"
@@ -260,12 +260,12 @@ function Detalhe({ peca: p, fechar }: { peca: Peca; fechar: () => void }) {
       </button>
     </div>
     <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pb-6">
-      <h2 className="text-lg/snug font-semibold tracking-[-0.01em] text-balance">{p.headline ?? "Peça sem headline"}</h2>
+      <h2 className="text-lg/snug font-semibold tracking-[-0.01em] text-balance [overflow-wrap:anywhere]">{p.headline ?? "Peça sem headline"}</h2>
       {p.artes.length > 0 ? (
-        <ul aria-label="Artes" className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1">
+        <ul aria-label="Artes" tabIndex={0} className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1">
           {p.artes.map((url, i) => (
             <li key={url} className="relative w-[58%] flex-none snap-start">
-              <Capa url={url} headline={null} className="w-full rounded-item" />
+              <Capa url={url} headline={null} alt={`Arte ${i + 1} de ${p.artes.length}`} vazio="A arte não carregou." className="w-full rounded-item" />
               {i === 0 && p.artes.length > 1 && (
                 <span className="absolute top-2 left-2 rounded-full bg-superficie/90 px-2 py-0.5 text-[11px] font-medium">Escolhida</span>
               )}
@@ -277,7 +277,7 @@ function Detalhe({ peca: p, fechar }: { peca: Peca; fechar: () => void }) {
       )}
       <Legenda texto={p.legenda} />
       {p.tema && (
-        <p className="text-[13px] text-tinta-3">
+        <p className="text-[13px] text-tinta-3 [overflow-wrap:anywhere]">
           Tema <span className="text-tinta-2">{p.tema}</span>
         </p>
       )}

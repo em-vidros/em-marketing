@@ -90,13 +90,14 @@ const COR_DO_ROTULO: Record<Fase, string> = {
   recusado: "text-tinta-3",
 };
 
-export function LinhasDeTarefa({ linhas, className = "" }: { linhas: readonly LinhaDeTarefa[]; className?: string }) {
+/** `inicio` é quantos passos ficaram de fora antes destes, para a numeração continuar certa. */
+export function LinhasDeTarefa({ linhas, inicio = 0, className = "" }: { linhas: readonly LinhaDeTarefa[]; inicio?: number; className?: string }) {
   if (linhas.length === 0) return null;
   return (
     <ol aria-label="Passos" className={`flex list-none flex-col ${className}`}>
       {linhas.map((l, i) => (
         <li key={l.id} className="sobe flex h-11 min-w-0 items-center gap-2.5 border-t border-linha px-3.5 first:border-t-0">
-          <Indicador estado={l.estado} numero={i + 1} />
+          <Indicador estado={l.estado} numero={inicio + i + 1} />
           <span className={`min-w-0 flex-1 truncate text-[13px] font-medium ${COR_DO_ROTULO[l.estado]}`}>
             {l.rotulo}
             {estadoFalado(l.rotulo, l.estado) && <span className="sr-only">, {estadoFalado(l.rotulo, l.estado)}</span>}

@@ -109,6 +109,31 @@ function Sugestoes({ enviar }: { enviar: (t: string) => void }) {
   );
 }
 
+/** Uma mensagem longa (um briefing colado, um texto inteiro) fica em dez linhas até pedir o resto. */
+const LONGA = 700;
+
+function BalaoDoUsuario({ texto }: { texto: string }) {
+  const [tudo, setTudo] = useState(false);
+  const longa = texto.length > LONGA || texto.split("\n").length > 10;
+  return (
+    <div className="flex max-w-[80%] flex-col items-end gap-1 self-end">
+      <div className="max-w-full rounded-balao border border-linha bg-ativo px-4 py-2.5 whitespace-pre-line [overflow-wrap:anywhere]">
+        <p className={longa && !tudo ? "line-clamp-[10]" : undefined}>{texto}</p>
+      </div>
+      {longa && (
+        <button
+          type="button"
+          aria-expanded={tudo}
+          onClick={() => setTudo((t) => !t)}
+          className="pressiona cursor-pointer rounded-full px-3 py-1 text-[13px] font-medium text-tinta-2 hover:bg-hover hover:text-tinta"
+        >
+          {tudo ? "Mostrar menos" : "Mostrar tudo"}
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** Mantém a lista no fim enquanto o usuário já está no fim; se ele subiu para ler, não puxa. */
 function useGrudaNoFim(deps: readonly unknown[]) {
   const fim = useRef<HTMLDivElement>(null);
@@ -258,9 +283,7 @@ function Chat({
                 className="flex flex-col gap-4"
               >
                 {m.role === "user" ? (
-                  <div className="max-w-[80%] self-end rounded-balao border border-linha bg-ativo px-4 py-2.5 whitespace-pre-line">
-                    {texto(m)}
-                  </div>
+                  <BalaoDoUsuario texto={texto(m)} />
                 ) : (
                   trechosDe(m.parts, ehPassoSolto).map((t) =>
                     t.tipo === "passos" ? (

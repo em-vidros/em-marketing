@@ -31,7 +31,8 @@ const COMPONENTES: Components = {
     <code className={`rounded-[6px] bg-ativo px-1 py-px font-mono text-[0.9em] ${className ?? ""}`}>{children}</code>
   ),
   pre: ({ children }) => (
-    <pre className="overflow-x-auto rounded-item bg-ativo px-3.5 py-3 font-mono text-[13px]/relaxed [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-[1em]">
+    // Focável para rolar de lado pelo teclado quando a linha não cabe.
+    <pre tabIndex={0} className="overflow-x-auto rounded-item bg-ativo px-3.5 py-3 font-mono text-[13px]/relaxed [&>code]:bg-transparent [&>code]:p-0 [&>code]:text-[1em]">
       {children}
     </pre>
   ),
@@ -43,7 +44,7 @@ const COMPONENTES: Components = {
   blockquote: ({ children }) => <blockquote className="border-l-2 border-linha-forte pl-3 text-tinta-2">{children}</blockquote>,
   hr: () => <hr className="border-linha-forte" />,
   table: ({ children }) => (
-    <div className="overflow-x-auto">
+    <div role="region" aria-label="Tabela" tabIndex={0} className="overflow-x-auto">
       <table className="w-full border-collapse text-left">{children}</table>
     </div>
   ),
@@ -71,7 +72,7 @@ const RASTRO = { animation: "rastro", sep: "word", duration: 260, easing: "cubic
 export function Markdown({ texto, digitando = false, className = "" }: { texto: string; digitando?: boolean; className?: string }) {
   return (
     <Streamdown
-      className={`flex flex-col gap-3 space-y-0 ${digitando ? CURSOR : ""} ${className}`}
+      className={`flex min-w-0 flex-col gap-3 space-y-0 [overflow-wrap:anywhere] [&>*]:min-w-0 ${digitando ? CURSOR : ""} ${className}`}
       components={COMPONENTES}
       rehypePlugins={REHYPE}
       controls={false}

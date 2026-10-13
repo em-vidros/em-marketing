@@ -6,6 +6,7 @@ import { aoClicarLink } from "../../rota";
 import { type BotId, type Conversa, type Fase, type ResumoTarefa, type Tarefa } from "../../tipos";
 import { Avatar } from "../Avatar";
 import { Falha } from "../Falha";
+import { semMarkdown } from "../texto";
 import { atividadeDe } from "../ia/atividade";
 import { IconeDaFase } from "../ia/LinhaFerramenta";
 import { Pensando } from "../ia/Pensando";
@@ -75,7 +76,7 @@ function Transcricao({ tarefa }: { tarefa: Tarefa }) {
     <div className="flex flex-col gap-3.5">
       {mensagens.map((m) =>
         m.role === "user" ? (
-          <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line">
+          <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line [overflow-wrap:anywhere]">
             {textoDe(m)}
           </div>
         ) : (
@@ -120,7 +121,7 @@ export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoT
   const tempo = rodando
     ? `${t.status === "na_fila" ? "Na fila há" : "Rodando há"} ${duracao(Math.floor((agora - t.criadaEm) / 1000) * 1000)}`
     : `Rodou por ${duracao(t.atualizadaEm - t.criadaEm)}`;
-  const resumo = t.status === "falhou" ? t.erro : t.resumo;
+  const resumo = semMarkdown((t.status === "falhou" ? t.erro : t.resumo) ?? "");
 
   return (
     <li className="border-t border-linha first:border-t-0">
@@ -136,9 +137,9 @@ export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoT
             {mostrarBot ? <Avatar bot={t.botId} tamanho={20} estado={t.status === "trabalhando" ? "trabalhando" : "parado"} anel="var(--color-superficie)" /> : <IconeDaFase fase={fase} />}
           </span>
           <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="line-clamp-2 font-medium text-pretty">{t.pedido}</span>
+            <span className="line-clamp-2 font-medium text-pretty [overflow-wrap:anywhere]">{t.pedido}</span>
             {resumo && (
-              <span className={`line-clamp-2 text-[13px] text-pretty ${t.status === "falhou" ? "text-erro" : "text-tinta-2"}`}>{resumo}</span>
+              <span className={`line-clamp-2 text-[13px] text-pretty [overflow-wrap:anywhere] ${t.status === "falhou" ? "text-erro" : "text-tinta-2"}`}>{resumo}</span>
             )}
             <span className="tabular text-xs text-tinta-3">
               {[mostrarBot ? nomes[t.botId].nome : null, rotulo, dataCurta.format(t.criadaEm), tempo].filter(Boolean).join(" · ")}

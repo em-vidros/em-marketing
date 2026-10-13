@@ -66,7 +66,9 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
   const ativas =
     atividade.estado === "pronto" ? atividade.dados.filter((t) => id === "chefe" || t.botId === id) : atividade.estado === "erro" ? [] : null;
   const estado = estadoDo(id, ativas ?? [], agora.estado === "pronto" ? agora.dados.esperando.length : 0, nomes);
-  const modelo = salvo && modelos.estado === "pronto" ? (modelos.dados.find((m) => m.id === salvo.modelo)?.nome ?? salvo.modelo) : null;
+  const emUso = salvo && modelos.estado === "pronto" ? modelos.dados.find((m) => m.id === salvo.modelo) : undefined;
+  const modelo = salvo && modelos.estado === "pronto" ? (emUso?.nome ?? salvo.modelo) : null;
+  const semChave = !!emUso && !emUso.disponivel;
 
   useEffect(() => {
     document.title = `${nome}${aba === "config" ? " · Configuração" : ""} · EM Marketing`;
@@ -86,8 +88,8 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
         <header className="flex items-start gap-4 sm:items-center">
           <Avatar bot={id} tamanho={56} estado={estado.tipo} anel="var(--color-fundo)" />
           <div className="flex min-w-0 flex-col gap-1">
-            <h1 className="text-2xl/tight font-semibold tracking-[-0.02em] text-balance break-words">{nome}</h1>
-            <p className="text-pretty text-tinta-2">{descricao}</p>
+            <h1 className="text-2xl/tight font-semibold tracking-[-0.02em] text-balance [overflow-wrap:anywhere]">{nome}</h1>
+            <p className="text-pretty text-tinta-2 [overflow-wrap:anywhere]">{descricao}</p>
             <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-tinta-3">
               <span role="status" className="inline-flex items-center gap-1.5">
                 <span aria-hidden="true" className={`size-1.5 rounded-full ${COR_DO_PONTO[estado.tipo]}`} />
@@ -98,6 +100,9 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
                   <span aria-hidden="true">·</span>
                   <span>{modelo}</span>
                 </>
+              )}
+              {semChave && (
+                <span className="rounded-full bg-esperando/15 px-2 py-0.5 text-xs text-esperando-texto">Sem chave de API. Ele não responde até trocar o modelo.</span>
               )}
             </p>
           </div>
