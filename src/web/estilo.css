@@ -346,6 +346,31 @@ a.linha:focus-visible {
 }
 
 /*
+ * Ações de cada mensagem (componentes/mensagem): aparecem na hora com o ponteiro em cima ou o
+ * foco dentro, e saem em 150 ms, como as ações da linha da barra. No toque ficam sempre à mostra.
+ */
+.acoes-mensagem {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.mensagem:focus-within > .acoes-mensagem,
+.mensagem:has([data-popup-open]) > .acoes-mensagem {
+  opacity: 1;
+  transition-duration: 0s;
+}
+@media (hover: hover) {
+  .mensagem:hover > .acoes-mensagem {
+    opacity: 1;
+    transition-duration: 0s;
+  }
+}
+@media (hover: none) {
+  .acoes-mensagem {
+    opacity: 1;
+  }
+}
+
+/*
  * Calendário (telas/Calendario.tsx). O vermelho do hoje fica perto do systemRed da Apple, escurecido
  * até o número branco passar 4,5:1. Os pilares saem da família do teal da marca e de neutros, longe
  * das cores dos bots: a barra passa 3:1 no branco e o texto passa 4,5:1 no próprio fundo.

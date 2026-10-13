@@ -1,7 +1,7 @@
 import { useChat } from "@ai-sdk/react";
 import { Menu } from "@base-ui/react/menu";
 import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
-import { motion, useReducedMotion } from "motion/react";
+import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
 import { useApi, useNomesDosBots } from "../api";
 import { Avatar } from "../componentes/Avatar";
@@ -13,6 +13,10 @@ import { atividadeDe } from "../componentes/ia/atividade";
 import { Pensando } from "../componentes/ia/Pensando";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
+import { apiMensagens, criarApagarMensagem, type Historico, textoDaMensagem, tirarTurno } from "../componentes/mensagem/apagar";
+import { BlocoDaMensagem, EditorDeMensagem, TrocaDeEdicao } from "../componentes/mensagem/BlocoDaMensagem";
+import { mostrarAviso } from "../componentes/menu/Avisos";
+import { pilhaDeDesfazer } from "../componentes/menu/desfazer";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
 import { Passos, trechosDe } from "../componentes/Passos";
@@ -21,9 +25,8 @@ import { Chevron } from "../componentes/ia/Raciocinio";
 import { Check } from "../componentes/Passos";
 import type { EstadoBot, EstadosDaEquipe } from "../equipe";
 import { criarEscolhaDoBot, criarTransporte, type EscolhaDoBot } from "../escolhaDoBot";
-import { MOLA, MOLA_REDUZIDA } from "../movimento";
 import { navegar } from "../rota";
-import { ehCampo, useAtalho } from "../teclado/motor";
+import { ehCampo, executar, useAtalho } from "../teclado/motor";
 import { type BotId, ehAprovacao, ehDelegacao, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao } from "../tipos";
 
 export interface Vivo {
@@ -102,8 +105,6 @@ function Cabecalho({ abrirMenu, bot, estado, titulo }: { abrirMenu: () => void; 
     </header>
   );
 }
-
-const texto = (m: Mensagem) => m.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
 
 /** O estado vazio de uma conversa: o bot que vai responder e as sugestões dele, de /api/bots. */
 function Sugestoes({ bot, enviar }: { bot: BotId; enviar: (t: string) => void }) {
@@ -185,8 +186,8 @@ function BalaoDoUsuario({ texto }: { texto: string }) {
   const [tudo, setTudo] = useState(false);
   const longa = texto.length > LONGA || texto.split("\n").length > 10;
   return (
-    <div className="flex max-w-[80%] flex-col items-end gap-1 self-end">
-      <div className="max-w-full rounded-balao border border-linha bg-ativo px-4 py-2.5 whitespace-pre-line [overflow-wrap:anywhere]">
+    <div className="flex max-w-full flex-col items-end gap-1">
+      <div data-balao className="max-w-full rounded-balao border border-linha bg-ativo px-4 py-2.5 whitespace-pre-line [overflow-wrap:anywhere]">
         <p className={longa && !tudo ? "line-clamp-[10]" : undefined}>{texto}</p>
       </div>
       {longa && (
@@ -233,17 +234,53 @@ function Chat({
   const [transporte] = useState(() => criarTransporte(escolha));
   const bot = useSyncExternalStore(escolha.assinar, escolha.ler);
   const travada = useSyncExternalStore(escolha.assinar, escolha.travada);
+  // Editar e refazer cortam o histórico local antes do pedido; se o servidor recusar, a tela volta a este retrato.
+  const pendente = useRef<{ antes: Mensagem[]; edicao?: { id: string; texto: string; volta: Volta } } | null>(null);
   const chat = useChat<Mensagem>({
     id,
     messages: inicial,
     transport: transporte,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
-    onFinish: aoTerminarTurno,
+    onFinish: () => {
+      pendente.current = null;
+      aoTerminarTurno();
+    },
+    onError: (e) => {
+      const p = pendente.current;
+      pendente.current = null;
+      const motivo = recusa(e);
+      if (!p || motivo === null) return;
+      historico.escrever(p.antes);
+      chatAtual.current.clearError();
+      if (p.edicao) {
+        // A recusa pode chegar antes do foco ir para a mensagem: o editor reaberto fica com ele.
+        setFoco(null);
+        setEditando({ ...p.edicao, largura: larguraDe(p.edicao.id), erro: motivo, vez: performance.now() });
+      } else mostrarAviso({ tipo: "erro", texto: motivo });
+    },
     throttle: 50,
   });
   const respondendo = chat.status === "submitted" || chat.status === "streaming";
-  const reduzir = useReducedMotion();
   const nomes = useNomesDosBots();
+
+  // O histórico que apagar, desfazer e a volta de uma edição recusada leem e escrevem. A leitura vê a
+  // escrita na hora, antes do próximo render.
+  const chatAtual = useRef(chat);
+  chatAtual.current = chat;
+  const mensagensAtuais = useRef(chat.messages);
+  mensagensAtuais.current = chat.messages;
+  const [voltando] = useState(() => new Set<string>());
+  const [historico] = useState<Historico>(() => ({
+    ler: () => mensagensAtuais.current,
+    escrever(novas) {
+      const atuais = new Set(mensagensAtuais.current.map((m) => m.id));
+      for (const m of novas) if (!atuais.has(m.id)) voltando.add(m.id);
+      mensagensAtuais.current = novas;
+      chatAtual.current.setMessages(novas);
+    },
+    ocupado: () => ["submitted", "streaming"].includes(chatAtual.current.status),
+  }));
+  const apagarNoServidor = useMemo(() => criarApagarMensagem(id, historico, apiMensagens, pilhaDeDesfazer, mostrarAviso), [id, historico]);
   const jaEstavam = useMemo(() => new Set(inicial.map((m) => m.id)), [inicial]);
   const fim = useGrudaNoFim([chat.messages, chat.error]);
 
@@ -323,6 +360,85 @@ function Chat({
   });
   useAtalho("focar-composer", () => document.getElementById("mensagem")?.focus());
 
+  // Editar, apagar e navegar pelas mensagens.
+  const bloqueio = respondendo ? "Espere o bot terminar de responder." : null;
+  const [editando, setEditando] = useState<Edicao | null>(null);
+  const [atual, setAtual] = useState<string | null>(null);
+  const [foco, setFoco] = useState<Volta | null>(null);
+  const [aviso, setAviso] = useState("");
+  const ultimaId = chat.messages.at(-1)?.id;
+  const tabulavel = chat.messages.some((m) => m.id === atual) ? atual : ultimaId;
+
+  useEffect(() => {
+    if (!foco) return;
+    setFoco(null);
+    const alvo =
+      foco === "composer"
+        ? document.getElementById("mensagem")
+        : document.querySelector<HTMLElement>(`[data-mensagem="${CSS.escape(foco)}"]:not([data-saindo])`);
+    alvo?.focus({ preventScroll: true });
+  }, [foco]);
+
+  function editar(mensagemId: string, volta: Volta = mensagemId) {
+    const m = chat.messages.find((x) => x.id === mensagemId);
+    if (!m || m.role !== "user" || respondendo) return false;
+    setEditando({ id: mensagemId, texto: textoDaMensagem(m), largura: larguraDe(mensagemId), erro: null, volta, vez: performance.now() });
+  }
+  function fecharEdicao() {
+    if (editando) setFoco(editando.volta);
+    setEditando(null);
+  }
+  function salvarEdicao(textoNovo: string) {
+    if (!editando || respondendo) return;
+    const original = textoDaMensagem(chat.messages.find((m) => m.id === editando.id)!);
+    if (textoNovo === original.trim()) return fecharEdicao();
+    pendente.current = { antes: chat.messages, edicao: { id: editando.id, texto: textoNovo, volta: editando.volta } };
+    setFoco(editando.id);
+    setEditando(null);
+    void chat.sendMessage({ text: textoNovo, messageId: editando.id });
+  }
+  function refazer(mensagemId: string) {
+    if (respondendo) return;
+    pendente.current = { antes: chat.messages };
+    setFoco(mensagemId === ultimaId ? "composer" : mensagemId);
+    void chat.regenerate({ messageId: mensagemId });
+  }
+  function apagar(mensagemId: string) {
+    if (respondendo) return false;
+    const r = tirarTurno(chat.messages, mensagemId)?.remocao;
+    if (!r) return false;
+    if (editando && r.removidas.some((m) => m.id === editando.id)) setEditando(null);
+    setFoco(r.antesDe ?? r.depoisDe ?? "composer");
+    void apagarNoServidor(mensagemId);
+  }
+  /** Refazer só a última resposta, logo depois de uma mensagem sua: é o que o servidor sabe responder de novo sem apagar turnos. */
+  const refazivel = (i: number) => i === chat.messages.length - 1 && chat.messages[i]!.role === "assistant" && chat.messages[i - 1]?.role === "user";
+
+  const focada = () => {
+    const mensagemId = document.activeElement?.closest<HTMLElement>("[data-mensagem]")?.dataset.mensagem;
+    return chat.messages.findIndex((m) => m.id === mensagemId);
+  };
+  const andar = (passo: 1 | -1) => () => {
+    const itens = [...document.querySelectorAll<HTMLElement>("[data-mensagem]:not([data-saindo])")];
+    const daqui = document.activeElement?.closest<HTMLElement>("[data-mensagem]");
+    const i = daqui ? itens.indexOf(daqui) : -1;
+    const alvo = i < 0 ? itens.at(passo === 1 ? 0 : -1) : itens[i + passo];
+    alvo?.focus({ preventScroll: true });
+    alvo?.scrollIntoView({ block: "nearest" });
+  };
+  const temMensagens = chat.messages.length > 0;
+  useAtalho("mensagem-proxima", andar(1), temMensagens);
+  useAtalho("mensagem-anterior", andar(-1), temMensagens);
+  useAtalho("mensagem-editar", () => editar(chat.messages[focada()]?.id ?? ""));
+  useAtalho("mensagem-apagar", () => apagar(chat.messages[focada()]?.id ?? ""));
+  useAtalho("mensagem-refazer", () => {
+    const i = focada();
+    if (!refazivel(i) || respondendo) return false;
+    refazer(chat.messages[i]!.id);
+  });
+  const minhaUltima = chat.messages.findLast((m) => m.role === "user");
+  useAtalho("mensagem-editar-ultima", () => editar(minhaUltima?.id ?? "", "composer"), !!minhaUltima);
+
   const erro = chat.error ? lerErro(chat.error) : null;
   const ultima = chat.messages.at(-1);
   const turno = ultima?.role === "assistant" ? ultima : null;
@@ -330,41 +446,72 @@ function Chat({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 scroll-pt-16 flex-col overflow-y-auto">
+      <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 scroll-pt-16 scroll-pb-36 flex-col overflow-y-auto">
         <Cabecalho abrirMenu={abrirMenu} bot={bot} estado={estados[bot]} titulo={titulo} />
         {chat.messages.length === 0 ? (
           <Sugestoes bot={bot} enviar={enviar} />
         ) : (
-          <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-6 px-4 py-6 text-base/relaxed sm:px-6">
-            {chat.messages.map((m) => (
-              <motion.div
-                key={m.id}
-                initial={jaEstavam.has(m.id) ? false : reduzir ? { opacity: 0 } : { opacity: 0, transform: "translateY(8px)" }}
-                animate={reduzir ? { opacity: 1 } : { opacity: 1, transform: "translateY(0px)" }}
-                transition={reduzir ? MOLA_REDUZIDA : MOLA}
-                className="flex flex-col gap-4"
-              >
-                {m.role === "user" ? (
-                  <BalaoDoUsuario texto={texto(m)} />
-                ) : (
-                  trechosDe(m.parts, ehPassoSolto).map((t) =>
-                    t.tipo === "passos" ? (
-                      <Passos key={t.chave} passos={t.passos} className="text-sm" />
-                    ) : (
-                      <ParteDoChefe
-                        key={t.chave}
-                        parte={t.parte}
-                        noAr={respondendo && m === ultima}
-                        painel={painel}
-                        abrir={abrir}
-                        responder={responder}
-                        respondidas={respondidas.current}
-                      />
-                    ),
-                  )
-                )}
-              </motion.div>
-            ))}
+          <div
+            data-escopo="conversa"
+            aria-label="Mensagens"
+            role="region"
+            className="mx-auto flex w-full max-w-3xl flex-1 flex-col gap-8 px-4 pt-6 pb-12 text-base/relaxed sm:px-6"
+          >
+            <AnimatePresence initial={false}>
+              {chat.messages.map((m, i) => (
+                <BlocoDaMensagem
+                  key={m.id}
+                  id={m.id}
+                  papel={m.role === "user" ? "user" : "assistant"}
+                  rotulo={m.role === "user" ? "Sua mensagem" : `Resposta de ${nomes[bot].nome}`}
+                  atual={m.id === tabulavel}
+                  nova={!jaEstavam.has(m.id) && !voltando.has(m.id)}
+                  voltando={voltando.has(m.id)}
+                  bloqueio={bloqueio}
+                  texto={textoDaMensagem(m)}
+                  editando={editando?.id === m.id}
+                  editar={m.role === "user" ? () => editar(m.id) : undefined}
+                  refazer={refazivel(i) ? () => refazer(m.id) : undefined}
+                  apagar={() => apagar(m.id)}
+                  // O leitor de tela não repete um texto igual: copiar de novo alterna o ponto final.
+                  copiada={() => setAviso(aviso === "Mensagem copiada." ? "Mensagem copiada" : "Mensagem copiada.")}
+                  aoFocar={() => setAtual(m.id)}
+                >
+                  {m.role === "user" ? (
+                    <TrocaDeEdicao editando={editando?.id === m.id}>
+                      <BalaoDoUsuario texto={textoDaMensagem(m)} />
+                      {editando?.id === m.id && (
+                        <EditorDeMensagem
+                          key={editando.vez}
+                          inicial={editando.texto}
+                          largura={editando.largura}
+                          erro={editando.erro}
+                          bloqueio={bloqueio}
+                          salvar={salvarEdicao}
+                          cancelar={fecharEdicao}
+                        />
+                      )}
+                    </TrocaDeEdicao>
+                  ) : (
+                    trechosDe(m.parts, ehPassoSolto).map((t) =>
+                      t.tipo === "passos" ? (
+                        <Passos key={t.chave} passos={t.passos} className="text-sm" />
+                      ) : (
+                        <ParteDoChefe
+                          key={t.chave}
+                          parte={t.parte}
+                          noAr={respondendo && m === ultima}
+                          painel={painel}
+                          abrir={abrir}
+                          responder={responder}
+                          respondidas={respondidas.current}
+                        />
+                      ),
+                    )
+                  )}
+                </BlocoDaMensagem>
+              ))}
+            </AnimatePresence>
             {pensando && <Pensando />}
             {erro && (
               <div
@@ -389,10 +536,14 @@ function Chat({
           placeholder={bot === "chefe" ? "O que vamos postar?" : `Escreva para ${nomes[bot].nome}`}
           extra={chat.messages.length === 0 && !travada ? <SeletorDeBot escolha={escolha} /> : null}
           respondendo={respondendo}
+          aoSubirVazio={() => executar("mensagem-editar-ultima")}
           enviar={enviar}
           parar={() => chat.stop()}
         />
       </main>
+      <p role="status" className="sr-only">
+        {aviso}
+      </p>
       <PainelLateral aberto={!!painel} rotulo="Tarefa" fechar={fechar} instantaneo={porTeclado}>
         {painel && <PainelTarefa tarefaId={painel} parte={delegacoes.get(painel)} fechar={() => fechar()} />}
       </PainelLateral>
@@ -429,6 +580,31 @@ function ParteDoChefe({
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
 const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p);
+
+/** Para onde o foco volta quando a edição fecha: a mensagem, ou o composer quando o ↑ abriu a edição de lá. */
+type Volta = string | "composer";
+
+interface Edicao {
+  id: string;
+  texto: string;
+  largura: number;
+  erro: string | null;
+  volta: Volta;
+  /** Cada abertura monta um editor novo, com o próprio rascunho e o foco, mesmo se a anterior ainda está saindo. */
+  vez: number;
+}
+
+const larguraDe = (mensagemId: string) =>
+  document.querySelector<HTMLElement>(`[data-mensagem="${CSS.escape(mensagemId)}"] [data-balao]`)?.offsetWidth ?? 0;
+
+/** O servidor recusou o pedido antes de responder (400, 409): o corpo é {erro}. Um erro no meio do stream não é recusa. */
+function recusa(e: Error): string | null {
+  try {
+    return (JSON.parse(e.message) as { erro?: string }).erro ?? null;
+  } catch {
+    return null;
+  }
+}
 
 /** O transporte joga o corpo da resposta como mensagem; o servidor manda {erro}. */
 function lerErro(e: Error): string {

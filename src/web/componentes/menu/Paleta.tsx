@@ -94,6 +94,7 @@ export function Paleta({
                     Excluir conversa
                   </Linha>
                   {acao("painel-tarefas")}
+                  {acao("mensagem-editar-ultima")}
                 </Grupo>
               )}
 

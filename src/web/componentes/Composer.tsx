@@ -1,4 +1,5 @@
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import { editaAoSubir } from "./mensagem/teclas";
 import { Troca } from "./Troca";
 
 /** Enter envia, Shift+Enter quebra linha. Enquanto o bot responde, o botão vira parar. */
@@ -9,6 +10,7 @@ export function Composer({
   enviar,
   parar,
   extra,
+  aoSubirVazio,
 }: {
   rotulo: string;
   placeholder: string;
@@ -17,6 +19,8 @@ export function Composer({
   parar: () => void;
   /** Fica à esquerda do botão de enviar (o seletor de bot de uma conversa nova). */
   extra?: React.ReactNode;
+  /** ↑ com o campo vazio. Devolve true se usou a tecla (abriu a edição da última mensagem). */
+  aoSubirVazio?: () => boolean;
 }) {
   const [texto, setTexto] = useState("");
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -33,7 +37,7 @@ export function Composer({
     if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       aoEnviar();
-    }
+    } else if (editaAoSubir(e, texto) && aoSubirVazio?.()) e.preventDefault();
   }
 
   return (
