@@ -8,6 +8,7 @@ import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
 import { attachJpeg, commentOnIssue, createIssue, moveIssueState } from "../../domain/linear";
 import { enqueue } from "../../domain/scheduler";
+import { urlDaMidia } from "../midia";
 import {
   criarPost,
   exigir,
@@ -20,6 +21,7 @@ import {
   type Evento,
   type EtapaPost,
 } from "../post";
+import { fotoPublica } from "./fotos";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
 const mediaType = z.enum(["IMAGE", "STORIES"]);
@@ -35,7 +37,7 @@ function aplicar(conversaId: string, evento: Evento) {
 const artePublica = (a: { variant: number; style: string; path: string; problemas: unknown[] }) => ({
   variante: a.variant,
   estilo: a.style,
-  path: a.path,
+  url: urlDaMidia(a.path),
   problemas: a.problemas,
 });
 
@@ -58,7 +60,7 @@ export function toolsDePost(conversaId: string) {
       execute: async ({ precisa_foto_real, formato, ...resto }) => {
         const brief: Brief = { ...resto, precisaFotoReal: precisa_foto_real };
         const post = criarPost(conversaId, brief, formato ?? null);
-        const candidatas = brief.precisaFotoReal ? buscarFotos(`${brief.tema} ${brief.angulo ?? ""}`) : [];
+        const candidatas = brief.precisaFotoReal ? buscarFotos(`${brief.tema} ${brief.angulo ?? ""}`).map(fotoPublica) : [];
         return { ok: true as const, postId: post.postId, brief, formato: formato ?? null, fotosCandidatas: candidatas, proximoPasso: proximoPasso(post) };
       },
     }),
@@ -121,7 +123,13 @@ export function toolsDePost(conversaId: string) {
         const storyPath = formato === "ambos" ? await prepararFoto({ fotoId: foto.id, postId, formato: "stories" }) : null;
         const arte = { variant: 1, style: "foto-real", path, interactionId: "", problemas: [] };
         const estado = aplicar(conversaId, { tipo: "foto", arte, storyPath });
-        return { ...estado, fotoId: foto.id, path, storyPath, recorte: "automático, confirme o enquadramento com o usuário" };
+        return {
+          ...estado,
+          fotoId: foto.id,
+          url: urlDaMidia(path),
+          storyUrl: storyPath && urlDaMidia(storyPath),
+          recorte: "automático, confirme o enquadramento com o usuário",
+        };
       },
     }),
 
@@ -140,7 +148,7 @@ export function toolsDePost(conversaId: string) {
           chosen: p.peca.arte,
         });
         const estado = aplicar(conversaId, { tipo: "story", path });
-        return { ...estado, path, problemas };
+        return { ...estado, url: urlDaMidia(path), problemas };
       },
     }),
 
