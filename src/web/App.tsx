@@ -17,14 +17,15 @@ import { estadosDaEquipe } from "./equipe";
 import { DESKTOP, inertizarFora } from "./media";
 import { MOLA } from "./movimento";
 import { lerRota, navegar, useCaminho, type Rota } from "./rota";
-import { atalhoDoBot } from "./teclado/atalhos";
+import { criarEscolhaDoBot } from "./escolhaDoBot";
+import { atalhoDeConversa, atalhoDoBot } from "./teclado/atalhos";
 import { useAtalho, useTeclado } from "./teclado/motor";
 import { Atividade } from "./telas/Atividade";
 import { Biblioteca } from "./telas/Biblioteca";
 import Bot from "./telas/Bot";
 import { TelaConversa, type Vivo } from "./telas/Conversa";
 import { Entrar } from "./telas/Entrar";
-import type { ResumoTarefa } from "./tipos";
+import type { BotId, ResumoTarefa } from "./tipos";
 
 export function App() {
   const rota = lerRota(useCaminho());
@@ -43,7 +44,7 @@ export function App() {
   return <Shell rota={rota} email={sessao.data.user.email} />;
 }
 
-const VAZIO: Vivo = { mensagens: [], respondendo: false };
+const VAZIO: Vivo = { mensagens: [], respondendo: false, bot: "chefe" };
 
 const NOME_DA_TELA: Record<Exclude<Rota["tela"], "entrar">, string> = {
   nova: "esta conversa",
@@ -53,6 +54,8 @@ const NOME_DA_TELA: Record<Exclude<Rota["tela"], "entrar">, string> = {
   bot: "a página do bot",
   "nao-encontrada": "esta página",
 };
+
+const conversaNova = (bot: BotId) => ({ id: crypto.randomUUID(), escolha: criarEscolhaDoBot(bot) });
 
 const CHAVE_BARRA = "barra-oculta";
 const lerBarraOculta = () => {
@@ -81,7 +84,11 @@ function focarVizinha(id: string) {
 }
 
 function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email: string }) {
-  const [novoId, setNovoId] = useState(() => crypto.randomUUID());
+  // A conversa de "/": o id que ela vai ter e o bot que vai responder, trocável até a primeira mensagem.
+  const [nova, setNova] = useState(() => conversaNova("chefe"));
+  const novoId = nova.id;
+  const novaRef = useRef(nova);
+  novaRef.current = nova;
   const [vivo, setVivo] = useState<Vivo>(VAZIO);
   const [menu, setMenu] = useState(false);
   const [paleta, setPaleta] = useState<ModoPaleta | null>(null);
@@ -108,7 +115,7 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   const bots = useNomesDosBots();
   const [atividade, relerAtividade] = useApi<ResumoTarefa[]>("/api/atividade", respondendo ? 3000 : 15000);
   const ativas = atividade.estado === "pronto" ? atividade.dados : [];
-  const estados = estadosDaEquipe(ativas, vivo.mensagens, respondendo, bots);
+  const estados = estadosDaEquipe(ativas, vivo.mensagens, respondendo, bots, vivo.bot);
 
   useTeclado();
   useEffect(() => void conversas.carregar(), [conversas]);
@@ -121,11 +128,13 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   const usadaRef = useRef(usada);
   usadaRef.current = usada;
   useEffect(() => {
-    if (rota.tela === "nova" && usadaRef.current) setNovoId(crypto.randomUUID());
+    if (rota.tela === "nova" && usadaRef.current) setNova(conversaNova("chefe"));
   }, [rota.tela]);
 
-  const novoPedido = useCallback(() => {
-    if (usadaRef.current) setNovoId(crypto.randomUUID());
+  /** Abre "/" com `bot` respondendo. A conversa de "/" ainda sem mensagem só troca de bot. */
+  const novoPedido = useCallback((bot: BotId = "chefe") => {
+    if (usadaRef.current) setNova(conversaNova(bot));
+    else novaRef.current.escolha.escolher(bot);
     navegar("/");
   }, []);
 
@@ -193,7 +202,8 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   );
   useAtalho("barra-lateral", () => (matchMedia(DESKTOP).matches ? mostrarBarra(barraOculta, true) : setMenu((m) => !m)));
   useAtalho("config-bot", () => navegar(`/bots/${rota.tela === "bot" ? rota.id : "chefe"}/config`));
-  useAtalho("nova-conversa", novoPedido);
+  useAtalho("nova-conversa", () => novoPedido());
+  for (const id of BOT_IDS) useAtalho(atalhoDeConversa(id), () => novoPedido(id));
   useAtalho("ir-atividade", () => navegar("/atividade"));
   useAtalho("ir-biblioteca", () => navegar("/biblioteca"));
   for (const id of BOT_IDS) useAtalho(atalhoDoBot(id), () => navegar(`/bots/${id}`));
@@ -260,18 +270,19 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
             <TelaConversa
               key={conversaId}
               id={conversaId}
-              nova={conversaId === novoId}
+              escolha={conversaId === novoId ? nova.escolha : null}
+              botDaLista={conversas.achar(conversaId)?.botId ?? null}
               aoMudar={setVivo}
               aoTerminarTurno={aoTerminarTurno}
               abrirMenu={abrirMenu}
-              estadoDoChefe={estados.chefe}
+              estados={estados}
             />
           ) : rota.tela === "atividade" ? (
             <Atividade abrirMenu={abrirMenu} />
           ) : rota.tela === "biblioteca" ? (
             <Biblioteca abrirMenu={abrirMenu} />
           ) : rota.tela === "bot" ? (
-            <Bot key={rota.id} id={rota.id} aba={rota.aba} abrirMenu={abrirMenu} />
+            <Bot key={rota.id} id={rota.id} aba={rota.aba} abrirMenu={abrirMenu} conversar={() => novoPedido(rota.id)} />
           ) : (
             <main id="conteudo" className="grid flex-1 place-items-center px-6 text-center">
               <div className="flex flex-col items-center gap-3">

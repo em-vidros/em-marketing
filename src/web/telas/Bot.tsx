@@ -5,6 +5,7 @@ import type { Modelo } from "../../agent/models";
 import { type NomesDosBots, useApi, useNomesDosBots } from "../api";
 import { BOT_IDS } from "../bots";
 import { Avatar } from "../componentes/Avatar";
+import { Teclas } from "../componentes/menu/Teclas";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Falha } from "../componentes/Falha";
 import { Configuracao, useFormularioDoBot } from "../componentes/bot/Configuracao";
@@ -13,6 +14,7 @@ import { Trabalho } from "../componentes/bot/Trabalho";
 import { Segmentado } from "../componentes/Segmentado";
 import type { EstadoBot } from "../equipe";
 import { aoClicarLink, navegar } from "../rota";
+import { ariaDe, atalhoDeConversa, ehMac } from "../teclado/atalhos";
 import type { BotId, ResumoTarefa } from "../tipos";
 
 type Aba = "trabalho" | "config";
@@ -42,11 +44,11 @@ const COR_DO_PONTO: Record<EstadoBot["tipo"], string> = {
   delegando: "bg-trabalhando",
 };
 
-export default function Bot(props: { id: BotId; aba: Aba; abrirMenu: () => void }) {
+export default function Bot(props: { id: BotId; aba: Aba; abrirMenu: () => void; conversar: () => void }) {
   return <PaginaDoBot key={props.id} {...props} />;
 }
 
-function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: () => void }) {
+function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; abrirMenu: () => void; conversar: () => void }) {
   const [f, despachar] = useReducer(formulario, { fase: "carregando" });
   const [config, relerConfig] = useApi<DetalheBot>(`/api/bots/${id}/config`);
   const [modelos, relerModelos] = useApi<Modelo[]>("/api/modelos");
@@ -85,7 +87,7 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
     <main id="conteudo" className="min-w-0 flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-5xl flex-col gap-7 px-4 pt-3 sm:px-6 md:pt-10">
         <BotaoMenu abrir={abrirMenu} />
-        <header className="flex items-start gap-4 sm:items-center">
+        <header className="flex flex-wrap items-start gap-4 sm:flex-nowrap sm:items-center">
           <Avatar bot={id} tamanho={56} estado={estado.tipo} anel="var(--color-fundo)" />
           <div className="flex min-w-0 flex-col gap-1">
             <h1 className="text-2xl/tight font-semibold tracking-[-0.02em] text-balance [overflow-wrap:anywhere]">{nome}</h1>
@@ -106,6 +108,17 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
               )}
             </p>
           </div>
+          <button
+            type="button"
+            onClick={conversar}
+            aria-keyshortcuts={ariaDe(atalhoDeConversa(id), ehMac) || undefined}
+            className="pressiona flex h-10 flex-none cursor-pointer items-center gap-2 rounded-full bg-tinta px-4 font-medium text-sobre-tinta max-sm:w-full max-sm:justify-center sm:ml-auto"
+          >
+            Nova conversa com {nome}
+            <span className="max-md:hidden">
+              <Teclas atalho={atalhoDeConversa(id)} tom="escuro" />
+            </span>
+          </button>
         </header>
 
         <div className="flex">

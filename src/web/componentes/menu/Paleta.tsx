@@ -4,7 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { NomesDosBots } from "../../api";
 import { BOT_IDS } from "../../bots";
 import { navegar } from "../../rota";
-import { type AtalhoId, atalhoDoBot, rotuloDe } from "../../teclado/atalhos";
+import { type AtalhoId, atalhoDeConversa, atalhoDoBot, rotuloDe } from "../../teclado/atalhos";
 import { estaLigado, executar, useLigados } from "../../teclado/motor";
 import type { Conversa } from "../../tipos";
 import { Avatar } from "../Avatar";
@@ -126,6 +126,21 @@ export function Paleta({
                       </span>
                     </Linha>
                   ))}
+                </Grupo>
+              )}
+
+              {!so && (
+                <Grupo titulo="Nova conversa">
+                  {BOT_IDS.map((id) => {
+                    const atalho = atalhoDeConversa(id);
+                    const rotulo = rotuloDe(atalho, bots);
+                    return (
+                      <Linha key={id} valor={`conversar ${id}`} palavras={[rotulo, bots[id].nome, "conversa", "pedido"]} atalho={atalho} aoEscolher={() => rodar(() => executar(atalho))}>
+                        <Avatar bot={id} tamanho={20} />
+                        <span className="truncate">{rotulo}</span>
+                      </Linha>
+                    );
+                  })}
                 </Grupo>
               )}
 

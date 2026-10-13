@@ -23,18 +23,22 @@ export interface Atalho {
   emCampo?: true;
   /** Segurar a tecla repete a ação. */
   repete?: true;
-  /** Atalho de abrir um bot: o rótulo usa o nome em vigor, que o usuário pode trocar. */
-  bot?: BotId;
+  /** Atalho de um bot: o rótulo usa o nome em vigor, que o usuário pode trocar. */
+  bot?: { id: BotId; rotulo: (nome: string) => string };
 }
 
-/** O prefixo O mais uma letra abre a página do bot. */
-const abrirBot = (bot: BotId, letra: string): Atalho => ({
-  teclas: [`o ${letra}`],
-  rotulo: `Abrir ${BOTS[bot].nome}`,
-  grupo: "Bots",
+/** A letra de cada bot nos prefixos O (abrir a página) e N (conversa nova). */
+const LETRA: Record<BotId, string> = { chefe: "c", post: "p", legenda: "l", agenda: "a", fotos: "f", reels: "r" };
+
+const doBot = (prefixo: "o" | "n", id: BotId, rotulo: (nome: string) => string): Atalho => ({
+  teclas: [`${prefixo} ${LETRA[id]}`],
+  rotulo: rotulo(BOTS[id].nome),
+  grupo: prefixo === "o" ? "Bots" : "Conversas",
   escopo: "global",
-  bot,
+  bot: { id, rotulo },
 });
+const abrirBot = (id: BotId) => doBot("o", id, (nome) => `Abrir ${nome}`);
+const conversarCom = (id: BotId) => doBot("n", id, (nome) => `Nova conversa com ${nome}`);
 
 export const ATALHOS = {
   paleta: { teclas: ["mod+k"], rotulo: "Abrir a paleta de comandos", grupo: "Geral", escopo: "global", emCampo: true },
@@ -47,12 +51,18 @@ export const ATALHOS = {
   "ir-atividade": { teclas: ["g a"], rotulo: "Ir para Atividade", grupo: "Navegação", escopo: "global" },
   "ir-biblioteca": { teclas: ["g b"], rotulo: "Ir para Biblioteca", grupo: "Navegação", escopo: "global" },
   "config-bot": { teclas: ["mod+,"], rotulo: "Configurar o bot desta tela", grupo: "Bots", escopo: "global", emCampo: true },
-  "abrir-bot-chefe": abrirBot("chefe", "c"),
-  "abrir-bot-post": abrirBot("post", "p"),
-  "abrir-bot-legenda": abrirBot("legenda", "l"),
-  "abrir-bot-agenda": abrirBot("agenda", "a"),
-  "abrir-bot-fotos": abrirBot("fotos", "f"),
-  "abrir-bot-reels": abrirBot("reels", "r"),
+  "abrir-bot-chefe": abrirBot("chefe"),
+  "abrir-bot-post": abrirBot("post"),
+  "abrir-bot-legenda": abrirBot("legenda"),
+  "abrir-bot-agenda": abrirBot("agenda"),
+  "abrir-bot-fotos": abrirBot("fotos"),
+  "abrir-bot-reels": abrirBot("reels"),
+  "conversar-chefe": conversarCom("chefe"),
+  "conversar-post": conversarCom("post"),
+  "conversar-legenda": conversarCom("legenda"),
+  "conversar-agenda": conversarCom("agenda"),
+  "conversar-fotos": conversarCom("fotos"),
+  "conversar-reels": conversarCom("reels"),
   "lista-proxima": { teclas: ["j", "arrowdown"], rotulo: "Próxima conversa", grupo: "Conversas", escopo: "lista", repete: true },
   "lista-anterior": { teclas: ["k", "arrowup"], rotulo: "Conversa anterior", grupo: "Conversas", escopo: "lista", repete: true },
   "lista-abrir": { teclas: ["enter"], rotulo: "Abrir a conversa focada", grupo: "Conversas", escopo: "lista" },
@@ -72,10 +82,12 @@ export const GRUPOS: readonly Grupo[] = ["Geral", "Navegação", "Conversas", "B
 
 export const atalhoDoBot = (id: BotId) => `abrir-bot-${id}` as const satisfies AtalhoId;
 
-/** O rótulo com o nome do bot em vigor, para os atalhos de abrir bot. */
+export const atalhoDeConversa = (id: BotId) => `conversar-${id}` as const satisfies AtalhoId;
+
+/** O rótulo com o nome do bot em vigor, para os atalhos de um bot. */
 export function rotuloDe(id: AtalhoId, nomes?: Partial<Record<BotId, { nome: string }>>): string {
   const a: Atalho = ATALHOS[id];
-  return a.bot ? `Abrir ${nomes?.[a.bot]?.nome ?? BOTS[a.bot].nome}` : a.rotulo;
+  return a.bot ? a.bot.rotulo(nomes?.[a.bot.id]?.nome ?? BOTS[a.bot.id].nome) : a.rotulo;
 }
 
 /** O que importa de um KeyboardEvent; separado para os testes não dependerem do DOM. */

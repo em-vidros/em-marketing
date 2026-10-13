@@ -8,12 +8,15 @@ export function Composer({
   respondendo,
   enviar,
   parar,
+  extra,
 }: {
   rotulo: string;
   placeholder: string;
   respondendo: boolean;
   enviar: (texto: string) => void;
   parar: () => void;
+  /** Fica à esquerda do botão de enviar (o seletor de bot de uma conversa nova). */
+  extra?: React.ReactNode;
 }) {
   const [texto, setTexto] = useState("");
   const campo = useRef<HTMLTextAreaElement>(null);
@@ -57,7 +60,8 @@ export function Composer({
           enterKeyHint="send"
           className="max-h-[40dvh] min-h-7 resize-none bg-transparent py-0.5 pr-2 text-base/6 text-tinta outline-none [field-sizing:content] focus-visible:outline-none"
         />
-        <div className="flex justify-end">
+        <div className="flex min-w-0 items-center justify-end gap-2">
+          {extra && <div className="mr-auto min-w-0">{extra}</div>}
           {/* Um botão só, que troca de papel: o foco não se perde quando a resposta começa ou acaba. */}
           <button
             type={respondendo ? "button" : "submit"}

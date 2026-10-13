@@ -83,8 +83,10 @@ function Linha({ c, ativa, editando, aoRenomear, acoes, aoNavegar, tabulavel }: 
             tabIndex={tabulavel ? 0 : -1}
             aria-current={c.id === ativa ? "page" : undefined}
             onClick={(e) => (aoClicarLink(e), aoNavegar())}
-            className="flex min-h-10 min-w-0 flex-1 items-center truncate rounded-item pl-3 text-tinta-2 outline-none group-data-atual/linha:text-tinta"
+            className="flex min-h-10 min-w-0 flex-1 items-center gap-2 truncate rounded-item pl-3 text-tinta-2 outline-none group-data-atual/linha:text-tinta"
           >
+            {/* A conversa direta com um especialista leva o rosto dele; a do Chefe, que é a maioria, não. */}
+            {c.botId !== "chefe" && <Avatar bot={c.botId} tamanho={16} />}
             <span className="truncate">{c.titulo}</span>
           </a>
         )}
