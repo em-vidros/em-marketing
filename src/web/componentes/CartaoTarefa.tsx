@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { BOTS } from "../bots";
+import { useNomesDosBots } from "../api";
 import { especialistaDa, passosDe, type ParteDelegacao, type Passo } from "../tipos";
 import { Avatar } from "./Avatar";
 import { atividadeDe, textoDa } from "./ia/atividade";
@@ -65,7 +65,7 @@ export function CartaoTarefa({
   abrir: (tarefaId: string, origem: HTMLElement) => void;
 }) {
   const bot = especialistaDa(parte);
-  const { nome } = BOTS[bot];
+  const { nome } = useNomesDosBots()[bot];
   const tempoDe = useTempos();
   const vistas = useRef<LinhaDeTarefa[]>([]);
 
@@ -102,7 +102,7 @@ export function CartaoTarefa({
             .map((l) => (l.estado === "fazendo" ? { ...l, estado: situacao.tipo === "falhou" ? "falhou" : "feito", tempo: tempoDe(l.id, false) } : l));
 
   return (
-    <section aria-label={`Tarefa do ${nome}`} className="overflow-hidden rounded-cartao border border-linha bg-superficie text-sm/normal">
+    <section aria-label={`Tarefa de ${nome}`} className="overflow-hidden rounded-cartao border border-linha bg-superficie text-sm/normal">
       <div className="flex items-center gap-2.5 px-3.5 py-2.5">
         <Avatar bot={bot} tamanho={22} estado={situacao.tipo === "trabalhando" ? "trabalhando" : "parado"} />
         <span className="font-medium">{nome}</span>
@@ -114,6 +114,7 @@ export function CartaoTarefa({
           <button
             type="button"
             aria-expanded={aberta}
+            data-abre-tarefa={tarefaId}
             onClick={(e) => abrir(tarefaId, e.currentTarget)}
             className="pressiona relative ml-auto flex-none cursor-pointer rounded-full bg-linha px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 after:absolute after:-inset-1.5 hover:bg-linha-forte"
           >

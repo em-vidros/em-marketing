@@ -1,8 +1,7 @@
 import type { UIMessage } from "ai";
 import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import type { StatusTarefa, TrabalhoDoBot } from "../../../agent/tarefas";
-import { pegar, useApi } from "../../api";
-import { BOTS } from "../../bots";
+import { pegar, useApi, useNomesDosBots } from "../../api";
 import { aoClicarLink } from "../../rota";
 import { imagensEm, passosDe, type BotId, type Conversa, type Fase, type ResumoTarefa, type Tarefa } from "../../tipos";
 import { Avatar } from "../Avatar";
@@ -132,6 +131,7 @@ function Detalhe({ tarefa }: { tarefa: ResumoTarefa }) {
 export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoTarefa; mostrarBot?: boolean }) {
   const [aberta, setAberta] = useState(false);
   const painel = useId();
+  const nomes = useNomesDosBots();
   const rodando = ativa(t.status);
   const agora = useRelogio(rodando);
   const { rotulo, fase } = STATUS[t.status];
@@ -159,7 +159,7 @@ export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoT
               <span className={`line-clamp-2 text-[13px] text-pretty ${t.status === "falhou" ? "text-erro" : "text-tinta-2"}`}>{resumo}</span>
             )}
             <span className="tabular text-xs text-tinta-3">
-              {[mostrarBot ? BOTS[t.botId].nome : null, rotulo, dataCurta.format(t.criadaEm), tempo].filter(Boolean).join(" · ")}
+              {[mostrarBot ? nomes[t.botId].nome : null, rotulo, dataCurta.format(t.criadaEm), tempo].filter(Boolean).join(" · ")}
             </span>
           </span>
           <span className="grid h-5 place-items-center">
@@ -261,7 +261,8 @@ function LinhaConversa({ conversa: c }: { conversa: Conversa }) {
 
 function Historico({ id, releitura }: { id: BotId; releitura: string }) {
   const [p, mais] = useTrabalho(id, releitura);
-  const nome = BOTS[id].nome;
+  const nomes = useNomesDosBots();
+  const nome = nomes[id].nome;
   if (p.estado === "carregando") return <Vazio>Carregando o histórico…</Vazio>;
   if (p.estado === "erro")
     return (
@@ -273,7 +274,7 @@ function Historico({ id, releitura }: { id: BotId; releitura: string }) {
   const vazio =
     trabalho.tipo === "conversas"
       ? "Nenhuma conversa ainda. Comece um pedido novo e ele aparece aqui."
-      : `O ${nome} ainda não fez nenhuma tarefa. Quando o Chefe passar um pedido, ele fica registrado aqui.`;
+      : `${nome} ainda não fez nenhuma tarefa. Quando ${nomes.chefe.nome} passar um pedido, ele fica registrado aqui.`;
   // As tarefas em andamento já aparecem em "Agora".
   const feitas = trabalho.tipo === "tarefas" ? trabalho.itens.filter((t) => !ativa(t.status)) : [];
   const nada = trabalho.tipo === "tarefas" ? feitas.length === 0 : trabalho.itens.length === 0;
@@ -314,7 +315,8 @@ function Historico({ id, releitura }: { id: BotId; releitura: string }) {
  * as do bot, ou todas quando o bot é o Chefe, que coordena as delegações.
  */
 export function Trabalho({ id, ativas }: { id: BotId; ativas: readonly ResumoTarefa[] | null }) {
-  const nome = BOTS[id].nome;
+  const nomes = useNomesDosBots();
+  const nome = nomes[id].nome;
   const chefe = id === "chefe";
   const releitura = (ativas ?? []).map((t) => t.id).join(",");
   return (
@@ -325,8 +327,8 @@ export function Trabalho({ id, ativas }: { id: BotId; ativas: readonly ResumoTar
         ) : ativas.length === 0 ? (
           <Vazio>
             {chefe
-              ? "Nenhum pedido em andamento. Quando o Chefe passar trabalho a um especialista, ele aparece aqui ao vivo."
-              : `O ${nome} está parado. Quando o Chefe passar um pedido, você acompanha cada passo por aqui.`}
+              ? `Nenhum pedido em andamento. Quando ${nome} passar trabalho a um especialista, ele aparece aqui ao vivo.`
+              : `${nome} está parado. Quando ${nomes.chefe.nome} passar um pedido, você acompanha cada passo por aqui.`}
           </Vazio>
         ) : (
           <ListaDeTarefas tarefas={ativas} mostrarBot={chefe} />

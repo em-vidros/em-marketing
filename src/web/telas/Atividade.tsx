@@ -1,8 +1,7 @@
 import { motion } from "motion/react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import type { Agendamento, Agora, AprovacaoPendente, Historico, Publicacao, TarefaEmCurso, TarefaFeita } from "../../db";
-import { useApi, type Carga } from "../api";
-import { BOTS } from "../bots";
+import { useApi, useNomesDosBots, type Carga } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
@@ -97,11 +96,12 @@ const linkDaConversa = (id: string) => `/c/${encodeURIComponent(id)}`;
 function PainelAgora() {
   const [carga] = useApi<Agora>("/api/atividade/agora", 4000);
   const agora = useRelogio(carga.estado === "pronto" && carga.dados.trabalhando.length > 0);
+  const { chefe } = useNomesDosBots();
   return (
     <Conteudo carga={carga}>
       {(d) => (
         <>
-          <Secao titulo="Trabalhando" vazio="Nenhum bot trabalhando agora. Peça algo ao Chefe e acompanhe por aqui.">
+          <Secao titulo="Trabalhando" vazio={`Nenhum bot trabalhando agora. Peça algo para ${chefe.nome} e acompanhe por aqui.`}>
             {d.trabalhando.map((t) => (
               <LinhaTrabalhando key={t.id} tarefa={t} agora={agora} />
             ))}
@@ -123,7 +123,7 @@ function PainelAgora() {
 }
 
 function LinhaTrabalhando({ tarefa: t, agora }: { tarefa: TarefaEmCurso; agora: number }) {
-  const { nome } = BOTS[t.botId];
+  const { nome } = useNomesDosBots()[t.botId];
   const passo =
     t.status === "na_fila" ? "Na fila" : (passosDe(t.ultima).findLast((p) => p.estado === "fazendo")?.rotulo ?? "Pensando");
   return (
@@ -147,11 +147,12 @@ function LinhaTrabalhando({ tarefa: t, agora }: { tarefa: TarefaEmCurso; agora: 
 }
 
 function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
+  const { chefe } = useNomesDosBots();
   const peca = a.headline ? `"${a.headline}"` : "a peça";
   const onde = a.tipo ? ` no ${MIDIA[a.tipo].toLowerCase()}` : "";
   const titulo = `${a.acao === "publicar_agora" ? "Publicar agora" : "Agendar"} ${peca}${onde}`;
   const detalhes = [
-    "Chefe",
+    chefe.nome,
     a.acao === "agendar_publicacao" && a.publicarEm ? dataEHora.format(new Date(a.publicarEm)) : null,
     a.pilar ? `pilar ${a.pilar}` : null,
   ].filter(Boolean);
@@ -172,7 +173,7 @@ function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
 }
 
 function LinhaFeita({ tarefa: t, quando }: { tarefa: TarefaFeita; quando: string }) {
-  const { nome } = BOTS[t.botId];
+  const { nome } = useNomesDosBots()[t.botId];
   const texto = t.status === "falhou" ? `falhou. ${t.erro ?? t.pedido}` : (t.resumo ?? t.pedido);
   return (
     <a
@@ -199,10 +200,11 @@ const ESTADO_FILA: Record<Agendamento["status"], { rotulo: string; cor: string }
 
 function PainelAgendado() {
   const [carga] = useApi<Agendamento[]>("/api/atividade/agendado", 30000);
+  const { chefe } = useNomesDosBots();
   return (
     <Conteudo carga={carga}>
       {(itens) => (
-        <Secao titulo="Na fila de publicação" vazio="Nada agendado. Quando o Chefe agendar uma peça, ela aparece aqui com dia e hora.">
+        <Secao titulo="Na fila de publicação" vazio={`Nada agendado. Quando ${chefe.nome} agendar uma peça, ela aparece aqui com dia e hora.`}>
           {itens.map((a) => (
             <LinhaDePeca
               key={a.id}
