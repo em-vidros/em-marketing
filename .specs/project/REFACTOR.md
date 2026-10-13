@@ -130,13 +130,15 @@ Cada fase termina com `bun run check` verde e um commit.
 
 ## Visual do site (decisão de 2026-10-13)
 
-O Henrique pediu o site o mais parecido possível com o Grok. Os tokens vêm do CSS público do grok.com (tema escuro):
+O Henrique pediu o site o mais parecido possível com o Grok, no tema claro. Os tokens vêm do CSS público do grok.com (tema claro, tons quentes):
 
-- Fundo `#050505`, superfícies `#141414` e `#212121`, elevado `#363636`;
-- Texto `#fcfcfc`, secundário `#9e9e9e`, terciário `#858585`, apagado `#636363`;
-- Bordas em branco a 8%, 14% e 20%;
-- Botão principal branco com texto preto, botões secundários em pílula com branco a 8%;
+- Fundo `#f9f8f7`, barra lateral e painel `#f5f3f2`, hover `#f0eeed`, item ativo e balão do usuário `#ece9e7`, composer e cartões `#ffffff`;
+- Texto `#050505`, secundário `#636363`, terciário `#858585`, apagado `#a3a3a3`;
+- Bordas em preto quente a 6% e 10%;
+- Botão principal preto com texto branco, botões secundários em pílula com preto a 6%;
 - Raios de 12px (itens), 16px (cartões), 24px a 28px (balão e composer), pílula nos botões.
+
+O tema escuro do Grok (fundo `#050505`, superfícies `#141414` e `#212121`) fica para depois, se alguém pedir.
 
 A fonte do Grok é a Universal Sans, proprietária. O substituto é Inter com `cv11` e `ss01`, que o próprio grok.com já carrega, e Geist Mono para horários e contadores. A marca da EM Vidros aparece só no conteúdo (as peças mantêm paleta, Poppins e Playfair do brandbook) e no ponto `#63B5AF` de bot trabalhando.
 
