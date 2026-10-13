@@ -97,6 +97,16 @@ export function Paleta({
                 </Grupo>
               )}
 
+              {!so && estaLigado("cal-hoje") && (
+                <Grupo titulo="Calendário">
+                  {acao("cal-nova-pauta")}
+                  {acao("cal-hoje")}
+                  {acao("cal-dia")}
+                  {acao("cal-semana")}
+                  {acao("cal-mes")}
+                </Grupo>
+              )}
+
               {!so && (
                 <Grupo titulo="Ações">
                   {acao("nova-conversa")}
@@ -162,6 +172,7 @@ export function Paleta({
                 <Grupo titulo="Navegação">
                   {acao("ir-atividade")}
                   {acao("ir-biblioteca")}
+                  {acao("ir-calendario")}
                 </Grupo>
               )}
             </Command.List>

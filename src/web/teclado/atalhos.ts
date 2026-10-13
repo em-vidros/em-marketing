@@ -5,10 +5,12 @@ import { BOTS, type BotId } from "../bots";
  * conversa e age na conversa focada na barra, ou na aberta; `conversa` vale com o foco dentro
  * de um elemento marcado com `data-escopo="conversa"`. As duas últimas nunca valem juntas,
  * então a mesma tecla pode ter um sentido em cada uma (R renomeia a linha, R recusa o cartão).
+ * `calendario` vale com o foco dentro de `data-escopo="calendario"` e, como `conversa`, tira
+ * a `lista`: ali as setas andam pelos dias, não pelas conversas.
  */
-export type Escopo = "global" | "lista" | "conversa";
+export type Escopo = "global" | "lista" | "conversa" | "calendario";
 
-export type Grupo = "Geral" | "Navegação" | "Conversas" | "Bots" | "Aprovação";
+export type Grupo = "Geral" | "Navegação" | "Conversas" | "Bots" | "Aprovação" | "Calendário";
 
 /**
  * Uma tecla é uma sequência de acordes separados por espaço ("g a"); um acorde junta
@@ -50,6 +52,7 @@ export const ATALHOS = {
   "focar-composer": { teclas: ["mod+l"], rotulo: "Escrever uma mensagem", grupo: "Conversas", escopo: "global", emCampo: true },
   "ir-atividade": { teclas: ["g a"], rotulo: "Ir para Atividade", grupo: "Navegação", escopo: "global" },
   "ir-biblioteca": { teclas: ["g b"], rotulo: "Ir para Biblioteca", grupo: "Navegação", escopo: "global" },
+  "ir-calendario": { teclas: ["g c"], rotulo: "Ir para Calendário", grupo: "Navegação", escopo: "global" },
   "config-bot": { teclas: ["mod+,"], rotulo: "Configurar o bot desta tela", grupo: "Bots", escopo: "global", emCampo: true },
   "abrir-bot-chefe": abrirBot("chefe"),
   "abrir-bot-post": abrirBot("post"),
@@ -72,13 +75,29 @@ export const ATALHOS = {
   "painel-tarefas": { teclas: ["mod+i"], rotulo: "Mostrar ou esconder o painel de tarefas", grupo: "Conversas", escopo: "global", emCampo: true },
   aprovar: { teclas: ["a"], rotulo: "Aprovar o cartão focado", grupo: "Aprovação", escopo: "conversa" },
   recusar: { teclas: ["r"], rotulo: "Recusar o cartão focado", grupo: "Aprovação", escopo: "conversa" },
+  "cal-hoje": { teclas: ["t"], rotulo: "Ir para hoje", grupo: "Calendário", escopo: "calendario" },
+  "cal-dia": { teclas: ["1"], rotulo: "Ver o dia", grupo: "Calendário", escopo: "calendario" },
+  "cal-semana": { teclas: ["2"], rotulo: "Ver a semana", grupo: "Calendário", escopo: "calendario" },
+  "cal-mes": { teclas: ["3"], rotulo: "Ver o mês", grupo: "Calendário", escopo: "calendario" },
+  "cal-esquerda": { teclas: ["arrowleft"], rotulo: "Dia anterior, ou período anterior sem nada selecionado", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-direita": { teclas: ["arrowright"], rotulo: "Dia seguinte, ou próximo período sem nada selecionado", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-cima": { teclas: ["arrowup"], rotulo: "Item anterior, ou semana anterior no mês", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-baixo": { teclas: ["arrowdown"], rotulo: "Próximo item, ou semana seguinte no mês", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-abrir": { teclas: ["enter"], rotulo: "Abrir o item selecionado, ou criar pauta no dia vazio", grupo: "Calendário", escopo: "calendario" },
+  "cal-nova-pauta": { teclas: ["p"], rotulo: "Nova pauta no dia selecionado", grupo: "Calendário", escopo: "calendario" },
+  "cal-mover-cedo": { teclas: ["alt+arrowup"], rotulo: "Mover o item 15 minutos antes (no mês, uma semana)", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-mover-tarde": { teclas: ["alt+arrowdown"], rotulo: "Mover o item 15 minutos depois (no mês, uma semana)", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-mover-antes": { teclas: ["alt+arrowleft"], rotulo: "Mover o item para o dia anterior", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-mover-depois": { teclas: ["alt+arrowright"], rotulo: "Mover o item para o dia seguinte", grupo: "Calendário", escopo: "calendario", repete: true },
+  "cal-apagar": { teclas: ["delete", "backspace"], rotulo: "Apagar a pauta selecionada", grupo: "Calendário", escopo: "calendario" },
+  "cal-limpar": { teclas: ["escape"], rotulo: "Tirar a seleção", grupo: "Calendário", escopo: "calendario" },
 } satisfies Record<string, Atalho>;
 
 export type AtalhoId = keyof typeof ATALHOS;
 
 export const IDS_DE_ATALHO = Object.keys(ATALHOS) as AtalhoId[];
 
-export const GRUPOS: readonly Grupo[] = ["Geral", "Navegação", "Conversas", "Bots", "Aprovação"];
+export const GRUPOS: readonly Grupo[] = ["Geral", "Navegação", "Conversas", "Bots", "Aprovação", "Calendário"];
 
 export const atalhoDoBot = (id: BotId) => `abrir-bot-${id}` as const satisfies AtalhoId;
 
@@ -167,6 +186,9 @@ const SIMBOLO: Record<string, string> = {
   enter: "↵",
   arrowdown: "↓",
   arrowup: "↑",
+  arrowleft: "←",
+  arrowright: "→",
+  delete: "⌦",
   escape: "Esc",
   space: "Espaço",
 };
@@ -190,6 +212,10 @@ export function ariaDe(id: AtalhoId, mac: boolean): string {
     enter: "Enter",
     arrowdown: "ArrowDown",
     arrowup: "ArrowUp",
+    arrowleft: "ArrowLeft",
+    arrowright: "ArrowRight",
+    delete: "Delete",
+    escape: "Escape",
   };
   // Uma sequência ("g a") não tem notação em aria-keyshortcuts; só os acordes entram.
   return ATALHOS[id].teclas
