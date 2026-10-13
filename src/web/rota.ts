@@ -1,4 +1,5 @@
 import { useSyncExternalStore, type MouseEvent } from "react";
+import { BOT_IDS, type BotId } from "./bots";
 
 export type Rota =
   | { tela: "entrar" }
@@ -6,6 +7,7 @@ export type Rota =
   | { tela: "conversa"; id: string }
   | { tela: "atividade" }
   | { tela: "biblioteca" }
+  | { tela: "bot"; id: BotId; aba: "trabalho" | "config" }
   | { tela: "nao-encontrada" };
 
 export function lerRota(caminho: string): Rota {
@@ -13,6 +15,9 @@ export function lerRota(caminho: string): Rota {
   if (caminho === "/entrar") return { tela: "entrar" };
   if (caminho === "/atividade") return { tela: "atividade" };
   if (caminho === "/biblioteca") return { tela: "biblioteca" };
+  const bot = /^\/bots\/([^/]+)(\/config)?$/.exec(caminho);
+  const botId = BOT_IDS.find((id) => id === bot?.[1]);
+  if (botId) return { tela: "bot", id: botId, aba: bot?.[2] ? "config" : "trabalho" };
   const conversa = /^\/c\/([^/]+)$/.exec(caminho);
   if (conversa?.[1]) return { tela: "conversa", id: decodeURIComponent(conversa[1]) };
   return { tela: "nao-encontrada" };
