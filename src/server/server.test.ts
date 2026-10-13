@@ -1,6 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { MockLanguageModelV4 } from "ai/test";
-import { abrirConversaDoUsuario } from "../agent/conversas";
+import type { ConfigBot, DetalheBot, VersaoBot } from "../agent/config";
+import { abrirConversaDoUsuario, type Conversa } from "../agent/conversas";
+import type { Modelo } from "../agent/models";
+import type { TrabalhoDoBot } from "../agent/tarefas";
 import { db, type Agendamento, type Agora, type Historico, type Peca } from "../db";
 import { rotas } from "./rotas";
 
@@ -191,5 +194,144 @@ describe("leituras de Atividade e Biblioteca", () => {
     expect(caminhos(daAna!.artes)).toEqual(["/tmp/arte-v2.jpg", "/tmp/arte-v1.jpg"]);
     expect(daBia?.artes).toEqual(daAna!.artes);
     expect(daBia?.conversaId).toBeNull();
+  });
+});
+
+const enviar = (caminho: string, cookie: string, method: string, corpo?: unknown) =>
+  fetch(url(caminho), {
+    method,
+    headers: { cookie, "content-type": "application/json" },
+    body: corpo === undefined ? undefined : JSON.stringify(corpo),
+  });
+
+describe("config dos bots", () => {
+  afterAll(() => db.run("DELETE FROM versoes_bot"));
+
+  test("a edição vale na leitura seguinte, cada gravação vira versão, e restaurar grava de novo o texto antigo", async () => {
+    const { cookie } = await sessao("ana@emvidros.com.br");
+    const { cookie: daBia } = await sessao("bia@emvidros.com.br");
+    const padrao = await comCookie<DetalheBot>("/api/bots/agenda/config", cookie);
+
+    const primeira = await (await enviar("/api/bots/agenda/config", cookie, "PUT", { nome: "Calendário", prompt: "Você cuida do calendário." })).json() as DetalheBot;
+    await enviar("/api/bots/agenda/config", daBia, "PUT", { prompt: "Você cuida da fila." });
+    await enviar("/api/bots/agenda/config", daBia, "PUT", { prompt: "Você cuida da fila." });
+    const versoes = await comCookie<VersaoBot[]>("/api/bots/agenda/versoes", cookie);
+    const restaurada = await (await enviar(`/api/bots/agenda/versoes/${primeira.versaoId}/restaurar`, daBia, "POST")).json() as DetalheBot;
+    const lista = await comCookie<ConfigBot[]>("/api/bots", cookie);
+    const voltaAoPadrao = await (await enviar("/api/bots/agenda/padrao", cookie, "POST")).json() as DetalheBot;
+
+    expect(padrao).toMatchObject({ nome: "Agenda", versaoId: null, padrao: { nome: true, descricao: true, modelo: true, prompt: true } });
+    expect(padrao.fixo).toContain("--- BRANDBOOK");
+    expect(primeira).toMatchObject({ nome: "Calendário", prompt: "Você cuida do calendário.", descricao: padrao.descricao, padrao: { nome: false, prompt: false, descricao: true } });
+    expect(versoes.map((v) => [v.prompt, v.autor])).toEqual([
+      ["Você cuida da fila.", "bia@emvidros.com.br"],
+      ["Você cuida do calendário.", "ana@emvidros.com.br"],
+    ]);
+    expect(restaurada).toMatchObject({ nome: "Calendário", prompt: "Você cuida do calendário." });
+    expect(restaurada.versaoId).toBeGreaterThan(versoes[0]!.id);
+    expect(lista.find((b) => b.id === "agenda")).toMatchObject({ nome: "Calendário", versaoId: restaurada.versaoId });
+    expect(voltaAoPadrao).toMatchObject({ nome: padrao.nome, prompt: padrao.prompt, padrao: { nome: true, descricao: true, modelo: true, prompt: true } });
+    expect(voltaAoPadrao.versaoId).toBeGreaterThan(restaurada.versaoId!);
+  });
+
+  test("modelo desconhecido ou sem chave no servidor é recusado em português e não grava versão", async () => {
+    const { cookie } = await sessao("ana@emvidros.com.br");
+    const chave = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const desconhecido = await enviar("/api/bots/fotos/config", cookie, "PUT", { modelo: "openai:gpt-9" });
+      const semChave = await enviar("/api/bots/fotos/config", cookie, "PUT", { modelo: "anthropic:claude-opus-5-5" });
+      const disponiveis = await comCookie<Modelo[]>("/api/modelos", cookie);
+
+      expect([desconhecido.status, await desconhecido.json()]).toEqual([400, { erro: "Modelo desconhecido: openai:gpt-9." }]);
+      expect([semChave.status, await semChave.json()]).toEqual([400, { erro: "O Claude Opus 5.5 não está disponível: falta a chave ANTHROPIC_API_KEY no servidor." }]);
+      expect(disponiveis.find((m) => m.id === "anthropic:claude-opus-5-5")?.disponivel).toBe(false);
+      expect(await comCookie<VersaoBot[]>("/api/bots/fotos/versoes", cookie)).toEqual([]);
+    } finally {
+      if (chave !== undefined) process.env.ANTHROPIC_API_KEY = chave;
+    }
+  });
+});
+
+describe("gestão de conversas", () => {
+  test("renomear, arquivar, apagar e restaurar valem só para o dono e repetir não muda o resultado", async () => {
+    const ana = await sessao("ana@emvidros.com.br");
+    const bia = await sessao("bia@emvidros.com.br");
+    const id = `gestao-${crypto.randomUUID()}`;
+    abrirConversaDoUsuario(ana.id, id, "chefe", "Conversa nova");
+    const ids = (lista: Conversa[]) => lista.map((c) => c.id).filter((x) => x === id);
+
+    const pelaBia = await Promise.all([
+      enviar(`/api/conversas/${id}`, bia.cookie, "PATCH", { titulo: "Invadida" }),
+      enviar(`/api/conversas/${id}`, bia.cookie, "DELETE"),
+      enviar(`/api/conversas/${id}/restaurar`, bia.cookie, "POST"),
+    ]);
+    const renomeada = (await (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { titulo: "Dia do Vidraceiro", arquivada: true })).json()) as Conversa;
+    const arquivadaDeNovo = (await (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { arquivada: true })).json()) as Conversa;
+    const naLista = ids(await comCookie<Conversa[]>("/api/conversas", ana.cookie));
+    const nasArquivadas = ids(await comCookie<Conversa[]>("/api/conversas?arquivadas=1", ana.cookie));
+    const apagar = [await enviar(`/api/conversas/${id}`, ana.cookie, "DELETE"), await enviar(`/api/conversas/${id}`, ana.cookie, "DELETE")];
+    const depoisDeApagar = [
+      (await fetch(url(`/api/conversas/${id}`), { headers: { cookie: ana.cookie } })).status,
+      (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { arquivada: false })).status,
+      ids(await comCookie<Conversa[]>("/api/conversas?arquivadas=1", ana.cookie)),
+    ];
+    const restaurada = (await (await enviar(`/api/conversas/${id}/restaurar`, ana.cookie, "POST")).json()) as Conversa;
+    const desarquivada = (await (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { arquivada: false })).json()) as Conversa;
+
+    expect(pelaBia.map((r) => r.status)).toEqual([404, 404, 404]);
+    expect([renomeada.titulo, typeof renomeada.arquivadaEm]).toEqual(["Dia do Vidraceiro", "number"]);
+    expect(arquivadaDeNovo.arquivadaEm).toBe(renomeada.arquivadaEm);
+    expect([naLista, nasArquivadas]).toEqual([[], [id]]);
+    expect(apagar.map((r) => r.status)).toEqual([204, 204]);
+    expect(depoisDeApagar).toEqual([404, 404, []]);
+    expect(restaurada).toMatchObject({ id, titulo: "Dia do Vidraceiro", arquivadaEm: renomeada.arquivadaEm });
+    expect(desarquivada.arquivadaEm).toBeNull();
+    expect(ids(await comCookie<Conversa[]>("/api/conversas", ana.cookie))).toEqual([id]);
+  });
+
+  test("POST /api/chat numa conversa apagada é recusado e não grava nada", async () => {
+    const ana = await sessao("ana@emvidros.com.br");
+    const id = `apagada-${crypto.randomUUID()}`;
+    abrirConversaDoUsuario(ana.id, id, "chefe", "Vai ser apagada");
+    await enviar(`/api/conversas/${id}`, ana.cookie, "DELETE");
+
+    const res = await fetch(url("/api/chat"), { method: "POST", headers: { "content-type": "application/json", cookie: ana.cookie }, body: pedidoDeChat(id) });
+
+    expect(res.status).toBe(404);
+    expect(db.query("SELECT mensagens FROM conversas WHERE id = ?").get(id)).toEqual({ mensagens: "[]" });
+  });
+
+  test("GET /api/bots/:id/tarefas pagina as tarefas do especialista nas conversas vivas do usuário; o Chefe lista conversas", async () => {
+    const ana = await sessao("ana@emvidros.com.br");
+    const bia = await sessao("bia@emvidros.com.br");
+    const viva = `bot-viva-${crypto.randomUUID()}`;
+    const apagada = `bot-apagada-${crypto.randomUUID()}`;
+    abrirConversaDoUsuario(ana.id, viva, "chefe", "Viva");
+    abrirConversaDoUsuario(ana.id, apagada, "chefe", "Apagada");
+    const base = Date.now() + 10_000_000;
+    semearTarefa(`${viva}-1`, viva, "concluida", base + 1);
+    semearTarefa(`${viva}-2`, viva, "falhou", base + 2);
+    semearTarefa(`${viva}-3`, viva, "concluida", base + 3);
+    semearTarefa(`${apagada}-1`, apagada, "concluida", base + 4);
+    await enviar(`/api/conversas/${apagada}`, ana.cookie, "DELETE");
+
+    const p1 = await comCookie<TrabalhoDoBot>("/api/bots/post/tarefas?limite=2", ana.cookie);
+    const p2 = await comCookie<TrabalhoDoBot>(`/api/bots/post/tarefas?limite=1&offset=${p1.proximo}`, ana.cookie);
+    const daBia = await comCookie<TrabalhoDoBot>("/api/bots/post/tarefas", bia.cookie);
+    const doChefe = await comCookie<TrabalhoDoBot>("/api/bots/chefe/tarefas?limite=100", ana.cookie);
+
+    if (p1.tipo !== "tarefas" || p2.tipo !== "tarefas" || daBia.tipo !== "tarefas") throw new Error("especialista lista tarefas");
+    expect(p1.proximo).toBe(2);
+    expect(p1.itens.map((t) => [t.id, t.status, t.conversaId])).toEqual([
+      [`${viva}-3`, "concluida", viva],
+      [`${viva}-2`, "falhou", viva],
+    ]);
+    expect(p2.itens.map((t) => t.id)).toEqual([`${viva}-1`]);
+    expect(daBia.itens.map((t) => t.conversaId)).not.toContain(viva);
+    expect(doChefe.tipo).toBe("conversas");
+    expect(doChefe.itens.map((c) => c.id)).toContain(viva);
+    expect(doChefe.itens.map((c) => c.id)).not.toContain(apagada);
+    expect((await fetch(url("/api/bots/inexistente/tarefas"), { headers: { cookie: ana.cookie } })).status).toBe(404);
   });
 });
