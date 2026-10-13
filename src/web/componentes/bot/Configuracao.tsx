@@ -597,8 +597,9 @@ export function Configuracao({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void atalhos.current.salvar();
-      } else if (e.key === "Escape" && !e.defaultPrevented && !ehCampo(document.activeElement) && !document.querySelector("[aria-modal='true']")) {
+      } else if (e.key === "Escape" && !e.defaultPrevented && !ehCampo(e.target instanceof HTMLElement ? e.target : null) && !document.querySelector("[aria-modal='true']")) {
         // Num campo, o Esc só tira o foco (motor do teclado); um segundo Esc, já fora, descarta.
+        // Lê o alvo do evento: o motor pode ter tirado o foco antes deste ouvinte rodar.
         atalhos.current.descartar();
       }
     };
