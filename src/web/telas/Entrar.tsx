@@ -4,7 +4,7 @@ import { navegar } from "../rota";
 
 /** better-auth não diz se o e-mail existe; o usuário vê a mesma mensagem nos dois casos. */
 function mensagemDoErro(status: number | undefined): string {
-  if (status === 401 || status === 403) return "E-mail sem acesso ou senha errada.";
+  if (status === 401 || status === 403) return "E-mail ou senha não conferem. Confira os dois ou peça acesso à equipe.";
   if (status === 429) return "Muitas tentativas seguidas. Espere um minuto e tente de novo.";
   if (status === undefined || status === 0) return "Sem conexão com o servidor. Confira a internet e tente de novo.";
   return "Não deu para entrar agora. Tente de novo em instantes.";

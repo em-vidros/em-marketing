@@ -5,6 +5,7 @@ import { useApi, useNomesDosBots, type Carga } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
+import { Falha } from "../componentes/Falha";
 import { dataCurta, dataEHora, dia, hora, MIDIA } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
 import { MOLA_REDUZIDA } from "../movimento";
@@ -52,14 +53,9 @@ export function Atividade({ abrirMenu }: { abrirMenu: () => void }) {
 }
 
 /** Carregando, erro ou o conteúdo. Uma releitura que falha mantém os dados na tela (useApi). */
-function Conteudo<T>({ carga, children }: { carga: Carga<T>; children: (dados: T) => ReactNode }) {
+function Conteudo<T>({ carga, tentar, children }: { carga: Carga<T>; tentar: () => void; children: (dados: T) => ReactNode }) {
   if (carga.estado === "carregando") return <p className="text-tinta-3">Carregando…</p>;
-  if (carga.estado === "erro")
-    return (
-      <p role="alert" className="text-erro">
-        Não deu para carregar. {carga.erro.message}
-      </p>
-    );
+  if (carga.estado === "erro") return <Falha texto="Não deu para carregar a atividade." erro={carga.erro} tentar={tentar} />;
   return children(carga.dados);
 }
 
@@ -94,11 +90,11 @@ const decorrido = (ms: number) => {
 const linkDaConversa = (id: string) => `/c/${encodeURIComponent(id)}`;
 
 function PainelAgora() {
-  const [carga] = useApi<Agora>("/api/atividade/agora", 4000);
+  const [carga, tentar] = useApi<Agora>("/api/atividade/agora", 4000);
   const agora = useRelogio(carga.estado === "pronto" && carga.dados.trabalhando.length > 0);
   const { chefe } = useNomesDosBots();
   return (
-    <Conteudo carga={carga}>
+    <Conteudo carga={carga} tentar={tentar}>
       {(d) => (
         <>
           <Secao titulo="Trabalhando" vazio={`Nenhum bot trabalhando agora. Peça algo para ${chefe.nome} e acompanhe por aqui.`}>
@@ -199,10 +195,10 @@ const ESTADO_FILA: Record<Agendamento["status"], { rotulo: string; cor: string }
 };
 
 function PainelAgendado() {
-  const [carga] = useApi<Agendamento[]>("/api/atividade/agendado", 30000);
+  const [carga, tentar] = useApi<Agendamento[]>("/api/atividade/agendado", 30000);
   const { chefe } = useNomesDosBots();
   return (
-    <Conteudo carga={carga}>
+    <Conteudo carga={carga} tentar={tentar}>
       {(itens) => (
         <Secao titulo="Na fila de publicação" vazio={`Nada agendado. Quando ${chefe.nome} agendar uma peça, ela aparece aqui com dia e hora.`}>
           {itens.map((a) => (
@@ -267,9 +263,9 @@ function LinhaDePeca({
 }
 
 function PainelHistorico() {
-  const [carga] = useApi<Historico>("/api/atividade/historico", 60000);
+  const [carga, tentar] = useApi<Historico>("/api/atividade/historico", 60000);
   return (
-    <Conteudo carga={carga}>
+    <Conteudo carga={carga} tentar={tentar}>
       {(d) => (
         <>
           <Secao titulo="Publicadas no Instagram" vazio="Nenhuma peça publicada ainda.">

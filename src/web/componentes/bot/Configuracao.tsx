@@ -6,6 +6,7 @@ import { recarregarBots, useApi, useNomesDosBots, type Carga } from "../../api";
 import { BOTS } from "../../bots";
 import { MOLA, MOLA_REDUZIDA } from "../../movimento";
 import type { BotId } from "../../tipos";
+import { Falha } from "../Falha";
 import { fecharAviso, mostrarAviso } from "../menu/Avisos";
 import { pilhaDeDesfazer } from "../menu/desfazer";
 import { dataCurta } from "../peca";
@@ -157,15 +158,17 @@ function SeletorDeModelo({
   salvo,
   modelos,
   aoMudar,
+  relerModelos,
 }: {
   valor: string;
   salvo: string;
   modelos: Carga<Modelo[]>;
   aoMudar: (id: string) => void;
+  relerModelos: () => void;
 }) {
   const nome = useId();
   if (modelos.estado === "carregando") return <p className="text-tinta-3">Carregando os modelos…</p>;
-  if (modelos.estado === "erro") return <p className="text-erro">Não deu para listar os modelos. {modelos.erro.message}</p>;
+  if (modelos.estado === "erro") return <Falha texto="Não deu para listar os modelos." erro={modelos.erro} tentar={relerModelos} />;
   return (
     <div role="radiogroup" aria-label="Modelo" className="flex flex-col overflow-hidden rounded-[12px] border border-linha-forte">
       {modelos.dados.map((m) => {
@@ -406,7 +409,7 @@ function Versoes({
       {carga.estado === "carregando" ? (
         <p className="border-t border-linha px-5 py-4 text-tinta-3">Carregando as versões…</p>
       ) : carga.estado === "erro" ? (
-        <p className="border-t border-linha px-5 py-4 text-erro">Não deu para carregar as versões. {carga.erro.message}</p>
+        <Falha texto="Não deu para carregar as versões." erro={carga.erro} tentar={recarregar} className="border-t border-linha px-5 py-4" />
       ) : carga.dados.length === 0 ? (
         <p className="border-t border-linha px-5 py-4 text-pretty text-tinta-3">
           Nenhuma versão gravada. {nomes[id].nome} usa o texto original do código até alguém salvar uma mudança.
@@ -523,7 +526,19 @@ function Barra({ f, salvar, descartar }: { f: Pronto; salvar: () => void; descar
  * A aba Configuração. O estado do formulário mora na página (Bot.tsx), que mostra o nome salvo no
  * cabeçalho; aqui ficam os campos, o histórico e os atalhos ⌘S e Esc.
  */
-export function Configuracao({ id, f, despachar, modelos }: { id: BotId; f: Pronto; despachar: Dispatch<Acao>; modelos: Carga<Modelo[]> }) {
+export function Configuracao({
+  id,
+  f,
+  despachar,
+  modelos,
+  relerModelos,
+}: {
+  id: BotId;
+  f: Pronto;
+  despachar: Dispatch<Acao>;
+  modelos: Carga<Modelo[]>;
+  relerModelos: () => void;
+}) {
   const ids = useId();
   const campos = useRef<Partial<Record<CampoEditavel, HTMLElement | null>>>({});
 
@@ -634,7 +649,7 @@ export function Configuracao({ id, f, despachar, modelos }: { id: BotId; f: Pron
           <Problema id={`${ids}-descricao-erro`} texto={p.descricao} />
         </Linha>
         <Linha rotulo="Modelo" ajuda="O modelo de IA que responde por este bot.">
-          <SeletorDeModelo valor={r.modelo} salvo={f.salvo.modelo} modelos={modelos} aoMudar={(m) => editar("modelo", m)} />
+          <SeletorDeModelo valor={r.modelo} salvo={f.salvo.modelo} modelos={modelos} relerModelos={relerModelos} aoMudar={(m) => editar("modelo", m)} />
         </Linha>
         <Linha
           rotulo="Prompt"

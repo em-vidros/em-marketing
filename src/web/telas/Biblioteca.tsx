@@ -3,6 +3,7 @@ import type { Peca, Pilar, StatusPost } from "../../db";
 import { useApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
+import { Falha } from "../componentes/Falha";
 import { PainelLateral } from "../componentes/PainelLateral";
 import { dia, FORMATO, PILARES, STATUS_POST } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
@@ -77,7 +78,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   useEffect(() => {
     document.title = "Biblioteca · EM Marketing";
   }, []);
-  const [carga] = useApi<Peca[]>("/api/pecas", 60000);
+  const [carga, tentar] = useApi<Peca[]>("/api/pecas", 60000);
   const [vista, setVista] = useVista();
   const [busca, setBusca] = useState("");
   const [pilar, setPilar] = useState<Pilar | null>(null);
@@ -165,9 +166,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
           {carga.estado === "carregando" ? (
             <p className="text-tinta-3">Carregando…</p>
           ) : carga.estado === "erro" ? (
-            <p role="alert" className="text-erro">
-              Não deu para carregar as peças. {carga.erro.message}
-            </p>
+            <Falha texto="Não deu para carregar as peças." erro={carga.erro} tentar={tentar} />
           ) : pecas.length === 0 ? (
             <p className="py-8 text-tinta-3">Nenhuma peça ainda. Cada post que o Post gerar fica guardado aqui, com as artes e a legenda.</p>
           ) : visiveis.length === 0 ? (

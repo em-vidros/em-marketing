@@ -6,6 +6,7 @@ import { type NomesDosBots, useApi, useNomesDosBots } from "../api";
 import { BOT_IDS } from "../bots";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
+import { Falha } from "../componentes/Falha";
 import { Configuracao, useFormularioDoBot } from "../componentes/bot/Configuracao";
 import { formulario, sujo, type DetalheBot } from "../componentes/bot/formulario";
 import { Trabalho } from "../componentes/bot/Trabalho";
@@ -48,8 +49,8 @@ export default function Bot(props: { id: BotId; aba: Aba; abrirMenu: () => void 
 
 function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: () => void }) {
   const [f, despachar] = useReducer(formulario, { fase: "carregando" });
-  const [config] = useApi<DetalheBot>(`/api/bots/${id}/config`);
-  const [modelos] = useApi<Modelo[]>("/api/modelos");
+  const [config, relerConfig] = useApi<DetalheBot>(`/api/bots/${id}/config`);
+  const [modelos, relerModelos] = useApi<Modelo[]>("/api/modelos");
   const nomes = useNomesDosBots();
   const [atividade] = useApi<ResumoTarefa[]>("/api/atividade", 3000);
   const [agora] = useApi<Agora>(id === "chefe" ? "/api/atividade/agora" : null, 5000);
@@ -153,11 +154,9 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
               </nav>
               <div className="min-w-0">
                 {f.fase === "pronto" ? (
-                  <Configuracao id={id} f={f} despachar={despachar} modelos={modelos} />
+                  <Configuracao id={id} f={f} despachar={despachar} modelos={modelos} relerModelos={relerModelos} />
                 ) : config.estado === "erro" ? (
-                  <p role="alert" className="text-erro">
-                    Não deu para abrir a configuração. {config.erro.message}
-                  </p>
+                  <Falha texto="Não deu para abrir a configuração." erro={config.erro} tentar={relerConfig} />
                 ) : (
                   <p className="text-tinta-3">Carregando a configuração…</p>
                 )}

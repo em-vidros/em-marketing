@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { useApi, useNomesDosBots } from "../api";
 import { especialistaDa, type ParteDelegacao, type Tarefa } from "../tipos";
 import { Avatar } from "./Avatar";
+import { Falha } from "./Falha";
 import { atividadeDe } from "./ia/atividade";
 import { Pensando } from "./ia/Pensando";
 import { Raciocinio } from "./ia/Raciocinio";
@@ -90,7 +91,7 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto overscroll-contain px-4 pt-2 pb-4">
         {carga.estado === "erro" && !aoVivo ? (
-          <p className="text-[13px] text-tinta-2">Não deu para abrir esta tarefa. {carga.erro.message}</p>
+          <Falha texto="Não deu para abrir esta tarefa." erro={carga.erro} tentar={recarregar} className="text-[13px]" />
         ) : (
           <Transcricao mensagens={mensagens} aoVivo={aoVivo} noAr={status === "trabalhando"} />
         )}

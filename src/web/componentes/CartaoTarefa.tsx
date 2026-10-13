@@ -49,7 +49,7 @@ type Situacao =
 const ROTULO: Record<Situacao["tipo"], { texto: string; cor: string }> = {
   fila: { texto: "Na fila", cor: "text-tinta-3" },
   trabalhando: { texto: "Trabalhando", cor: "text-tinta-3" },
-  concluida: { texto: "Terminou", cor: "text-tinta-2" },
+  concluida: { texto: "Concluída", cor: "text-tinta-2" },
   falhou: { texto: "Falhou", cor: "text-erro" },
 };
 

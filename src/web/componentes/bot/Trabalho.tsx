@@ -1,10 +1,11 @@
 import type { UIMessage } from "ai";
-import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useReducer, useState, type ReactNode } from "react";
 import type { StatusTarefa, TrabalhoDoBot } from "../../../agent/tarefas";
 import { pegar, useApi, useNomesDosBots } from "../../api";
 import { aoClicarLink } from "../../rota";
 import { type BotId, type Conversa, type Fase, type ResumoTarefa, type Tarefa } from "../../tipos";
 import { Avatar } from "../Avatar";
+import { Falha } from "../Falha";
 import { atividadeDe } from "../ia/atividade";
 import { IconeDaFase } from "../ia/LinhaFerramenta";
 import { Pensando } from "../ia/Pensando";
@@ -104,7 +105,7 @@ function Detalhe({ tarefa }: { tarefa: ResumoTarefa }) {
   const [carga, recarregar] = useApi<Tarefa>(`/api/tarefas/${encodeURIComponent(tarefa.id)}`, ativa(tarefa.status) ? 2000 : undefined);
   useEffect(recarregar, [tarefa.status, recarregar]);
   if (carga.estado === "carregando") return <p className="text-[13px] text-tinta-3">Abrindo a tarefa…</p>;
-  if (carga.estado === "erro") return <p className="text-[13px] text-erro">Não deu para abrir esta tarefa. {carga.erro.message}</p>;
+  if (carga.estado === "erro") return <Falha texto="Não deu para abrir esta tarefa." erro={carga.erro} tentar={recarregar} className="text-[13px]" />;
   return <Transcricao tarefa={carga.dados} />;
 }
 
@@ -195,15 +196,17 @@ type Paginas =
 /** As páginas de /api/bots/:id/tarefas, somadas. `releitura` muda quando uma tarefa termina, e a lista volta à primeira página. */
 function useTrabalho(id: BotId, releitura: string) {
   const [p, setP] = useState<Paginas>({ estado: "carregando" });
+  const [tentativa, tentar] = useReducer((n: number) => n + 1, 0);
   const url = (offset: number) => `/api/bots/${id}/tarefas?offset=${offset}&limite=${POR_PAGINA}`;
 
   useEffect(() => {
     const ctl = new AbortController();
+    setP((atual) => (atual.estado === "erro" ? { estado: "carregando" } : atual));
     pegar<TrabalhoDoBot>(url(0), ctl.signal)
       .then((trabalho) => setP({ estado: "pronto", trabalho, maisCarregando: false, maisErro: null }))
       .catch((e: Error) => e.name !== "AbortError" && setP((atual) => (atual.estado === "pronto" ? atual : { estado: "erro", erro: e.message })));
     return () => ctl.abort();
-  }, [id, releitura]);
+  }, [id, releitura, tentativa]);
 
   const mais = useCallback(() => {
     if (p.estado !== "pronto" || p.trabalho.proximo === null || p.maisCarregando) return;
@@ -221,7 +224,7 @@ function useTrabalho(id: BotId, releitura: string) {
       .catch((e: Error) => setP({ ...p, maisCarregando: false, maisErro: e.message }));
   }, [p, id]);
 
-  return [p, mais] as const;
+  return [p, mais, tentar] as const;
 }
 
 function LinhaConversa({ conversa: c }: { conversa: Conversa }) {
@@ -241,16 +244,12 @@ function LinhaConversa({ conversa: c }: { conversa: Conversa }) {
 }
 
 function Historico({ id, releitura }: { id: BotId; releitura: string }) {
-  const [p, mais] = useTrabalho(id, releitura);
+  const [p, mais, tentar] = useTrabalho(id, releitura);
   const nomes = useNomesDosBots();
   const nome = nomes[id].nome;
   if (p.estado === "carregando") return <Vazio>Carregando o histórico…</Vazio>;
   if (p.estado === "erro")
-    return (
-      <p role="alert" className="text-erro">
-        Não deu para carregar o histórico. {p.erro}
-      </p>
-    );
+    return <Falha texto="Não deu para carregar o histórico." erro={p.erro} tentar={tentar} />;
   const { trabalho } = p;
   const vazio =
     trabalho.tipo === "conversas"
@@ -282,11 +281,7 @@ function Historico({ id, releitura }: { id: BotId; releitura: string }) {
           {p.maisCarregando ? "Carregando…" : "Mostrar mais"}
         </button>
       )}
-      {p.maisErro && (
-        <p role="alert" className="text-[13px] text-erro">
-          Não deu para carregar mais. {p.maisErro}
-        </p>
-      )}
+      {p.maisErro && <Falha texto="Não deu para carregar mais." erro={p.maisErro} tentar={mais} className="text-[13px]" />}
     </>
   );
 }

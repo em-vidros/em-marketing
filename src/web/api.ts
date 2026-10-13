@@ -51,6 +51,8 @@ export function useApi<T>(caminho: string | null, intervalo?: number) {
 
   useEffect(() => {
     if (!caminho) return;
+    // Tentar de novo depois de um erro mostra o carregando outra vez.
+    setCarga((c) => (c.estado === "erro" ? { estado: "carregando" } : c));
     const ctl = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const buscar = () =>
