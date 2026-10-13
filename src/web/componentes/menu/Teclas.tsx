@@ -14,7 +14,7 @@ export function Teclas({ atalho, tecla, tom = "claro" }: { atalho?: AtalhoId; te
     <span className="inline-flex flex-none items-center gap-1" aria-hidden="true">
       {teclasVisiveis(t, ehMac).map((acorde, i) => (
         <Fragment key={i}>
-          {i > 0 && <span className={`text-[11px] ${tom === "escuro" ? "text-white/50" : "text-tinta-4"}`}>depois</span>}
+          {i > 0 && <span className={`text-[11px] ${tom === "escuro" ? "text-white/50" : "text-tinta-3"}`}>depois</span>}
           {acorde.map((k) => (
             <kbd key={k} className={`grid h-5 min-w-5 place-items-center rounded-[5px] px-1 font-sans text-[11px] leading-none font-medium ${cor}`}>
               {k}

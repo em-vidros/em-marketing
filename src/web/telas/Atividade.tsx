@@ -66,7 +66,7 @@ function Conteudo<T>({ carga, children }: { carga: Carga<T>; children: (dados: T
 function Secao({ titulo, vazio, children }: { titulo: string; vazio: string; children: ReactNode[] }) {
   return (
     <section aria-label={titulo} className="flex flex-col gap-0.5">
-      <h2 className="mb-2 text-xs font-normal text-tinta-4">{titulo}</h2>
+      <h2 className="mb-2 text-xs font-normal text-tinta-3">{titulo}</h2>
       {children.length > 0 ? children : <p className="py-2 text-tinta-3">{vazio}</p>}
     </section>
   );
@@ -139,7 +139,7 @@ function LinhaTrabalhando({ tarefa: t, agora }: { tarefa: TarefaEmCurso; agora: 
           {nome} · {passo}
         </span>
       </span>
-      <span className="font-mono text-xs text-[#2f646a] tabular">
+      <span className="font-mono text-xs text-trabalhando-texto tabular">
         {decorrido(agora - t.criadaEm)}
       </span>
     </a>
@@ -193,7 +193,7 @@ function LinhaFeita({ tarefa: t, quando }: { tarefa: TarefaFeita; quando: string
 }
 
 const ESTADO_FILA: Record<Agendamento["status"], { rotulo: string; cor: string }> = {
-  pending: { rotulo: "Agendado", cor: "text-[hsl(45_100%_29%)]" },
+  pending: { rotulo: "Agendado", cor: "text-esperando-texto" },
   publishing: { rotulo: "Publicando", cor: "text-tinta" },
   failed: { rotulo: "Falhou", cor: "text-erro" },
 };

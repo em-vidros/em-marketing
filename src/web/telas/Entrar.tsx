@@ -35,7 +35,7 @@ export function Entrar() {
   }
 
   const campo =
-    "w-full rounded-full border border-linha-forte bg-superficie px-[18px] py-3 text-base text-tinta outline-none transition-[border-color] duration-150 focus-visible:border-tinta focus-visible:outline-none aria-invalid:border-erro sm:text-[15px]";
+    "w-full rounded-full border border-borda-campo bg-superficie px-[18px] py-3 text-base text-tinta outline-none transition-[border-color] duration-150 focus-visible:border-tinta focus-visible:outline-none aria-invalid:border-erro sm:text-[15px]";
 
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-6">

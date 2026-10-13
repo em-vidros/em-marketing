@@ -56,7 +56,7 @@ export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar
               if (ids.length === 0) return null;
               return (
                 <section key={grupo} aria-label={grupo} className="pt-3">
-                  <h3 className="px-1 pb-1 text-xs text-tinta-4">{grupo}</h3>
+                  <h3 className="px-1 pb-1 text-xs text-tinta-3">{grupo}</h3>
                   <ul>
                     {ids.map((id) => (
                       <li key={id} className="flex min-h-9 items-center justify-between gap-3 border-b border-linha px-1 py-1.5 last:border-b-0">
@@ -64,7 +64,7 @@ export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar
                         <span className="flex flex-none items-center gap-1.5">
                           {ATALHOS[id].teclas.map((t, i) => (
                             <span key={t} className="flex items-center gap-1.5">
-                              {i > 0 && <span className="text-[11px] text-tinta-4">ou</span>}
+                              {i > 0 && <span className="text-[11px] text-tinta-3">ou</span>}
                               <Teclas tecla={t} />
                             </span>
                           ))}

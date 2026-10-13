@@ -62,7 +62,7 @@ function CampoTitulo({ c, aoRenomear }: { c: Conversa; aoRenomear: PropsLista["a
         }
       }}
       onBlur={(e) => terminar(e.currentTarget.value)}
-      className="h-8 min-w-0 flex-1 rounded-[9px] bg-superficie px-2 text-base text-tinta shadow-[inset_0_0_0_1px_var(--color-linha-forte)] outline-none sm:text-sm"
+      className="h-8 min-w-0 flex-1 rounded-[9px] bg-superficie px-2 text-base text-tinta shadow-[inset_0_0_0_1px_var(--color-borda-campo)] outline-none sm:text-sm"
     />
   );
 }
@@ -97,7 +97,7 @@ function Grupo({ titulo, conversas, alvoTab, ...p }: PropsLista & { titulo: stri
   if (conversas.length === 0) return null;
   return (
     <section aria-label={titulo} className="flex flex-col gap-px">
-      <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-4">{titulo}</h2>
+      <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-3">{titulo}</h2>
       {conversas.map((c) => (
         <Linha key={c.id} c={c} tabulavel={c.id === alvoTab} {...p} />
       ))}
@@ -194,7 +194,7 @@ export function Barra({
       </div>
 
       <section aria-label="Equipe" className="flex flex-col gap-px">
-        <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-4">Equipe</h2>
+        <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-3">Equipe</h2>
         <ul className="flex flex-col gap-px">
           {BOT_IDS.map((id) => {
             const caminho = `/bots/${id}`;
@@ -225,7 +225,7 @@ export function Barra({
               type="button"
               aria-expanded={mostrarArquivadas}
               onClick={alternarArquivadas}
-              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-item px-3 text-xs text-tinta-4 hover:text-tinta-2"
+              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-item px-3 text-xs text-tinta-3 hover:text-tinta"
             >
               Arquivadas
               <span className="tabular font-mono">{arquivadas.length}</span>

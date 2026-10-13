@@ -13,8 +13,10 @@
 
   --color-tinta: #050505;
   --color-tinta-2: #636363;
-  --color-tinta-3: #858585;
+  --color-tinta-3: #696969;
+  /* Só para desabilitado, traço e preenchimento: não passa contraste de texto. */
   --color-tinta-4: #a3a3a3;
+  --color-corpo: #1a1a1a;
   --color-sobre-tinta: #fcfcfc;
 
   --color-linha: rgb(15 13 10 / 0.06);
@@ -22,6 +24,10 @@
 
   --color-trabalhando: #63b5af;
   --color-esperando: hsl(45 100% 45%);
+  --color-esperando-texto: hsl(45 100% 26%);
+  --color-trabalhando-texto: #2f646a;
+  --color-borda-campo: #8f8f8f;
+  --color-erro-sobre-tinta: #ffb4ab;
   --color-erro: #b42318;
 
   --radius-item: 12px;
@@ -48,7 +54,7 @@
     outline-offset: 2px;
   }
   ::placeholder {
-    color: var(--color-tinta-4);
+    color: var(--color-tinta-3);
   }
 }
 

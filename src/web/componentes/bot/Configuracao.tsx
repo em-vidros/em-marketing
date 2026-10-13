@@ -67,7 +67,7 @@ export function useFormularioDoBot(id: BotId, despachar: Dispatch<Acao>) {
 const conta = (n: number) => n.toLocaleString("pt-BR");
 
 const estiloCampo =
-  "w-full rounded-[10px] border border-linha-forte bg-superficie px-3 py-2 text-base text-tinta transition-[border-color] duration-150 hover:border-tinta/20 focus-visible:border-tinta/40 sm:text-sm aria-invalid:border-erro";
+  "w-full rounded-[10px] border border-borda-campo bg-superficie px-3 py-2 text-base text-tinta transition-[border-color] duration-150 hover:border-tinta-3 focus-visible:border-tinta sm:text-sm aria-invalid:border-erro";
 
 function Linha({ rotulo, para, ajuda, children }: { rotulo: string; para?: string; ajuda?: ReactNode; children: ReactNode }) {
   return (
@@ -171,6 +171,8 @@ function SeletorDeModelo({
       {modelos.dados.map((m) => {
         const marcado = m.id === valor;
         const motivo = !m.disponivel ? "Falta a chave de API no servidor" : null;
+        // O modelo em uso continua marcável mesmo sem chave, para não sumir da lista.
+        const desabilitado = !m.disponivel && m.id !== salvo;
         return (
           <label
             key={m.id}
@@ -183,8 +185,7 @@ function SeletorDeModelo({
               name={nome}
               value={m.id}
               checked={marcado}
-              // O modelo em uso continua marcável mesmo sem chave, para não sumir da lista.
-              disabled={!m.disponivel && m.id !== salvo}
+              disabled={desabilitado}
               onChange={() => aoMudar(m.id)}
               className="sr-only"
             />
@@ -194,7 +195,7 @@ function SeletorDeModelo({
             >
               {marcado && <span className="size-1.5 rounded-full bg-sobre-tinta" />}
             </span>
-            <span className={`flex min-w-0 flex-1 flex-col ${m.disponivel ? "" : "text-tinta-4"}`}>
+            <span className={`flex min-w-0 flex-1 flex-col ${desabilitado ? "text-tinta-4" : m.disponivel ? "" : "text-tinta-2"}`}>
               <span className="font-medium">{m.nome}</span>
               <span className="truncate font-mono text-xs text-tinta-3">{m.id}</span>
             </span>
@@ -221,7 +222,7 @@ function Prompt({
 }) {
   const ref = useAutoAltura(valor);
   const n = valor.trim().length;
-  const cor = n > LIMITE.prompt ? "text-erro" : n > LIMITE.prompt * 0.95 ? "text-[hsl(45_100%_29%)]" : "text-tinta-3";
+  const cor = n > LIMITE.prompt ? "text-erro" : n > LIMITE.prompt * 0.95 ? "text-esperando-texto" : "text-tinta-3";
   return (
     <>
       <textarea
@@ -491,7 +492,7 @@ function Barra({ f, salvar, descartar }: { f: Pronto; salvar: () => void; descar
             transition={reduzir ? MOLA_REDUZIDA : MOLA}
             className="pointer-events-auto flex w-full max-w-xl items-center gap-2 rounded-[20px] bg-tinta py-2 pr-2 pl-4 text-sobre-tinta shadow-[0_8px_30px_rgb(15_13_10/0.18)]"
           >
-            <p className={`mr-auto line-clamp-2 min-w-0 flex-1 text-[13px] ${f.erro ? "text-[#ffb4ab]" : "text-sobre-tinta/80"}`}>
+            <p className={`mr-auto line-clamp-2 min-w-0 flex-1 text-[13px] ${f.erro ? "text-erro-sobre-tinta" : "text-sobre-tinta/80"}`}>
               {f.erro ?? "Alterações não salvas"}
             </p>
             <button

@@ -39,7 +39,7 @@ export function Composer({
     >
       <div
         onClick={() => campo.current?.focus()}
-        className="mx-auto flex max-w-3xl cursor-text flex-col gap-1.5 rounded-composer border border-linha-forte bg-superficie pt-3.5 pr-3 pb-2.5 pl-5 transition-[border-color] duration-150 focus-within:border-tinta/50"
+        className="mx-auto flex max-w-3xl cursor-text flex-col gap-1.5 rounded-composer border border-borda-campo bg-superficie pt-3.5 pr-3 pb-2.5 pl-5 transition-[border-color] duration-150 focus-within:border-tinta"
       >
         <label htmlFor="mensagem" className="sr-only">
           {rotulo}

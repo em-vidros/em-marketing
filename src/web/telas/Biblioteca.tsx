@@ -124,7 +124,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar headline, legenda ou tema"
               autoComplete="off"
-              className="order-last w-full min-w-0 rounded-full border border-linha-forte bg-superficie px-4 py-2 text-base outline-none focus-visible:outline-2 focus-visible:outline-tinta sm:order-none sm:w-[280px] sm:text-sm"
+              className="order-last w-full min-w-0 rounded-full border border-borda-campo bg-superficie px-4 py-2 text-base outline-none focus-visible:outline-2 focus-visible:outline-tinta sm:order-none sm:w-[280px] sm:text-sm"
             />
             <Segmentado tipo="alternar" rotulo="Visualização" opcoes={VISTAS} valor={vista} aoMudar={setVista} />
           </header>
@@ -148,7 +148,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
               <select
                 value={status ?? ""}
                 onChange={(e) => setStatus((e.target.value || null) as StatusPost | null)}
-                className="cursor-pointer rounded-full border border-linha-forte bg-transparent py-[5px] pr-2 pl-3 text-[13px] text-tinta-2 hover:bg-hover"
+                className="cursor-pointer rounded-full border border-borda-campo bg-transparent py-[5px] pr-2 pl-3 text-[13px] text-tinta-2 hover:bg-hover"
               >
                 <option value="">Todos os status</option>
                 {statusPresentes.map((s) => (

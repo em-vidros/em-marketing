@@ -363,7 +363,7 @@ function ParteDoChefe({
   if (parte.type === "reasoning") return <Raciocinio texto={parte.text} ativo={noAr && parte.state === "streaming"} />;
   if (parte.type === "text") {
     const digitando = noAr && parte.state === "streaming";
-    return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-[#1a1a1a]" /> : null;
+    return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
   if (ehDelegacao(parte)) return <CartaoTarefa parte={parte as ParteDelegacao} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
   if (ehAprovacao(parte))

@@ -178,7 +178,7 @@ function Grupo({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
     <Command.Group
       heading={titulo}
-      className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-tinta-4"
+      className="[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:pt-3 [&_[cmdk-group-heading]]:pb-1.5 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:text-tinta-3"
     >
       {children}
     </Command.Group>

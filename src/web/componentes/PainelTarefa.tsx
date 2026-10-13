@@ -21,7 +21,7 @@ function Transcricao({ mensagens, aoVivo, noAr }: { mensagens: readonly UIMessag
     <>
       {mensagens.map((m) =>
         m.role === "user" ? (
-          <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line text-[#3a3836]">
+          <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line text-tinta">
             {m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}
           </div>
         ) : (

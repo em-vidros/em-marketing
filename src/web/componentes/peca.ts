@@ -7,7 +7,7 @@ export const STATUS_POST: Record<StatusPost, { rotulo: string; cor: string }> = 
   draft: { rotulo: "Rascunho", cor: "text-tinta-3" },
   generated: { rotulo: "Artes geradas", cor: "text-tinta-2" },
   chosen: { rotulo: "Arte escolhida", cor: "text-tinta-2" },
-  scheduled: { rotulo: "Agendado", cor: "text-[hsl(45_100%_29%)]" },
+  scheduled: { rotulo: "Agendado", cor: "text-esperando-texto" },
   published: { rotulo: "Publicado", cor: "text-tinta-2" },
   failed: { rotulo: "Falhou", cor: "text-erro" },
   archived: { rotulo: "Arquivado", cor: "text-tinta-3" },

@@ -109,7 +109,7 @@ export function CartaoTarefa({
         <span aria-live="polite" className={`min-w-0 truncate ${ROTULO[situacao.tipo].cor}`}>
           {ROTULO[situacao.tipo].texto}
         </span>
-        {situacao.tipo === "trabalhando" && <span className="tabular font-mono text-xs text-tinta-4">{tempo}</span>}
+        {situacao.tipo === "trabalhando" && <span className="tabular font-mono text-xs text-tinta-3">{tempo}</span>}
         {tarefaId && (
           <button
             type="button"
