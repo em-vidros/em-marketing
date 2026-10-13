@@ -1,4 +1,14 @@
-import { convertToModelMessages, createUIMessageStreamResponse, safeValidateUIMessages, toUIMessageStream, type UIMessage } from "ai";
+import {
+  convertToModelMessages,
+  createUIMessageStreamResponse,
+  getToolName,
+  isToolUIPart,
+  safeValidateUIMessages,
+  toUIMessageStream,
+  type TextStreamPart,
+  type ToolSet,
+  type UIMessage,
+} from "ai";
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
 import { BOTS, ehBotId } from "../agent/bots";
@@ -26,14 +36,44 @@ const tituloDe = (m: UIMessage) =>
     .trim()
     .slice(0, 80) || "Conversa nova";
 
+const fechada = (p: { state: string }) => p.state === "output-available" || p.state === "output-error" || p.state === "output-denied";
+
 /**
  * O histórico salvo manda; do cliente só entra a última mensagem. Se ela já existe
  * (resposta de aprovação na última mensagem do assistente, ou regenerar a partir de
- * uma mensagem do usuário), substitui essa e descarta o que vinha depois.
+ * uma mensagem do usuário), substitui essa e descarta o que vinha depois. Uma tool que
+ * o servidor já fechou continua como foi salva: reenviar a mesma aprovação não a executa de novo.
  */
 function juntar(salvas: UIMessage[], ultima: UIMessage): UIMessage[] {
   const i = salvas.findIndex((m) => m.id === ultima.id);
-  return [...(i === -1 ? salvas : salvas.slice(0, i)), ultima];
+  if (i === -1) return [...salvas, ultima];
+  const fechadas = new Map(salvas[i]!.parts.filter(isToolUIPart).filter(fechada).map((p) => [p.toolCallId, p]));
+  const parts = ultima.parts.map((p) => (isToolUIPart(p) && fechadas.get(p.toolCallId)) || p);
+  return [...salvas.slice(0, i), { ...ultima, parts }];
+}
+
+const APROVACAO_NAO_EXECUTADA = "Esta aprovação não pôde ser conferida. Nada foi publicado nem agendado; peça de novo ao Chefe.";
+
+/**
+ * Se o turno falha antes de executar uma tool aprovada (a assinatura não confere, por
+ * exemplo), o AI SDK só emite o erro, e a parte ficaria salva em approval-responded, que o
+ * card lê como "Aprovado. Agendando…". Antes do erro, cada aprovação sem resultado vira erro da tool.
+ */
+function fecharAprovacoesNoErro(ultima: UIMessage) {
+  const pendentes = new Map(
+    ultima.parts.filter(isToolUIPart).flatMap((p) => (p.state === "approval-responded" && p.approval.approved ? [[p.toolCallId, p] as const] : [])),
+  );
+  return new TransformStream<TextStreamPart<ToolSet>, TextStreamPart<ToolSet>>({
+    transform(part, ctl) {
+      if (part.type === "tool-result" || part.type === "tool-error") pendentes.delete(part.toolCallId);
+      if (part.type === "error") {
+        for (const [toolCallId, p] of pendentes)
+          ctl.enqueue({ type: "tool-error", toolCallId, toolName: getToolName(p), input: p.input, error: APROVACAO_NAO_EXECUTADA });
+        pendentes.clear();
+      }
+      ctl.enqueue(part);
+    },
+  });
 }
 
 export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
@@ -57,7 +97,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
 
     return createUIMessageStreamResponse({
       stream: toUIMessageStream({
-        stream: result.stream,
+        stream: result.stream.pipeThrough(fecharAprovacoesNoErro(historico.at(-1)!)),
         originalMessages: historico,
         generateMessageId: () => crypto.randomUUID(),
         onError: (e) => (e instanceof Error ? e.message : String(e)),
