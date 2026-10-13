@@ -1,0 +1,73 @@
+<!-- @dsCard group="Fundamentos" title="Grade e composição" -->
+
+<p class="eyebrow">Capítulo 6</p>
+<h1>Grade e composição</h1>
+<p class="lead">Respiro é conteúdo. Se a peça parece vazia, provavelmente está certa. Se parece cheia, está errada.</p>
+
+<h2>Formatos</h2>
+<div class="grid g2" style="align-items:start">
+
+  <div>
+    <div style="position:relative;width:100%;max-width:280px;aspect-ratio:1080/1350;background:#F0EFEA;border:1px solid var(--rule);border-radius:4px;margin-bottom:10px">
+      <div style="position:absolute;inset:7.4%;border:1px dashed var(--teal-l)"></div>
+      <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-size:12px;color:var(--muted)">
+        <strong style="color:var(--fg);font-size:14px">1080 × 1350</strong><br>feed<br>
+        <span style="font-size:11px">margem 80 px</span>
+      </div>
+    </div>
+    <div style="font-size:13px;color:var(--muted)">Padrão. <strong style="color:var(--fg)">Nunca 1080 × 1080.</strong></div>
+  </div>
+
+  <div>
+    <div style="position:relative;width:100%;max-width:200px;aspect-ratio:1080/1920;background:#F0EFEA;border:1px solid var(--rule);border-radius:4px;margin-bottom:10px">
+      <div style="position:absolute;left:0;right:0;top:0;height:13%;background:rgba(180,85,46,.13)"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;height:16.7%;background:rgba(180,85,46,.13)"></div>
+      <div style="position:absolute;left:7.4%;right:7.4%;top:13%;bottom:16.7%;border:1px dashed var(--teal-l)"></div>
+      <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;font-size:11px;color:var(--muted)">
+        <strong style="color:var(--fg);font-size:13px">1080 × 1920</strong><br>story / reel
+      </div>
+      <div style="position:absolute;top:4%;left:0;right:0;text-align:center;font-size:9.5px;color:var(--atencao)">250 px</div>
+      <div style="position:absolute;bottom:6%;left:0;right:0;text-align:center;font-size:9.5px;color:var(--atencao)">320 px</div>
+    </div>
+    <div style="font-size:13px;color:var(--muted)">Faixas em vermelho: <strong style="color:var(--fg)">zonas cobertas pela interface do Instagram</strong>. Nenhum texto entra ali.</div>
+  </div>
+</div>
+
+<h2>Margens</h2>
+<div class="scroll">
+<table>
+  <tr><th>Formato</th><th>Lateral</th><th>Superior</th><th>Inferior</th></tr>
+  <tr><td>Feed 1080 × 1350</td><td>80 px</td><td>80 px</td><td>80 px</td></tr>
+  <tr><td>Story 1080 × 1920</td><td>80 px</td><td><strong>250 px</strong></td><td><strong>320 px</strong></td></tr>
+</table>
+</div>
+
+<h2>Grade de 6 colunas</h2>
+<div style="display:grid;grid-template-columns:repeat(6,1fr);gap:calc(32/1080*100%);background:#F0EFEA;padding:calc(80/1080*100%);border-radius:6px;border:1px solid var(--rule)">
+  <div style="background:rgba(99,181,175,.35);height:90px;border-radius:2px"></div>
+  <div style="background:rgba(99,181,175,.35);height:90px;border-radius:2px"></div>
+  <div style="background:rgba(99,181,175,.35);height:90px;border-radius:2px"></div>
+  <div style="background:rgba(99,181,175,.35);height:90px;border-radius:2px"></div>
+  <div style="background:rgba(99,181,175,.35);height:90px;border-radius:2px"></div>
+  <div style="background:rgba(99,181,175,.35);height:90px;border-radius:2px"></div>
+</div>
+<p style="font-size:13px;color:var(--muted);margin-top:10px">Medianiz de 32 px. Composições de texto ocupam <strong>4 ou 6 colunas</strong>; nunca 5 — assimetria sem intenção.</p>
+
+<h2>Regras de composição</h2>
+<div class="grid g2">
+  <div class="yes"><span class="tag">Sempre</span>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li><strong>Um foco por peça.</strong> Uma imagem principal ou um bloco de texto principal — nunca os dois disputando.</li>
+      <li><strong>Alinhamento único.</strong> A peça inteira à esquerda ou inteira centralizada.</li>
+      <li>Cantos com raio de 4 a 8 px em contêineres.</li>
+    </ul>
+  </div>
+  <div class="no"><span class="tag">Nunca</span>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li>Sombra. Separação por cor de fundo ou filete de 1 px em <code>#D8D5CE</code>.</li>
+      <li>Raio acima de 12 px. Nunca pílula.</li>
+      <li>Mais de <strong>3 blocos de texto</strong> por peça.</li>
+      <li>Misturar alinhamento à esquerda e centralizado.</li>
+    </ul>
+  </div>
+</div>

@@ -4,6 +4,13 @@
 **Data:** 29/07/2026 · **Status:** Draft para aprovação · **Autor:** Henrique
 **Escopo deste documento:** requisitos. Nenhuma implementação.
 
+> ⚠️ **Atualização de 11/08/2026 — o Anexo A foi superado.**
+> A identidade de marca deste PRD (paleta, tipografia, territórios visuais, tom de voz, calendário) foi escrita em 29/07/2026 a partir de amostragem do feed e do workflow legado. Em 05/08/2026 passou a existir o **brandbook normativo** (`brand/BRANDBOOK.md`, Direção 2026 v1.0), construído sobre auditoria de 59 posts e medição do SVG oficial do logotipo — e ele **contradiz o Anexo A em todos os eixos**: a paleta, as duas famílias tipográficas, o tom de voz, os três territórios e metade do calendário.
+>
+> **A fonte de verdade de marca é `brand/BRANDBOOK.md`.** Onde este PRD divergir, o brandbook vence. O Anexo A foi reduzido a um registro histórico — ver §A.
+>
+> O que **continua valendo** neste PRD: as user stories, o fluxo de conversa, as invariantes, a arquitetura, os formatos de saída (1080×1350 / 1080×1920, JPEG sRGB, < 8 MB) e as decisões de plataforma (Interactions API, fila própria de agendamento, Facebook Login).
+
 ---
 
 ## 1. Executive Summary
@@ -33,7 +40,7 @@ Diagnóstico da skill `post-emvidros`, que este produto substitui:
 | Depende da tool `generate_image`, que **não existe** neste ambiente (é sintaxe do Amp) | Bloqueante — a geração simplesmente falha |
 | Caminho do logo aponta para `code/personal/work/…`, que não existe (já foi reescrito errado 2×) | Bloqueante |
 | Guia de tom de voz e geração de legenda **se perdeu** na migração | A skill gera imagem sem legenda |
-| Teal errado: usa `#00A99D`; o real do logo é `#2C7A75` | Toda arte sai fora da marca |
+| Teal errado: usa `#00A99D`; o real do logo é `#2F646A` (§4.1) | Toda arte sai fora da marca |
 | Exige Claude Code aberto no terminal | Time de marketing não consegue operar |
 | `rm posts/EMV-*_v*-*.png` — glob destrutivo sem guarda, e sem cwd declarado | Risco de apagar arquivo errado |
 
@@ -166,7 +173,7 @@ Explicitamente **fora** do escopo, para proteger o prazo:
 | `montar_brief` | Converte pedido livre em brief estruturado (tipo, tema, ângulo, data) |
 | `perguntar_formato` | Apresenta os botões Feed / Stories / Os dois e trava o `formato` no brief |
 | `definir_headline` | Gera o texto que vai **dentro da arte** (headline + apoio), sempre — é pré-requisito da geração de imagem |
-| `escrever_legenda` | Gera a legenda de publicação a partir do brief + `voice.md`. **Só é chamada quando o formato inclui Feed** |
+| `escrever_legenda` | Gera a legenda de publicação a partir do brief + capítulos 1, 9, 10 e 11 do brandbook, e valida contra o checklist do capítulo 16. **Só é chamada quando o formato inclui Feed** |
 | `gerar_3_artes` | Dispara 3 chamadas paralelas ao Nano Banana 2, no aspect ratio do formato escolhido |
 | `derivar_story` | Gera a versão 9:16 do conceito já escolhido (fluxo "Os dois") |
 | `salvar_linear` | Cria/atualiza issue, anexa os JPEGs, comenta a legenda |
@@ -232,7 +239,7 @@ arquivo final
 | Texto em português | inspeção visual | 0 erros de grafia em 3/3 |
 | Diversidade | inspeção visual | as 3 visivelmente diferentes |
 | Zonas seguras (Stories) | inspeção visual | nada crítico nos 250 px de topo/base |
-| Aderência à paleta | amostragem de pixel | teal dominante ∈ família `#2C7A75`/`#3FA9A0` |
+| Aderência à paleta | amostragem de pixel | só `#2F646A`, `#63B5AF`, `#414141` e as neutras; proporção próxima de 70/20/10 (§4.2) — peça que parece "muito verde" está errada |
 | Runtime | rodar o script | `@google/genai` funciona sob Bun |
 
 **Benchmark contínuo.** Um conjunto de **10 briefs de referência** derivados de posts reais do feed (1 por tipo de conteúdo). Rodados a cada mudança de prompt ou de modelo. Critério de não-regressão: **≥ 8/10 com pelo menos uma das 3 variações aprovável sem refação**.
@@ -257,7 +264,7 @@ arquivo final
    │  GET  /health                                      │
    │                                                    │
    │  ┌────────── cérebro: gemini-3.6-flash ─────────┐  │
-   │  │ system = BRANDBOOK.md + voice.md + tokens    │  │
+   │  │ system = BRANDBOOK.md caps. 1,9,10,11,12,13,16│ │
    │  │ function calling (tools da seção 3.2)        │  │
    │  └───────────────────────────────────────────────┘  │
    │                                                    │
@@ -284,7 +291,7 @@ arquivo final
 ```
 em-marketing/
 ├── brand/                    ← o ativo central (Anexo A)
-│   ├── BRANDBOOK.md · tokens.json · voice.md · calendario.md
+│   ├── BRANDBOOK.md (normativo) · tokens.json · calendario.md · PENDENCIAS.md
 │   └── assets/logo-cor.png · logo-branco.png · fonts/
 ├── styles/                   ← 6 estilos, portados e corrigidos
 ├── src/
@@ -423,83 +430,33 @@ Pesquisa feita no feed do @emvidros (≈30 posts), no site emvidros.com.br, no l
 - **O que faz:** indústria + comércio de vidro plano. Fabrica **temperado** (INMETRO, 6/8/10 mm), **laminado** e **multilaminado**; vende espelhos, acessórios, ferragens e linha de perfis de alumínio
 - **Alcance:** 6 filiais no MA, PA e PI. Fábricas em **Raposa-MA** e **Imperatriz-MA**. Filiais citadas em posts: Angelim, Guajajaras, Imperatriz, Ananindeua
 - **Público nº 1: vidraceiros e serralheiros** (+10 mil parceiros) — é para eles o "Mês do Vidraceiro", o Dia do Serralheiro, os sorteios. Depois: arquitetos/projetistas e consumidor final
-- **Slogan:** **"Imagine EM Vidro"** — aparece em minúsculas discretas (`imagine em vidro`) no canto das peças editoriais
+- **Slogan:** **"Imagine EM Vidro"** — grafia travada pelo §2.2. A forma em minúsculas (`imagine em vidro`) que circula nas artes **está errada**
 - **Contato:** 0800 150 0103 · (98) 3131-4000 · contato@emvidros.com.br
 - **Marco atual:** 11 anos em 2026 — "11 anos em constante transformação"
 
-## A.2 Logo
-Único arquivo existente: `code/work/emvidros-ig-posts/EM Vidros - Oficial.png` (2273×1889, alpha).
+## A.2 – A.7 — superados pelo brandbook
 
-- **Símbolo:** monograma "EM" em barras — 3 barras horizontais empilhadas (E) fundidas a 3 barras inclinadas (M). Lê como **chapas de vidro empilhadas num cavalete**, que é literalmente o produto. Mark bom e ownable
-- **Gradiente:** teal claro no topo-esquerda → teal profundo na base-direita (`#5FA9A2` → `#2C7A75`)
-- **Wordmark:** "VIDROS" em sans geométrica bold, tracking largo, `#3D3D3D`
-- **Lockups em uso:** vertical (símbolo sobre "VIDROS"), horizontal, e símbolo isolado pequeno no topo das peças editoriais
-- **Gap:** só existe o PNG colorido. **Não há SVG nem versão branca/invertida** — e o estilo `premium-escuro` da skill antiga pedia uma branca que nunca existiu, então o gerador a inventava
+Estas seções descreviam logo, paleta, tipografia, três territórios visuais, tom de voz e calendário. **Todas foram substituídas por `brand/BRANDBOOK.md`** em 11/08/2026 e removidas daqui para não existirem duas normas concorrentes — foi exatamente essa duplicação que fez o repositório passar duas semanas instruindo o agente a produzir peça fora da marca.
 
-## A.3 Paleta
-A skill antiga usava `#00A99D`. **Está errado** — mais saturado e mais verde que o teal real. Valores amostrados do logo oficial e das artes:
+O que mudou:
 
-| Papel | Nome | Hex |
+| Eixo | Anexo A (29/07) | Brandbook (05/08) |
 |---|---|---|
-| Primária | Teal EM | `#2C7A75` |
-| Primária clara (gradiente do logo) | Teal Claro | `#5FA9A2` |
-| Acento (botões, pills) | Teal Vivo | `#3FA9A0` |
-| Profundo (títulos festivos, sombra) | Petróleo | `#1B5E63` |
-| Texto | Carvão | `#3D3D3D` |
-| Neutros | Branco / Cinza / Areia | `#FFFFFF` · `#F5F5F5` · `#F0EFEA` |
-| Fundo escuro | Quase-preto | `#0A0A0A` |
-| Suporte festivo | Prata / Azul-céu | `#C9CED1` · `#DCEAF2` |
+| Teal primário | `#2C7A75` | **`#2F646A`** |
+| Teal claro | `#5FA9A2` | **`#63B5AF`** |
+| Texto | `#3D3D3D` | **`#414141`** |
+| Acento / profundo | `#3FA9A0`, `#1B5E63` | não existem |
+| Títulos | Montserrat Bold/ExtraBold | **Poppins 600** — Montserrat rejeitada com medição (erro de 29–34% contra 6,2%) |
+| Corpo | Inter | **Poppins** |
+| Display emotivo | script decorativo e serifada genérica | **Playfair Display**, só em MARCA e GENTE |
+| Registros visuais | 3 territórios (Minimal, Festivo, Institucional) | **1 registro** — serifado sobre off-white texturizado — e 4 pilares de conteúdo |
+| Herói visual | objeto 3D de vidro translúcido teal | proibido pelo §1.3, "matéria antes de brilho" |
+| Imagem por IA | sem política | §8.2 proíbe representar produto, obra, fábrica ou pessoas |
+| Tom | persuasivo, elegante, caloroso, 🩵 de assinatura | **parceiro técnico**, direto, sem entusiasmo fabricado; 🩵 na lista negra |
+| Hashtags | 5–10 | **teto de 5** |
+| Calendário | 12 datas | **8**, filtradas pela trava do §12.4 |
 
-> **Regra:** o teal é sempre a cor de marca. Nenhuma peça usa outra cor dominante. Cores de suporte (coral, amarelo, rosa) só em datas comemorativas específicas (Páscoa, Dia das Mães) e nunca competem com o teal.
-
-## A.4 Tipografia
-Nenhum arquivo de fonte existe hoje — as fontes são só "dicas" no prompt e o gerador improvisa. O brandbook fixa a família e o repo passa a versionar os `.ttf`:
-- **Títulos:** Montserrat Bold/ExtraBold (o que mais se aproxima do wordmark "VIDROS")
-- **Corpo:** Inter ou Montserrat Regular/Medium
-- **Script decorativo:** só em peças festivas ("Parabéns, Imperatriz!", "Feliz Páscoa")
-- **Serifada:** só em peças editoriais/emotivas (Dia das Mães, Sexta-Feira Santa)
-
-## A.5 Os três territórios visuais
-O feed opera em três registros distintos. Saber **qual usar quando** é a decisão de design mais importante do agente.
-
-**A. Minimal / Editorial** ← *o preferido do usuário, e o mais próximo do Vivix*
-Fundo off-white/areia, muito respiro, tipografia grande e limpa, teal em 1–2 detalhes, logo pequeno no rodapé. Assinatura recorrente: **objeto 3D de vidro translúcido teal** como herói (coração de vidro no Dia das Mães, ferramentas de vidro no Dia do Vidraceiro, cubos e esferas). Textura de pontinhos e chevrons `>>>`. Referência Vivix: foto de ambiente real, crédito de projeto/fotógrafo em corpo minúsculo, wordmark discreto no canto.
-→ Educacional, produto, institucional sóbrio, datas emotivas.
-
-**B. Festivo / Comemorativo** ← *o terceiro estilo que o usuário mandou (174 anos de Imperatriz)*
-Fundo azul-claro texturizado, balões 3D cromados teal e prata, confete, numeral gigante com outline branco e sombra, script inclinado, cards de foto com pin de localização, silhueta de skyline no rodapé. Denso e caloroso, mas **sempre teal**.
-→ Aniversário de cidade, aniversário da empresa, feriados regionais, sorteios e promoções.
-
-**C. Institucional / Foto**
-Foto real da fábrica, da equipe ou de um porta-voz, com faixa de texto branco caixa-alta pesado por cima ("SUA CASA PRECISA DE SEGURANÇA"). Autêntico, sem stock.
-→ Bastidores, equipe, comunicados, prova social.
-
-## A.6 Tom de voz
-Recuperado do workflow legado (`.agents/workflows/post-emvidros.md`, passo 4) e **validado contra legendas reais** capturadas do feed.
-
-- **Tom:** persuasivo sem ser agressivo. Elegante, próximo, levemente formal mas leve e acessível
-- **Voz:** um especialista de confiança falando com o cliente — nunca uma marca impessoal
-- **Estrutura:** abertura impactante (1–2 linhas) → corpo com contexto/benefício (2–4 linhas) → CTA suave (1–2 linhas) → linha em branco → 5–10 hashtags
-- **Tamanho:** 50–100 palavras sem hashtags. Emojis com moderação, para pontuar blocos
-- **Marca registrada:** o coração teal 🩵. **Sempre** `#EMVidros` como primeira hashtag
-
-| Tipo | Abertura | Corpo | CTA |
-|---|---|---|---|
-| Institucional | Celebração e orgulho da trajetória | História, valores, conquistas | Agradecer clientes e parceiros |
-| Produto | Destaque técnico ou o problema que resolve | Especificações + benefícios tangíveis | Convite a orçamento |
-| Educacional | Pergunta provocativa ou dado curioso | Explicação clara e didática | Incentivar salvar/compartilhar |
-| Engajamento | Elemento humano ou bastidor | Narrativa leve e autêntica | Incentivar comentário |
-| Promocional | Urgência ou valor claro | Detalhes da oferta | CTA direto |
-| Data comemorativa | Reconhecimento da data | Mensagem de conexão/empatia | Desejo caloroso, sem CTA comercial |
-
-**Few-shots reais** (vão no `voice.md`):
-
-> *Aniversário de Imperatriz, 17/07/2026:* "Hoje o nosso abraço especial vai para Imperatriz, a nossa querida 'Princesa do Tocantins', que celebra com orgulho seus 174 anos! 🎉 / Uma terra acolhedora, de gente forte e de belezas únicas! Da imponência da Catedral de Fátima ao pôr do sol inesquecível na Beira Rio e na Praia do Cacau. Nós, da EM Vidros, temos a honra de fazer parte do crescimento e da história de cada lar e projeto desta cidade tão especial. / Parabéns, Imperatriz! Que o futuro seja sempre brilhante, repleto de progresso e conquistas. 🩵✨ / #EMVidros #Imperatriz174Anos #ImperatrizMA"
-
-> *Promoção, 19/05/2026:* "O Mês do Vidraceiro está na reta final, e o seu iPhone 16 pode estar a uma compra de distância! 📱✨ / Ainda dá tempo de participar da nossa comemoração exclusiva: a cada R$ 500 em compras na EM Vidros, você garante uma chance de levar para casa um iPhone 16 novinho e + brindes especiais. É o nosso jeito de celebrar a nossa parceria e o seu talento! / A promoção é válida apenas até o dia 30/05. […] Fale com nossos especialistas pelo link da bio! 👇"
-
-## A.7 Calendário editorial recorrente
-Seeds do scheduler (US-7): 18/05 Dia do Vidraceiro · "Mês do Vidraceiro" (maio, com sorteio) · 23/04 Dia do Serralheiro · 16/07 Aniversário de Imperatriz · aniversários das cidades das filiais (Ananindeua etc.) · Dia das Mães · Páscoa / Sexta-feira Santa · Tiradentes · Dia do Trabalho · Janeiro Branco · 08/03 Dia das Mulheres · aniversário da EM Vidros.
+O texto original está no git. As pendências abertas por essa reconciliação estão em `PENDENCIAS.md`.
 
 ---
 

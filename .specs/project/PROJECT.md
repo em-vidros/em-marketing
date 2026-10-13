@@ -3,11 +3,16 @@
 **Visão:** agente de marketing da EM Vidros no Telegram — pede-se um post em linguagem natural, o bot gera 3 variações de arte (Nano Banana 2), escreve legenda no tom da marca, registra no Linear e publica/agenda no Instagram (@emvidros).
 
 **Fonte de verdade dos requisitos:** `docs/prd.md` (não duplicar aqui).
+**Fonte de verdade da marca:** `brand/BRANDBOOK.md` — normativo, vence o PRD em qualquer divergência. O Anexo A do PRD foi superado em 11/08/2026.
 
 **Stack:** Bun 1.3 + Elysia 1.4.29 · `@google/genai@2.13.0` (`gemini-3.6-flash` cérebro, `gemini-3.1-flash-image` arte) · SQLite (`bun:sqlite`) · Linear API · Instagram Graph API (Facebook Login, Page token) · Docker + watchtower em srv-linx-01, subdomínio `mkt.emvidros.com.br`.
 
 **Restrições rígidas:**
-- Teal correto `#2C7A75` — nunca `#00A99D`
+- Paleta: só `#2F646A` (primária), `#63B5AF` (accent), `#414141` (texto) e as neutras do §4.1. `#00A99D`, `#32A999` e `#2C7A75` estão descontinuados
+- Tipografia: Poppins no sistema, Playfair Display só em headline de MARCA e GENTE (§5.2)
+- Todo post declara um pilar (§12.1) e datas comemorativas passam na trava do §12.4
+- IA não representa produto, obra, fábrica nem pessoas da EM Vidros (§8.2) — isso é foto real
+- Legenda e headline são validados em código contra o checklist do capítulo 16
 - Headline gerado ANTES da imagem (doc oficial Gemini)
 - Feed 1080×1350 / Stories 1080×1920, JPEG sRGB < 8 MB (pipeline resize+crop de 3.3)
 - Stories não têm legenda; `escrever_legenda` nunca roda com formato=stories

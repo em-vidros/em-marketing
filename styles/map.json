@@ -1,9 +1,9 @@
 {
-  "_comment": "Tipo de post → trio de variações (v1, v2, v3). O cérebro escolhe; o usuário pode sobrescrever.",
-  "data-comemorativa-regional": ["festivo-comemorativo", "minimal-editorial", "tipografico-bold"],
-  "dia-da-profissao": ["minimal-editorial", "festivo-comemorativo", "institucional-foto"],
-  "produto-tecnico": ["produto-3d", "minimal-editorial", "tipografico-bold"],
-  "educacional": ["tipografico-bold", "minimal-editorial", "produto-3d"],
-  "promocao-sorteio": ["festivo-comemorativo", "produto-3d", "tipografico-bold"],
-  "institucional-bastidor": ["institucional-foto", "minimal-editorial", "premium-escuro"]
+  "_comment": "Pilar (§12.1) → trio de variações geráveis por IA. O brandbook substituiu os 7 registros visuais por um sistema único; a variação entre v1/v2/v3 acontece nos eixos legítimos do sistema (registro tipográfico, fundo, textura, composição), nunca em 'looks' diferentes.",
+  "_foraDoMapa": "foto-real exige foto e nunca é gerado — ver §8.2 e styles/foto-real.md. PROVA e GENTE preferem foto real; quando não há foto, o agente deve pedir a foto antes de cair nestes trios.",
+
+  "PROVA": ["dado-numero", "tecnico-poppins", "cartela-rotulo"],
+  "AUTORIDADE": ["tecnico-poppins", "cartela-rotulo", "dado-numero"],
+  "GENTE": ["editorial-serifado", "cartela-rotulo", "tecnico-poppins"],
+  "MARCA": ["editorial-serifado", "faixa-teal", "dado-numero"]
 }

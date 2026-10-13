@@ -21,11 +21,26 @@ export async function publishingLimit(): Promise<number> {
   return json.data?.[0]?.quota_usage ?? 0;
 }
 
+/** Best-effort: o permalink é conveniência, a chave é o ig_media_id. */
+async function permalink(igMediaId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`${GRAPH}/${igMediaId}?fields=permalink&access_token=${TOKEN()}`);
+    return ((await res.json()) as any).permalink ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Publica uma imagem AGORA (o container expira em 24h — nunca criar no agendamento).
  * mediaType IMAGE leva caption; STORIES nunca (a API rejeita).
+ *
+ * `postId` é obrigatório de propósito: o registro em `publicacoes` acontece aqui,
+ * na única função que conhece o id da mídia, para que não exista caminho de
+ * publicação que esqueça de gravá-lo.
  */
 export async function publishImage(opts: {
+  postId: number;
   jpegPath: string;
   mediaType: "IMAGE" | "STORIES";
   caption?: string;
@@ -50,10 +65,13 @@ export async function publishImage(opts: {
     await Bun.sleep(60_000);
   }
 
-  const { id: postId } = await graph(`${IG_USER()}/media_publish`, {
+  const { id: igMediaId } = await graph(`${IG_USER()}/media_publish`, {
     creation_id: containerId,
   });
 
   db.query("UPDATE media SET expired = 1 WHERE id = ?").run(mediaId);
-  return postId;
+  db.query(
+    "INSERT INTO publicacoes (post_id, media_type, ig_media_id, permalink) VALUES (?, ?, ?, ?)",
+  ).run(opts.postId, opts.mediaType, igMediaId, await permalink(igMediaId));
+  return igMediaId;
 }

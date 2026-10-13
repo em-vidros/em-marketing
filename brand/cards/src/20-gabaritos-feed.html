@@ -1,0 +1,134 @@
+<!-- @dsCard group="Gabaritos" title="Gabaritos — Feed 1080×1350" -->
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="g1"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+  <filter id="g2"><feTurbulence type="fractalNoise" baseFrequency="0.05 0.9" numOctaves="4" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+</svg>
+
+<style>
+  /* Os gabaritos usam unidades de container (cqw): 1080 px = 100cqw.
+     Assim 84 px na especificação vira 7.78cqw e a proporção é exata em qualquer tela. */
+  .peca { container-type: inline-size; width: 100%; max-width: 340px; }
+  .art  { position: relative; aspect-ratio: 1080/1350; overflow: hidden; border-radius: 4px;
+          border: 1px solid var(--rule); background: #F0EFEA; }
+  .art .grao { position: absolute; inset: 0; filter: url(#g1); opacity: .09; mix-blend-mode: overlay; pointer-events: none; }
+  .art .papel { position: absolute; inset: 0; filter: url(#g2); opacity: .12; mix-blend-mode: multiply; pointer-events: none; }
+  .art .pad  { position: absolute; inset: 7.407cqw; display: flex; flex-direction: column; }  /* 80px */
+  .art .logo { position: absolute; right: 7.407cqw; bottom: 7.407cqw; width: 14cqw; }
+  .rot { font-size: 2.04cqw; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #2F646A; }
+  .tit { font-size: 7.0cqw;  font-weight: 600; letter-spacing: -.02em; line-height: 1.10; color: #414141; }
+  .sub { font-size: 3.9cqw;  font-weight: 500; line-height: 1.30; color: #414141; }
+  .cor { font-size: 2.7cqw;  font-weight: 400; line-height: 1.65; color: #6E6E6E; }
+  .dsp { font-family: 'Playfair Display', 'Iowan Old Style', Georgia, serif; font-size: 9.6cqw; font-weight: 500; line-height: 1.05; color: #2F646A; }
+  .spec { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
+  .spec b { color: var(--fg); font-weight: 600; }
+  .trio { display: grid; gap: 26px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+</style>
+
+<p class="eyebrow">Gabaritos</p>
+<h1>Feed — 1080 × 1350</h1>
+<p class="lead">Renderizados em proporção real, com grade, margem de 80 px, posição do logotipo e camada de grão já aplicadas. As medidas são as do capítulo 5.</p>
+
+<div class="trio">
+
+  <!-- 1. Capa de produto -->
+  <div>
+    <div class="peca"><div class="art">
+      <div style="position:absolute;inset:0;background:linear-gradient(180deg,#E4E1D8 0%,#F0EFEA 55%)"></div>
+      <div style="position:absolute;left:0;right:0;top:34%;height:34%;background:#D3D9D8"></div>
+      <div style="position:absolute;left:50%;top:51%;transform:translate(-50%,-50%);font-size:2.4cqw;color:#8A8A8A;letter-spacing:.1em">FOTO REAL DO PRODUTO</div>
+      <div class="grao"></div>
+      <div class="pad">
+        <div class="rot">Pronta entrega</div>
+        <div style="flex:1"></div>
+        <div class="tit">Box em temperado<br>8&nbsp;mm</div>
+        <div class="cor" style="margin-top:2.2cqw;max-width:62%">Tamanhos padronizados, disponíveis hoje nas seis unidades.</div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-oficial.svg" alt="">
+    </div></div>
+    <div class="spec"><b>1 · Capa de produto</b> — pilar PROVA<br>
+      Rótulo 24 px · título Poppins 600 / 76 px · corpo 30 px<br>
+      Foto real ocupando a faixa central · textura GRÃO 9%<br>
+      Logotipo 14% da largura, inferior direito</div>
+  </div>
+
+  <!-- 2. Dado técnico -->
+  <div>
+    <div class="peca"><div class="art" style="background:#2F646A">
+      <div class="grao" style="opacity:.12"></div>
+      <div class="pad">
+        <div class="rot" style="color:#A9CFCB">Especificação</div>
+        <div style="flex:1"></div>
+        <div style="font-size:17cqw;font-weight:600;color:#fff;line-height:.95;letter-spacing:-.03em">10<span style="font-size:7cqw;font-weight:500"> mm</span></div>
+        <div style="height:.5cqw;width:18cqw;background:#63B5AF;margin:3cqw 0"></div>
+        <div class="sub" style="color:#fff">Laminado para guarda-corpo</div>
+        <div class="cor" style="color:#C6DEDC;margin-top:1.8cqw;max-width:74%">Trinca e fica preso ao PVB. A norma pede laminado em altura.</div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-branca.svg" alt="">
+    </div></div>
+    <div class="spec"><b>2 · Dado técnico</b> — pilar AUTORIDADE<br>
+      Fundo <code>#2F646A</code> · número gigante como elemento gráfico<br>
+      Filete accent <code>#63B5AF</code> separando número e texto<br>
+      Logotipo na versão branca · nunca Playfair aqui</div>
+  </div>
+
+  <!-- 3. Citação / depoimento -->
+  <div>
+    <div class="peca"><div class="art">
+      <div class="papel"></div>
+      <div class="pad">
+        <div class="rot">Depoimento</div>
+        <div style="flex:1"></div>
+        <div class="dsp" style="font-size:7.4cqw;color:#414141">“Medi na segunda,<br>instalei na sexta.”</div>
+        <div style="height:.28cqw;width:11cqw;background:#63B5AF;margin:3.4cqw 0 2.4cqw"></div>
+        <div class="cor" style="font-size:2.5cqw">Serralheria em São Luís · cliente desde 2019</div>
+        <div style="height:5cqw"></div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-oficial.svg" alt="">
+    </div></div>
+    <div class="spec"><b>3 · Citação</b> — pilar GENTE<br>
+      Playfair Display 500 · aspas tipográficas curvas<br>
+      Textura PAPEL 16% · fundo off-white<br>
+      Crédito em Poppins 400 / 27 px, cinza médio</div>
+  </div>
+
+  <!-- 4. Data comemorativa -->
+  <div>
+    <div class="peca"><div class="art">
+      <div class="papel"></div>
+      <div class="pad" style="align-items:center;text-align:center;justify-content:center">
+        <div class="rot" style="color:#8A8A8A">18 de maio</div>
+        <div class="dsp" style="margin-top:3cqw">Dia do<br>Vidraceiro</div>
+        <div style="height:.28cqw;width:14cqw;background:#63B5AF;margin:4cqw 0"></div>
+        <div class="cor" style="max-width:70%">Quem transforma projeto em obra.</div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-oficial.svg" alt="">
+    </div></div>
+    <div class="spec"><b>4 · Data comemorativa</b> — pilar MARCA<br>
+      Playfair Display 500 / 104 px, centralizado<br>
+      Sem CTA · sem emoji · sem colagem · sem balão<br>
+      Uma frase de apoio, no máximo</div>
+  </div>
+
+  <!-- 5. Vaga / gente -->
+  <div>
+    <div class="peca"><div class="art">
+      <div style="position:absolute;left:0;right:0;top:0;height:52%;background:#CBD3D2"></div>
+      <div style="position:absolute;left:50%;top:26%;transform:translate(-50%,-50%);font-size:2.4cqw;color:#7C8A89;letter-spacing:.1em">FOTO REAL DA EQUIPE</div>
+      <div class="grao"></div>
+      <div class="pad">
+        <div style="flex:1"></div>
+        <div class="rot">Estamos contratando</div>
+        <div class="tit" style="font-size:6.2cqw;margin-top:1.6cqw">Produção, expedição<br>e qualidade</div>
+        <div class="cor" style="margin-top:2.2cqw;max-width:70%">Fábrica da Raposa. Não é preciso experiência em vidro — treinamos.</div>
+        <div style="margin-top:3cqw;display:inline-block;background:#2F646A;color:#fff;font-size:2.6cqw;font-weight:600;padding:1.6cqw 3cqw;border-radius:.6cqw;align-self:flex-start">Link na bio</div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-oficial.svg" alt="">
+    </div></div>
+    <div class="spec"><b>5 · Vaga / gente</b> — pilar GENTE<br>
+      Foto real ocupando a metade superior<br>
+      Único elemento com botão · raio 6 px, nunca pílula<br>
+      Poppins em tudo</div>
+  </div>
+
+</div>

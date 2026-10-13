@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import sharp from "sharp";
 import { readFileSync } from "node:fs";
-import tokens from "../../brand/tokens.json";
+import { tokens } from "../brand";
 
 export type Formato = "feed" | "stories";
 
@@ -18,8 +18,11 @@ function ai() {
   return _ai;
 }
 
+/** Arquivos oficiais do §3.5. O logo entra como reference image — fiel, nunca redesenhado. */
+const LOGO_FILE = { cor: "emvidros-oficial.png", branco: "emvidros-branca.png" } as const;
+
 function logoBase64(variant: "cor" | "branco"): { data: string; mime: string } {
-  const path = new URL(`../../brand/assets/logo-${variant}.png`, import.meta.url).pathname;
+  const path = new URL(`../../brand/assets/logo/${LOGO_FILE[variant]}`, import.meta.url).pathname;
   return { data: readFileSync(path).toString("base64"), mime: "image/png" };
 }
 

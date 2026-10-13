@@ -29,6 +29,7 @@ async function tick() {
       if (!jpegPath) throw new Error("Arquivo da arte não encontrado");
 
       const igId = await publishImage({
+        postId: item.post_id,
         jpegPath,
         mediaType: item.media_type,
         caption: item.media_type === "IMAGE" ? item.legenda : undefined,

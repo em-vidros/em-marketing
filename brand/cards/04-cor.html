@@ -1,0 +1,177 @@
+<!-- @dsCard group="Fundamentos" -->
+<meta charset="utf-8">
+<title>Cor — EM Vidros</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap');
+/* EM Vidros — Brandbook · base compartilhada dos cards
+   Copiada inline em cada card para mantê-los auto-contidos. */
+
+
+:root {
+  --teal: #2F646A;
+  --teal-l: #63B5AF;
+  --graf: #414141;
+  --off: #F0EFEA;
+  --areia: #E4E1D8;
+  --linha: #D8D5CE;
+  --cinza: #8A8A8A;
+  --atencao: #B4552E;
+
+  --bg: #F0EFEA;
+  --fg: #414141;
+  --card: #FFFFFF;
+  --muted: #8A8A8A;
+  --rule: #D8D5CE;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+    --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+  --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+}
+:root[data-theme="light"] {
+  --bg: #F0EFEA; --fg: #414141; --card: #FFFFFF;
+  --muted: #8A8A8A; --rule: #D8D5CE; --areia: #E4E1D8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: clamp(20px, 4vw, 44px);
+  background: var(--bg);
+  color: var(--fg);
+  /* Fallbacks geométricos: se o Google Fonts for bloqueado, a página ainda
+     cai numa sans e nunca numa serifada. */
+  font-family: Poppins, "Century Gothic", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--teal-l); margin: 0 0 10px;
+}
+
+h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+h2 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; }
+p  { margin: 0 0 14px; max-width: 68ch; }
+.lead { color: var(--muted); max-width: 62ch; margin-bottom: 4px; }
+
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; }
+
+/* tabelas — sempre roláveis, o body nunca rola na horizontal */
+.scroll { overflow-x: auto; margin: 0 0 18px; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+
+.box { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; }
+
+.yes, .no { border-left: 3px solid; padding: 14px 16px; border-radius: 0 6px 6px 0; background: var(--card); }
+.yes { border-color: var(--teal); }
+.no  { border-color: var(--atencao); }
+.yes .tag, .no .tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+.yes .tag { color: var(--teal); }
+.no .tag  { color: var(--atencao); }
+
+.note { font-size: 13px; color: var(--muted); border-left: 2px solid var(--rule); padding-left: 14px; margin: 18px 0; }
+</style>
+<div class="wrap">
+<p class="eyebrow">Capítulo 4</p>
+<h1>Cor</h1>
+<p class="lead">Todos os valores extraídos do arquivo oficial do logotipo — <code>EM Vidros - Logo 2026.svg</code>. Nada aqui foi escolhido por gosto.</p>
+
+<h2>Primárias</h2>
+<div class="grid g3">
+  <div>
+    <div style="background:#2F646A;height:110px;border:1px solid var(--rule);border-bottom:none;border-radius:6px 6px 0 0"></div>
+    <div class="box" style="border-radius:0 0 6px 6px;border-top:none">
+      <strong>Teal Profundo</strong><br>
+      <code>#2F646A</code> · rgb(47 100 106)<br>
+      <span style="color:var(--muted);font-size:12.5px">Primária. Título, destaque, fundo sólido institucional.</span>
+    </div>
+  </div>
+  <div>
+    <div style="background:#63B5AF;height:110px;border:1px solid var(--rule);border-bottom:none;border-radius:6px 6px 0 0"></div>
+    <div class="box" style="border-radius:0 0 6px 6px;border-top:none">
+      <strong>Teal Claro</strong><br>
+      <code>#63B5AF</code> · rgb(99 181 175)<br>
+      <span style="color:var(--muted);font-size:12.5px">Accent. Filete, ponto, palavra destacada, ícone.</span>
+    </div>
+  </div>
+  <div>
+    <div style="background:#414141;height:110px;border:1px solid var(--rule);border-bottom:none;border-radius:6px 6px 0 0"></div>
+    <div class="box" style="border-radius:0 0 6px 6px;border-top:none">
+      <strong>Grafite</strong><br>
+      <code>#414141</code> · rgb(65 65 65)<br>
+      <span style="color:var(--muted);font-size:12.5px">Texto corrido e wordmark.</span>
+    </div>
+  </div>
+</div>
+
+<h3>Gradiente oficial</h3>
+<div style="background:linear-gradient(135deg,#63B5AF,#2F646A);height:64px;border-radius:6px"></div>
+<p style="font-size:13px;color:var(--muted);margin-top:8px"><code>#63B5AF → #2F646A</code> — exclusivo do símbolo. Não aplicar em fundo, texto ou forma.</p>
+
+<h2>Neutras</h2>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(140px,1fr))">
+  <div><div style="background:#FFFFFF;border:1px solid var(--rule);height:64px;border-radius:5px"></div><div style="font-size:12px;margin-top:6px"><strong>Branco</strong><br><code>#FFFFFF</code></div></div>
+  <div><div style="background:#F0EFEA;border:1px solid var(--rule);height:64px;border-radius:5px"></div><div style="font-size:12px;margin-top:6px"><strong>Off-White</strong><br><code>#F0EFEA</code><br><span style="color:var(--teal-l)">fundo padrão</span></div></div>
+  <div><div style="background:#E4E1D8;height:64px;border:1px solid var(--rule);border-radius:5px"></div><div style="font-size:12px;margin-top:6px"><strong>Areia</strong><br><code>#E4E1D8</code></div></div>
+  <div><div style="background:#D8D5CE;height:64px;border:1px solid var(--rule);border-radius:5px"></div><div style="font-size:12px;margin-top:6px"><strong>Linha</strong><br><code>#D8D5CE</code></div></div>
+  <div><div style="background:#8A8A8A;height:64px;border:1px solid var(--rule);border-radius:5px"></div><div style="font-size:12px;margin-top:6px"><strong>Cinza Médio</strong><br><code>#8A8A8A</code></div></div>
+</div>
+
+<h2>Funcionais</h2>
+<div class="grid g2">
+  <div style="display:flex;gap:12px;align-items:center"><div style="background:#B4552E;width:56px;height:56px;border-radius:5px;flex:none"></div><div style="font-size:13px"><strong>Atenção</strong> <code>#B4552E</code><br><span style="color:var(--muted)">Comunicado de feriado ou alteração de funcionamento. Nunca decorativo.</span></div></div>
+  <div style="display:flex;gap:12px;align-items:center"><div style="background:#4A7C59;width:56px;height:56px;border-radius:5px;flex:none"></div><div style="font-size:13px"><strong>Sucesso</strong> <code>#4A7C59</code><br><span style="color:var(--muted)">Confirmação. Uso raro.</span></div></div>
+</div>
+
+<h2>Proporção — 70 / 20 / 10</h2>
+<div style="display:flex;height:44px;border-radius:5px;overflow:hidden;border:1px solid var(--rule)">
+  <div style="flex:70;background:#F0EFEA"></div>
+  <div style="flex:20;background:#414141"></div>
+  <div style="flex:10;background:#2F646A"></div>
+</div>
+<div style="display:flex;font-size:11.5px;color:var(--muted);margin-top:6px">
+  <div style="flex:70">70% neutro</div><div style="flex:20">20% grafite</div><div style="flex:10">10% teal</div>
+</div>
+<p class="note">Peça majoritariamente teal é exceção institucional, não padrão. Se a arte parece "muito verde", ela está errada.</p>
+
+<h2>Contraste</h2>
+<div class="scroll">
+<table>
+  <tr><th>Combinação</th><th>Razão</th><th>Situação</th></tr>
+  <tr><td><code>#414141</code> sobre <code>#F0EFEA</code></td><td>8,9:1</td><td>Aprovado em qualquer tamanho</td></tr>
+  <tr><td><code>#2F646A</code> sobre <code>#F0EFEA</code></td><td>5,6:1</td><td>Aprovado em qualquer tamanho</td></tr>
+  <tr><td><code>#FFFFFF</code> sobre <code>#2F646A</code></td><td>6,1:1</td><td>Aprovado em qualquer tamanho</td></tr>
+  <tr><td><code>#63B5AF</code> sobre <code>#F0EFEA</code></td><td>2,1:1</td><td style="color:var(--atencao)"><strong>Reprovado para texto.</strong> Só filete, forma e ícone</td></tr>
+  <tr><td><code>#8A8A8A</code> sobre <code>#F0EFEA</code></td><td>3,3:1</td><td>Só a partir de 18 pt / 24 px</td></tr>
+</table>
+</div>
+
+<h2>Descontinuados</h2>
+<div class="grid g2">
+  <div class="no"><span class="tag">Fora de norma</span>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px"><div style="background:#32A999;width:40px;height:40px;border-radius:4px;flex:none"></div><code>#32A999</code></div>
+    Teal do site <strong>emvidros.com.br</strong>. Deve virar <code>#2F646A</code> / <code>#63B5AF</code>.</div>
+  <div class="no"><span class="tag">Fora de norma</span>
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:8px"><div style="background:#00A99D;width:40px;height:40px;border-radius:4px;flex:none"></div><code>#00A99D</code></div>
+    Teal da skill <code>post-emvidros</code>. Nunca existiu no logotipo. Junto com <code>#3D3D3D</code>, descontinuado.</div>
+</div>
+</div>

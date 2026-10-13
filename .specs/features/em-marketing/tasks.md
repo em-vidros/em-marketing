@@ -1,14 +1,25 @@
 # Tasks (spec: docs/prd.md · design: PRD §3–4)
 
 ## F0 Brandbook
-- [ ] T0.1 `brand/BRANDBOOK.md` (Anexo A materializado)
-- [ ] T0.2 `brand/tokens.json` (paleta A.3, formatos, zonas seguras)
-- [ ] T0.3 `brand/voice.md` (A.6 + few-shots)
-- [ ] T0.4 `brand/calendario.md` (A.7 com datas/regras)
-- [ ] T0.5 Copiar logo oficial → `brand/assets/logo-cor.png`; produzir `logo-branco.png`
-- [ ] T0.6 Baixar Montserrat + Inter → `brand/assets/fonts/`
-- [ ] T0.7 Portar 6 estilos → `styles/` com correções (teal, logo, assinaturas visuais) e variantes 4:5/9:16
-- [ ] T0.8 Verificar gate: `grep -r '#00A99D\|code/personal'` vazio
+> Refeita em 11/08/2026. As tasks originais materializavam o Anexo A do PRD, que foi superado pelo brandbook canônico — ver `.specs/project/STATE.md` e `PENDENCIAS.md`.
+- [x] T0.1 `brand/BRANDBOOK.md` — brandbook canônico (Direção 2026 v1.0), não o resumo do Anexo A
+- [x] T0.2 `brand/tokens.json` — digesto legível por máquina do brandbook (paleta §4.1, tipografia §5, grade §6, textura §7, pilares §12, cadência §13)
+- [x] T0.3 ~~`brand/voice.md`~~ — **apagado**. A voz é o §9–§11 do brandbook, fatiado por `src/brand/index.ts`
+- [x] T0.4 `brand/calendario.md` — 8 datas, todas justificadas pela trava do §12.4
+- [x] T0.5 Logos oficiais → `brand/assets/logo/` (5 SVG + 2 PNG, incluindo a branca oficial)
+- [x] T0.6 ~~Montserrat + Inter~~ → **Poppins (400/500/600) + Playfair Display** em `brand/assets/fonts/` (§5.1)
+- [x] T0.7 `styles/` reescrito: 5 estilos geráveis dentro do registro único + `foto-real` documentado e não-gerável (§8.2); `map.json` passa a ser por pilar
+- [x] T0.8 Gate: `bun run check` verde (42 testes). O teste "nenhuma cor descontinuada sobrou como valor de cor" percorre a árvore de tokens e checa só o que **é** cor — `grep` daria falso positivo na lista `descontinuadas`, que cita os hexes legados de propósito. `grep -r 'code/personal' src styles brand` vazio.
+- [x] T0.9 Validador do capítulo 16 em `src/brand/validate.ts` + 42 testes
+
+## FA Alterações diretas (11/08/2026)
+> Quatro correções na base existente, autorizadas antes de qualquer grupo novo de features. Ver `.specs/project/STATE.md`.
+- [x] TA.1 Tabela `publicacoes` + `postId` obrigatório em `publishImage` — sem ela nenhuma métrica é atribuível a uma peça, e não há conserto retroativo
+- [x] TA.2 `src/art/validate.ts` — gate visual (dimensão, peso, matiz fora da paleta, proporção 70/20/10, zonas seguras do story). Limiares pendentes de calibração: PENDENCIAS.md §9
+- [x] TA.3 `status_do_mes` passa a propor pauta: buraco por pilar + datas do §12.4 na janela + fotos do banco
+- [x] TA.4 `src/fotos/` — banco de fotos reais (upload por Telegram, catalogação por visão, busca, `usar_foto`), a saída que a política do §8.2 exigia
+- [x] TA.5 `bunfig.toml` + `test/setup.ts`: um banco por execução de `bun test`
+- [x] TA.6 Gate: `bun run check` verde (86 testes, era 42)
 
 ## F1 Spike (bloqueante)
 - [ ] T1.1 `bun init` + deps (`@google/genai`, `sharp`, `elysia`)

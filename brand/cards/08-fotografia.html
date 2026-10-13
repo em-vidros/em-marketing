@@ -1,0 +1,159 @@
+<!-- @dsCard group="Fundamentos" -->
+<meta charset="utf-8">
+<title>Fotografia e imagem — EM Vidros</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap');
+/* EM Vidros — Brandbook · base compartilhada dos cards
+   Copiada inline em cada card para mantê-los auto-contidos. */
+
+
+:root {
+  --teal: #2F646A;
+  --teal-l: #63B5AF;
+  --graf: #414141;
+  --off: #F0EFEA;
+  --areia: #E4E1D8;
+  --linha: #D8D5CE;
+  --cinza: #8A8A8A;
+  --atencao: #B4552E;
+
+  --bg: #F0EFEA;
+  --fg: #414141;
+  --card: #FFFFFF;
+  --muted: #8A8A8A;
+  --rule: #D8D5CE;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+    --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+  --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+}
+:root[data-theme="light"] {
+  --bg: #F0EFEA; --fg: #414141; --card: #FFFFFF;
+  --muted: #8A8A8A; --rule: #D8D5CE; --areia: #E4E1D8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: clamp(20px, 4vw, 44px);
+  background: var(--bg);
+  color: var(--fg);
+  /* Fallbacks geométricos: se o Google Fonts for bloqueado, a página ainda
+     cai numa sans e nunca numa serifada. */
+  font-family: Poppins, "Century Gothic", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--teal-l); margin: 0 0 10px;
+}
+
+h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+h2 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; }
+p  { margin: 0 0 14px; max-width: 68ch; }
+.lead { color: var(--muted); max-width: 62ch; margin-bottom: 4px; }
+
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; }
+
+/* tabelas — sempre roláveis, o body nunca rola na horizontal */
+.scroll { overflow-x: auto; margin: 0 0 18px; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+
+.box { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; }
+
+.yes, .no { border-left: 3px solid; padding: 14px 16px; border-radius: 0 6px 6px 0; background: var(--card); }
+.yes { border-color: var(--teal); }
+.no  { border-color: var(--atencao); }
+.yes .tag, .no .tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+.yes .tag { color: var(--teal); }
+.no .tag  { color: var(--atencao); }
+
+.note { font-size: 13px; color: var(--muted); border-left: 2px solid var(--rule); padding-left: 14px; margin: 18px 0; }
+</style>
+<div class="wrap">
+<p class="eyebrow">Capítulo 8</p>
+<h1>Fotografia e imagem</h1>
+
+<div style="background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--teal);border-radius:0 6px 6px 0;padding:24px;margin-bottom:22px">
+  <div style="font-size:22px;font-weight:600;letter-spacing:-.01em;margin-bottom:8px">Foto real é o padrão.</div>
+  <div style="font-size:13.5px;color:var(--muted);max-width:64ch">Vidro é reflexo, transparência e refração — exatamente onde a geração por IA falha de um jeito que qualquer profissional do setor percebe em dois segundos. Um vidraceiro que vê um reflexo impossível numa peça da EM Vidros conclui, corretamente, que a empresa não fotografou a própria obra.</div>
+</div>
+
+<h2>Onde a IA é permitida</h2>
+<div class="grid g2">
+  <div class="yes"><span class="tag">Permitido</span>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li>Fundo abstrato e textura</li>
+      <li>Cenário conceitual e metafórico</li>
+      <li>Elemento gráfico não-fotográfico</li>
+      <li>Ilustração de data comemorativa sem produto</li>
+    </ul>
+  </div>
+  <div class="no"><span class="tag">Proibido</span>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li>Representar produto da EM Vidros</li>
+      <li>Representar obra entregue</li>
+      <li>Representar a fábrica ou o maquinário</li>
+      <li>Representar pessoas da empresa</li>
+      <li>Qualquer imagem lida como registro real</li>
+    </ul>
+  </div>
+</div>
+<p class="note"><strong>Teste único:</strong> se alguém pode olhar a imagem e acreditar que aquilo é uma obra, um produto ou uma pessoa da EM Vidros, ela precisa ser foto real.</p>
+
+<h2>Guia de foto própria</h2>
+<p style="font-size:13px;color:var(--muted)">Sem isto, a regra acima não é executável.</p>
+<div class="grid g2">
+  <div class="box"><div class="eyebrow">Luz</div>Natural difusa, <strong>de lado</strong>. Perto de abertura grande, nunca sol direto. Em fábrica, desligar o flash e apoiar em superfície. Nunca luz frontal direta: mata o vidro, que só se vê pelo que reflete.</div>
+  <div class="box"><div class="eyebrow">Ângulo</div>Ligeiramente fora do eixo — <strong>15° a 30°</strong> — para o vidro mostrar reflexo e profundidade. De frente, vidro transparente desaparece.</div>
+  <div class="box"><div class="eyebrow">Fundo</div>Limpo e distante. O que estiver atrás do vidro será visto através dele. <strong>Antes de fotografar, olhar o fundo, não a peça.</strong></div>
+  <div class="box"><div class="eyebrow">Enquadramento</div>Vertical, 4:5 ou 9:16. Sobra de espaço nas bordas para reenquadrar depois.</div>
+</div>
+
+<div class="grid g2" style="margin-top:14px">
+  <div class="yes"><span class="tag">Sempre fotografar</span>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li>Obra recém-instalada com o cliente no ambiente</li>
+      <li>Produto na prateleira com etiqueta legível</li>
+      <li>Fábrica em operação, com pessoas</li>
+      <li>Detalhe de ferragem e acabamento</li>
+      <li>Equipe trabalhando</li>
+    </ul>
+  </div>
+  <div class="no"><span class="tag">Nunca fotografar</span>
+    <ul style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li>Ambiente desarrumado ao fundo</li>
+      <li>Peça suja ou com digital</li>
+      <li>Pessoa sem EPI dentro da fábrica</li>
+      <li>Foto de foto ou de tela</li>
+      <li>Qualquer imagem com o logotipo distorcido</li>
+    </ul>
+  </div>
+</div>
+
+<h2>Tratamento</h2>
+<div class="grid g2">
+  <div class="yes"><span class="tag">Sim</span>Correção de cor fiel — o cliente compara com o que recebeu. Recorte de pessoa só com borda limpa.</div>
+  <div class="no"><span class="tag">Não</span>Saturar o teal do vidro para casar com a marca · preto esmagado (vidro vive nos meios-tons) · vinheta pesada, HDR ou filtro de aplicativo · recorte mal feito, que é pior que foto sem recorte.</div>
+</div>
+</div>
