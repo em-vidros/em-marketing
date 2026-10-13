@@ -10,9 +10,13 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "4.0.79",
+    "@ai-sdk/google": "4.0.94",
     "@google/genai": "2.13.0",
+    "ai": "7.0.138",
     "elysia": "1.4.29",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "zod": "4.6.7"
   },
   "trustedDependencies": [
     "@google/genai",

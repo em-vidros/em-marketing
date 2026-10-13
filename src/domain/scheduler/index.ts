@@ -52,7 +52,7 @@ export function listQueue() {
        FROM queue q JOIN posts p ON p.id = q.post_id
        WHERE q.status = 'pending' ORDER BY q.publish_at`,
     )
-    .all() as any[];
+    .all() as { id: number; media_type: "IMAGE" | "STORIES"; publish_at: string; brief: string | null }[];
 }
 
 export function cancelQueueItem(id: number): boolean {

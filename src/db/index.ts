@@ -22,6 +22,15 @@ CREATE TABLE IF NOT EXISTS posts (
   created_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Uma conversa com um bot. post_id é o post em andamento dela (agent/post.ts).
+CREATE TABLE IF NOT EXISTS conversas (
+  id TEXT PRIMARY KEY,
+  bot_id TEXT NOT NULL,
+  post_id INTEGER REFERENCES posts(id),
+  created_at TEXT DEFAULT (datetime('now')),
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id INTEGER NOT NULL REFERENCES posts(id),
