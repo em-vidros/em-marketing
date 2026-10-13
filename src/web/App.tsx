@@ -1,4 +1,5 @@
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
+import { Dialog } from "@base-ui/react/dialog";
+import { motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { apiConversas, useApi, useNomesDosBots } from "./api";
 import { auth } from "./auth";
@@ -12,7 +13,8 @@ import type { AcoesConversa } from "./componentes/menu/MenuConversa";
 import { type ModoPaleta, Paleta } from "./componentes/menu/Paleta";
 import { DicasProvider } from "./componentes/menu/Teclas";
 import { estadosDaEquipe } from "./equipe";
-import { MOLA, MOLA_REDUZIDA } from "./movimento";
+import { DESKTOP } from "./media";
+import { MOLA } from "./movimento";
 import { lerRota, navegar, useCaminho, type Rota } from "./rota";
 import { atalhoDoBot } from "./teclado/atalhos";
 import { useAtalho, useTeclado } from "./teclado/motor";
@@ -42,8 +44,6 @@ export function App() {
 
 const VAZIO: Vivo = { mensagens: [], respondendo: false };
 
-/** O breakpoint md do Tailwind: daqui para cima a barra lateral é fixa; abaixo, gaveta. */
-const DESKTOP = "(min-width: 48rem)";
 const CHAVE_BARRA = "barra-oculta";
 const lerBarraOculta = () => {
   try {
@@ -287,50 +287,22 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   );
 }
 
-/** A barra lateral no celular: entra pela esquerda sobre a conversa, que fica inerte. */
+/**
+ * A barra lateral no celular, num Dialog do Base UI: o fundo fica inerte, o Esc fecha e o foco
+ * volta para o botão de menu. Entra e sai pela esquerda (estilo.css, .gaveta).
+ */
 function Gaveta({ aberta, fechar, children }: { aberta: boolean; fechar: () => void; children: React.ReactNode }) {
-  const reduzir = useReducedMotion();
-  const painel = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!aberta) return;
-    const anterior = document.activeElement as HTMLElement | null;
-    painel.current?.querySelector<HTMLElement>("button, a")?.focus();
-    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && fechar();
-    window.addEventListener("keydown", aoTeclar);
-    return () => {
-      window.removeEventListener("keydown", aoTeclar);
-      anterior?.focus();
-    };
-  }, [aberta, fechar]);
-  const fora = reduzir ? { opacity: 0 } : { transform: "translateX(-100%)" };
   return (
-    <AnimatePresence>
-      {aberta && (
-        <div className="fixed inset-0 z-50 md:hidden">
-          <motion.div
-            aria-hidden="true"
-            onClick={fechar}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={MOLA_REDUZIDA}
-            className="absolute inset-0 bg-tinta/20"
-          />
-          <motion.div
-            ref={painel}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Menu"
-            initial={fora}
-            animate={{ opacity: 1, transform: "translateX(0%)" }}
-            exit={fora}
-            transition={reduzir ? MOLA_REDUZIDA : MOLA}
-            className="absolute inset-y-0 left-0 w-[min(85vw,300px)] shadow-[0_0_40px_rgb(15_13_10/0.12)]"
-          >
-            {children}
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
+    <Dialog.Root open={aberta} onOpenChange={(a) => !a && fechar()}>
+      <Dialog.Portal>
+        <Dialog.Backdrop className="gaveta-fundo fixed inset-0 z-50 bg-tinta/20 md:hidden" />
+        <Dialog.Popup
+          aria-label="Menu"
+          className="gaveta fixed inset-y-0 left-0 z-50 w-[min(85vw,300px)] shadow-[0_0_40px_rgb(15_13_10/0.12)] outline-none md:hidden"
+        >
+          {children}
+        </Dialog.Popup>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }

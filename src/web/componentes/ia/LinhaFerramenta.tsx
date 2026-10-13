@@ -56,16 +56,35 @@ export const COR_DO_ROTULO: Record<Fase, string> = {
   recusado: "text-tinta-3",
 };
 
-export function LinhaFerramenta({ passo }: { passo: Passo }) {
+/** O estado de um passo em palavras, para o leitor de tela: o ícone é decorativo. */
+export const FASE_FALADA: Record<Fase, string> = {
+  fazendo: "em andamento",
+  feito: "concluído",
+  falhou: "falhou",
+  esperando: "aguardando",
+  recusado: "recusado",
+};
+
+/** O estado falado, a menos que o rótulo já o diga depois dos dois-pontos ("Publicando: falhou"). */
+export const estadoFalado = (rotulo: string, fase: Fase) => (rotulo.includes(": ") ? null : FASE_FALADA[fase]);
+
+export function LinhaFerramenta({ passo, children }: { passo: Passo; children?: React.ReactNode }) {
+  const falado = estadoFalado(passo.rotulo, passo.estado);
   return (
-    <li className="sobe flex h-7 min-w-0 items-center gap-2">
-      <IconeDaFase fase={passo.estado} />
-      <span className={`flex-none text-[13px] font-medium ${COR_DO_ROTULO[passo.estado]}`}>{passo.rotulo}</span>
-      {passo.detalhe && (
-        <span className="inline-flex h-5.5 min-w-0 items-center truncate rounded-[6px] bg-ativo px-1.5 text-xs text-tinta-2">
-          <span className="truncate">{passo.detalhe}</span>
+    <li className="sobe flex min-w-0 flex-col gap-2">
+      <div className="flex h-7 min-w-0 items-center gap-2">
+        <IconeDaFase fase={passo.estado} />
+        <span className={`min-w-0 truncate text-[13px] font-medium ${COR_DO_ROTULO[passo.estado]}`}>
+          {passo.rotulo}
+          {falado && <span className="sr-only">, {falado}</span>}
         </span>
-      )}
+        {passo.detalhe && (
+          <span className="inline-flex h-5.5 min-w-0 items-center truncate rounded-[6px] bg-ativo px-1.5 text-xs text-tinta-2">
+            <span className="truncate">{passo.detalhe}</span>
+          </span>
+        )}
+      </div>
+      {children}
     </li>
   );
 }

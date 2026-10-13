@@ -263,6 +263,25 @@ a.linha:focus-visible {
   transition: none;
 }
 
+/* A gaveta do celular entra e sai pela esquerda; o Base UI espera o fim da transição para desmontar. */
+.gaveta {
+  transition: transform 350ms var(--ease-saida);
+}
+.gaveta[data-starting-style],
+.gaveta[data-ending-style] {
+  transform: translateX(-100%);
+}
+.gaveta[data-ending-style] {
+  transition-duration: 250ms;
+}
+.gaveta-fundo {
+  transition: opacity 200ms ease-out;
+}
+.gaveta-fundo[data-starting-style],
+.gaveta-fundo[data-ending-style] {
+  opacity: 0;
+}
+
 .linha-paleta[data-selected="true"]::before {
   content: "";
   position: absolute;
@@ -274,6 +293,14 @@ a.linha:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .gaveta {
+    transition-property: opacity;
+  }
+  .gaveta[data-starting-style],
+  .gaveta[data-ending-style] {
+    transform: none;
+    opacity: 0;
+  }
   .menu-popup[data-starting-style],
   .menu-popup[data-ending-style],
   .dica[data-starting-style],

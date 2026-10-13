@@ -1,12 +1,11 @@
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 import type { Peca, Pilar, StatusPost } from "../../db";
 import { useApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
+import { PainelLateral } from "../componentes/PainelLateral";
 import { dia, FORMATO, PILARES, STATUS_POST } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
-import { MOLA, MOLA_REDUZIDA } from "../movimento";
 import { aoClicarLink } from "../rota";
 
 type Vista = "grade" | "lista";
@@ -85,7 +84,6 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   const [status, setStatus] = useState<StatusPost | null>(null);
   const [aberta, setAberta] = useState<number | null>(null);
   const origem = useRef<HTMLElement | null>(null);
-  const reduzir = useReducedMotion();
 
   const pecas = carga.estado === "pronto" ? carga.dados : [];
   const visiveis = filtrar(pecas, useDeferredValue(busca), pilar, status);
@@ -124,7 +122,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
               onChange={(e) => setBusca(e.target.value)}
               placeholder="Buscar headline, legenda ou tema"
               autoComplete="off"
-              className="order-last w-full min-w-0 rounded-full border border-borda-campo bg-superficie px-4 py-2 text-base outline-none focus-visible:outline-2 focus-visible:outline-tinta sm:order-none sm:w-[280px] sm:text-sm"
+              className="order-last w-full min-w-0 rounded-full border border-borda-campo bg-superficie px-4 py-2 text-base sm:order-none sm:w-[280px] sm:text-sm"
             />
             <Segmentado tipo="alternar" rotulo="Visualização" opcoes={VISTAS} valor={vista} aoMudar={setVista} />
           </header>
@@ -233,90 +231,65 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
           )}
         </div>
       </main>
-      <AnimatePresence>
-        {selecionada && <Detalhe key="detalhe" peca={selecionada} reduzir={!!reduzir} fechar={fechar} />}
-      </AnimatePresence>
+      <PainelLateral aberto={!!selecionada} rotulo="Peça" fechar={fechar} className="flex flex-col">
+        {selecionada && <Detalhe peca={selecionada} fechar={fechar} />}
+      </PainelLateral>
     </div>
   );
 }
 
-/** Coluna à direita no desktop; no celular cobre a tela. Entra e sai pela direita, como o painel de tarefa da conversa. */
-function Detalhe({ peca: p, reduzir, fechar }: { peca: Peca; reduzir: boolean; fechar: () => void }) {
-  const fora = reduzir ? { opacity: 0 } : { opacity: 0, transform: "translateX(24px)" };
+function Detalhe({ peca: p, fechar }: { peca: Peca; fechar: () => void }) {
   const fecharRef = useRef<HTMLButtonElement>(null);
   useEffect(() => fecharRef.current?.focus({ preventScroll: true }), []);
-  useEffect(() => {
-    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && fechar();
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [fechar]);
 
   return (
     <>
-      <motion.div
-        aria-hidden="true"
+    <div className="flex items-center gap-2 px-4 pt-3 pb-2">
+      <span className="mr-auto text-xs text-tinta-3">{[detalheDa(p), STATUS_POST[p.status].rotulo].filter(Boolean).join(" · ")}</span>
+      <button
+        ref={fecharRef}
+        type="button"
         onClick={fechar}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={MOLA_REDUZIDA}
-        className="fixed inset-0 z-30 bg-tinta/20 lg:hidden"
-      />
-      <motion.aside
-        aria-label="Peça"
-        initial={fora}
-        animate={{ opacity: 1, transform: "translateX(0px)" }}
-        exit={fora}
-        transition={reduzir ? MOLA_REDUZIDA : MOLA}
-        className="fixed inset-y-0 right-0 z-40 flex w-full max-w-[420px] flex-col border-l border-linha bg-painel lg:static lg:z-auto lg:w-[400px] lg:flex-none"
+        aria-label="Fechar"
+        className="pressiona -mr-1.5 grid size-10 cursor-pointer place-items-center rounded-full text-tinta-2 hover:bg-hover"
       >
-        <div className="flex items-center gap-2 px-4 pt-3 pb-2">
-          <span className="mr-auto text-xs text-tinta-3">{[detalheDa(p), STATUS_POST[p.status].rotulo].filter(Boolean).join(" · ")}</span>
-          <button
-            ref={fecharRef}
-            type="button"
-            onClick={fechar}
-            aria-label="Fechar"
-            className="pressiona -mr-1.5 grid size-10 cursor-pointer place-items-center rounded-full text-tinta-2 hover:bg-hover"
-          >
-            <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-              <path d="M3 3l8 8M11 3l-8 8" />
-            </svg>
-          </button>
-        </div>
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pb-6">
-          <h2 className="text-lg/snug font-semibold tracking-[-0.01em] text-balance">{p.headline ?? "Peça sem headline"}</h2>
-          {p.artes.length > 0 ? (
-            <ul aria-label="Artes" className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1">
-              {p.artes.map((url, i) => (
-                <li key={url} className="relative w-[58%] flex-none snap-start">
-                  <Capa url={url} headline={null} className="w-full rounded-item" />
-                  {i === 0 && p.artes.length > 1 && (
-                    <span className="absolute top-2 left-2 rounded-full bg-superficie/90 px-2 py-0.5 text-[11px] font-medium">Escolhida</span>
-                  )}
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <p className="text-tinta-3">Esta peça ainda não tem arte.</p>
-          )}
-          <Legenda texto={p.legenda} />
-          {p.tema && (
-            <p className="text-[13px] text-tinta-3">
-              Tema <span className="text-tinta-2">{p.tema}</span>
-            </p>
-          )}
-          {p.conversaId && (
-            <a
-              href={`/c/${encodeURIComponent(p.conversaId)}`}
-              onClick={aoClicarLink}
-              className="pressiona self-start rounded-full bg-tinta px-4 py-2 font-medium text-sobre-tinta"
-            >
-              Abrir a conversa
-            </a>
-          )}
-        </div>
-      </motion.aside>
+        <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+          <path d="M3 3l8 8M11 3l-8 8" />
+        </svg>
+      </button>
+    </div>
+    <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-4 pb-6">
+      <h2 className="text-lg/snug font-semibold tracking-[-0.01em] text-balance">{p.headline ?? "Peça sem headline"}</h2>
+      {p.artes.length > 0 ? (
+        <ul aria-label="Artes" className="-mx-4 flex snap-x snap-mandatory scroll-px-4 gap-2.5 overflow-x-auto overscroll-x-contain px-4 pb-1">
+          {p.artes.map((url, i) => (
+            <li key={url} className="relative w-[58%] flex-none snap-start">
+              <Capa url={url} headline={null} className="w-full rounded-item" />
+              {i === 0 && p.artes.length > 1 && (
+                <span className="absolute top-2 left-2 rounded-full bg-superficie/90 px-2 py-0.5 text-[11px] font-medium">Escolhida</span>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-tinta-3">Esta peça ainda não tem arte.</p>
+      )}
+      <Legenda texto={p.legenda} />
+      {p.tema && (
+        <p className="text-[13px] text-tinta-3">
+          Tema <span className="text-tinta-2">{p.tema}</span>
+        </p>
+      )}
+      {p.conversaId && (
+        <a
+          href={`/c/${encodeURIComponent(p.conversaId)}`}
+          onClick={aoClicarLink}
+          className="pressiona self-start rounded-full bg-tinta px-4 py-2 font-medium text-sobre-tinta"
+        >
+          Abrir a conversa
+        </a>
+      )}
+    </div>
     </>
   );
 }

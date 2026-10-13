@@ -35,7 +35,7 @@ export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar
             </Dialog.Close>
           </div>
           <div className="px-4 pb-2">
-            <label className="flex h-10 items-center gap-2 rounded-item bg-tinta/5 px-3">
+            <label className="flex h-10 items-center gap-2 rounded-item bg-tinta/5 px-3 has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-offset-2 has-[input:focus-visible]:outline-tinta">
               <span className="sr-only">Buscar atalho</span>
               <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="flex-none text-tinta-3">
                 <circle cx="7" cy="7" r="4.75" />

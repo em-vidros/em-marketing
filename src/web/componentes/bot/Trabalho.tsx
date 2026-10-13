@@ -3,7 +3,7 @@ import { useCallback, useEffect, useId, useState, type ReactNode } from "react";
 import type { StatusTarefa, TrabalhoDoBot } from "../../../agent/tarefas";
 import { pegar, useApi, useNomesDosBots } from "../../api";
 import { aoClicarLink } from "../../rota";
-import { imagensEm, passosDe, type BotId, type Conversa, type Fase, type ResumoTarefa, type Tarefa } from "../../tipos";
+import { type BotId, type Conversa, type Fase, type ResumoTarefa, type Tarefa } from "../../tipos";
 import { Avatar } from "../Avatar";
 import { atividadeDe } from "../ia/atividade";
 import { IconeDaFase } from "../ia/LinhaFerramenta";
@@ -11,7 +11,7 @@ import { Pensando } from "../ia/Pensando";
 import { Chevron, Raciocinio } from "../ia/Raciocinio";
 import { Markdown } from "../Markdown";
 import { dataCurta } from "../peca";
-import { Passos } from "../Passos";
+import { comArtes, Passos, trechosDe } from "../Passos";
 
 const STATUS: Record<StatusTarefa, { rotulo: string; fase: Fase }> = {
   na_fila: { rotulo: "Na fila", fase: "esperando" },
@@ -79,33 +79,14 @@ function Transcricao({ tarefa }: { tarefa: Tarefa }) {
           </div>
         ) : (
           <div key={m.id} className="flex flex-col gap-3">
-            {m.parts.map((p, i) => {
+            {trechosDe(m.parts).map((t) => {
+              if (t.tipo === "passos") return <Passos key={t.chave} passos={t.passos} extra={comArtes} />;
+              const p = t.parte;
               const aoVivo = noAr && m === ultima && "state" in p && p.state === "streaming";
-              if (p.type === "reasoning") return <Raciocinio key={i} texto={p.text} ativo={aoVivo} />;
+              if (p.type === "reasoning") return <Raciocinio key={t.chave} texto={p.text} ativo={aoVivo} />;
               if (p.type === "text")
-                return p.text.trim() ? <Markdown key={i} texto={p.text} digitando={aoVivo} className="gap-2.5 text-[13px]/relaxed" /> : null;
-              const [passo] = passosDe({ ...m, parts: [p] });
-              if (!passo) return null;
-              const imagens = passo.estado === "feito" ? imagensEm(passo.saida) : [];
-              return (
-                <div key={i} className="flex flex-col gap-2">
-                  <Passos passos={[passo]} />
-                  {imagens.length > 0 && (
-                    <div className="grid max-w-md grid-cols-3 gap-2">
-                      {imagens.map((src, n) => (
-                        <a key={src} href={src} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-item">
-                          <img
-                            src={src}
-                            alt={`Arte ${n + 1}, abre em outra aba`}
-                            loading="lazy"
-                            className="aspect-[4/5] w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10"
-                          />
-                        </a>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
+                return p.text.trim() ? <Markdown key={t.chave} texto={p.text} digitando={aoVivo} className="gap-2.5 text-[13px]/relaxed" /> : null;
+              return null;
             })}
           </div>
         ),

@@ -255,13 +255,21 @@ export function Barra({
 
       <div className="flex flex-col gap-px px-2.5">
         <Dica rotulo="Atividade" atalho="ir-atividade">
-          <a href="/atividade" onClick={(e) => (aoClicarLink(e), aoNavegar())} className={`${linkDe(telaAtual === "/atividade")} justify-between`}>
+          <a
+            href="/atividade"
+            aria-current={telaAtual === "/atividade" ? "page" : undefined}
+            onClick={(e) => (aoClicarLink(e), aoNavegar())}
+            className={`${linkDe(telaAtual === "/atividade")} justify-between`}>
             Atividade
             {emAtividade > 0 && <span className="tabular font-mono text-xs text-tinta">{emAtividade}</span>}
           </a>
         </Dica>
         <Dica rotulo="Biblioteca" atalho="ir-biblioteca">
-          <a href="/biblioteca" onClick={(e) => (aoClicarLink(e), aoNavegar())} className={linkDe(telaAtual === "/biblioteca")}>
+          <a
+            href="/biblioteca"
+            aria-current={telaAtual === "/biblioteca" ? "page" : undefined}
+            onClick={(e) => (aoClicarLink(e), aoNavegar())}
+            className={linkDe(telaAtual === "/biblioteca")}>
             Biblioteca
           </a>
         </Dica>

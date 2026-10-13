@@ -1,7 +1,7 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useApi, useNomesDosBots } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
@@ -12,13 +12,14 @@ import { atividadeDe } from "../componentes/ia/atividade";
 import { Pensando } from "../componentes/ia/Pensando";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
+import { PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
-import { Passos } from "../componentes/Passos";
+import { Passos, trechosDe } from "../componentes/Passos";
 import type { EstadoBot } from "../equipe";
 import { MOLA, MOLA_REDUZIDA } from "../movimento";
 import { navegar } from "../rota";
 import { ehCampo, useAtalho } from "../teclado/motor";
-import { ehAprovacao, ehDelegacao, passosDe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao } from "../tipos";
+import { ehAprovacao, ehDelegacao, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao } from "../tipos";
 
 export interface Vivo {
   mensagens: readonly Mensagem[];
@@ -175,16 +176,10 @@ function Chat({
     origem.current = de;
     setPainel((atual) => (atual === tarefaId ? null : tarefaId));
   }
-  function fechar() {
+  const fechar = useCallback(() => {
     setPainel(null);
     origem.current?.focus();
-  }
-  useEffect(() => {
-    if (!painel) return;
-    const aoTeclar = (e: KeyboardEvent) => e.key === "Escape" && fechar();
-    window.addEventListener("keydown", aoTeclar);
-    return () => window.removeEventListener("keydown", aoTeclar);
-  }, [painel]);
+  }, []);
 
   function enviar(t: string) {
     if (nova && chat.messages.length === 0) navegar(`/c/${id}`, { substituir: true });
@@ -264,17 +259,21 @@ function Chat({
                     {texto(m)}
                   </div>
                 ) : (
-                  m.parts.map((p, i) => (
-                    <ParteDoChefe
-                      key={i}
-                      parte={p}
-                      noAr={respondendo && m === ultima}
-                      painel={painel}
-                      abrir={abrir}
-                      responder={responder}
-                      respondidas={respondidas.current}
-                    />
-                  ))
+                  trechosDe(m.parts, ehPassoSolto).map((t) =>
+                    t.tipo === "passos" ? (
+                      <Passos key={t.chave} passos={t.passos} className="text-sm" />
+                    ) : (
+                      <ParteDoChefe
+                        key={t.chave}
+                        parte={t.parte}
+                        noAr={respondendo && m === ultima}
+                        painel={painel}
+                        abrir={abrir}
+                        responder={responder}
+                        respondidas={respondidas.current}
+                      />
+                    ),
+                  )
                 )}
               </motion.div>
             ))}
@@ -305,42 +304,10 @@ function Chat({
           parar={() => chat.stop()}
         />
       </main>
-      <AnimatePresence>
-        {painel && (
-          <Painel key="painel" reduzir={!!reduzir} fechar={fechar}>
-            <PainelTarefa tarefaId={painel} parte={delegacoes.get(painel)} fechar={fechar} />
-          </Painel>
-        )}
-      </AnimatePresence>
+      <PainelLateral aberto={!!painel} rotulo="Tarefa" fechar={fechar}>
+        {painel && <PainelTarefa tarefaId={painel} parte={delegacoes.get(painel)} fechar={fechar} />}
+      </PainelLateral>
     </div>
-  );
-}
-
-/** Coluna à direita no desktop; no celular, cobre a tela e entra pela direita, por onde sai. */
-function Painel({ children, reduzir, fechar }: { children: React.ReactNode; reduzir: boolean; fechar: () => void }) {
-  const fora = reduzir ? { opacity: 0 } : { opacity: 0, transform: "translateX(24px)" };
-  return (
-    <>
-      <motion.div
-        aria-hidden="true"
-        onClick={fechar}
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={MOLA_REDUZIDA}
-        className="fixed inset-0 z-30 bg-tinta/20 lg:hidden"
-      />
-      <motion.aside
-        aria-label="Tarefa"
-        initial={fora}
-        animate={{ opacity: 1, transform: "translateX(0px)" }}
-        exit={fora}
-        transition={reduzir ? MOLA_REDUZIDA : MOLA}
-        className="fixed inset-y-0 right-0 z-40 w-full max-w-[420px] border-l border-linha bg-painel lg:static lg:z-auto lg:w-[400px] lg:flex-none"
-      >
-        {children}
-      </motion.aside>
-    </>
   );
 }
 
@@ -368,9 +335,11 @@ function ParteDoChefe({
   if (ehDelegacao(parte)) return <CartaoTarefa parte={parte as ParteDelegacao} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
   if (ehAprovacao(parte))
     return <CartaoAprovacao parte={parte} respondida={parte.state === "approval-requested" && respondidas.has(parte.approval.id)} responder={responder} />;
-  const [passo] = passosDe({ id: "", role: "assistant", parts: [parte] });
-  return passo ? <Passos passos={[passo]} className="text-sm" /> : null;
+  return null;
 }
+
+/** As tools do Chefe que não têm cartão próprio viram passos. */
+const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p);
 
 /** O transporte joga o corpo da resposta como mensagem; o servidor manda {erro}. */
 function lerErro(e: Error): string {

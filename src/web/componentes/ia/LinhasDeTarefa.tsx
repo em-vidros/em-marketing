@@ -4,6 +4,7 @@
  * ativo, selo de feito ou de falha, e o tempo de cada passo em mono.
  */
 import type { Fase } from "../../tipos";
+import { estadoFalado } from "./LinhaFerramenta";
 
 export interface LinhaDeTarefa {
   id: string;
@@ -96,7 +97,10 @@ export function LinhasDeTarefa({ linhas, className = "" }: { linhas: readonly Li
       {linhas.map((l, i) => (
         <li key={l.id} className="sobe flex h-11 min-w-0 items-center gap-2.5 border-t border-linha px-3.5 first:border-t-0">
           <Indicador estado={l.estado} numero={i + 1} />
-          <span className={`min-w-0 flex-1 truncate text-[13px] font-medium ${COR_DO_ROTULO[l.estado]}`}>{l.rotulo}</span>
+          <span className={`min-w-0 flex-1 truncate text-[13px] font-medium ${COR_DO_ROTULO[l.estado]}`}>
+            {l.rotulo}
+            {estadoFalado(l.rotulo, l.estado) && <span className="sr-only">, {estadoFalado(l.rotulo, l.estado)}</span>}
+          </span>
           {l.tempo && <span className="tabular flex-none font-mono text-xs text-tinta-3">{l.tempo}</span>}
         </li>
       ))}
