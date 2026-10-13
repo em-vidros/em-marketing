@@ -2,6 +2,11 @@ name: deploy
 on:
   push:
     branches: [main]
+    # brand/ e styles/ ficam de fora: entram na imagem e são lidos em runtime
+    paths-ignore:
+      - 'docs/**'
+      - '.specs/**'
+      - 'README.md'
 
 jobs:
   build-and-deploy:
@@ -16,6 +21,8 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # O estágio `verificar` do Dockerfile roda typecheck e as dez suítes; imagem
+      # vermelha não chega a existir, então não há o que empurrar nem o que subir.
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -23,5 +30,6 @@ jobs:
           tags: ghcr.io/em-vidros/em-marketing:latest
       - name: Trigger watchtower
         run: |
-          curl -fsS -X POST http://127.0.0.1:8080/v1/update \
-            -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}"
+          curl -fsS -X POST --max-time 90 \
+            -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}" \
+            http://watchtower-prod:8080/v1/update

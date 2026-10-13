@@ -1,6 +1,6 @@
 # em-marketing
 
-**Visão:** agente de marketing da EM Vidros no Telegram — pede-se um post em linguagem natural, o bot gera 3 variações de arte (Nano Banana 2), escreve legenda no tom da marca, registra no Linear e publica/agenda no Instagram (@emvidros).
+**Visão:** fábrica de conteúdo da EM Vidros num site com login. Pede-se um post em linguagem natural, os agentes geram 3 variações de arte (Nano Banana 2) e a legenda no tom da marca, a pessoa aprova e baixa pelo site, e o trabalho fica registrado no Linear. Publicar no Instagram é manual. Até 16/09/2026 a visão era um bot no Telegram; o canal mudou e o código ainda é o antigo.
 
 **Fonte de verdade dos requisitos:** `docs/prd.md` (não duplicar aqui).
 **Fonte de verdade da marca:** `brand/BRANDBOOK.md` — normativo, vence o PRD em qualquer divergência. O Anexo A do PRD foi superado em 11/08/2026.
