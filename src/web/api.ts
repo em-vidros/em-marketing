@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
 import type { ConfigBot } from "../agent/config";
+import type { PostPronto, Reagendado } from "../agent/fila";
+import type { TipoMidia } from "../db";
 import { BOT_IDS, BOTS, type BotId } from "./bots";
 import type { ApiConversas } from "./componentes/menu/conversas";
 import { navegar } from "./rota";
@@ -37,6 +40,27 @@ export const apiConversas: ApiConversas = {
   apagar: async (id) => void (await pedir(`/api/conversas/${encodeURIComponent(id)}`, { method: "DELETE" })),
   restaurar: async (id) => (await pedir(`/api/conversas/${encodeURIComponent(id)}/restaurar`, { method: "POST" })).json() as Promise<Conversa>,
 };
+
+const comCorpo = async <T>(caminho: string, method: string, corpo?: unknown): Promise<T> =>
+  (await pedir(caminho, { method, body: corpo === undefined ? undefined : JSON.stringify(corpo) })).json() as Promise<T>;
+const semCorpo = async (caminho: string, method: string) => void (await pedir(caminho, { method }));
+
+/** As rotas do calendário (.specs/project/CALENDARIO.md, "API"). Horários em epoch ms. */
+export const apiCalendario = {
+  itens: (de: Dia, ate: Dia, sinal?: AbortSignal) => pegar<ItemCalendario[]>(`/api/calendario?de=${de}&ate=${ate}`, sinal),
+  criarPauta: (p: Partial<NovaPauta> & Pick<NovaPauta, "dia" | "titulo">) => comCorpo<ItemPauta>("/api/pautas", "POST", p),
+  mudarPauta: (id: number, mudanca: Partial<NovaPauta>) => comCorpo<ItemPauta>(`/api/pautas/${id}`, "PATCH", mudanca),
+  apagarPauta: (id: number) => semCorpo(`/api/pautas/${id}`, "DELETE"),
+  restaurarPauta: (id: number) => comCorpo<ItemPauta>(`/api/pautas/${id}/restaurar`, "POST"),
+  conversaDaPauta: (id: number) => comCorpo<ConversaDaPauta>(`/api/pautas/${id}/conversa`, "POST"),
+  prontos: () => pegar<PostPronto[]>("/api/posts/prontos"),
+  agendar: (postId: number, midia: TipoMidia, publicaEm: number) => comCorpo<ItemAgendado>("/api/fila", "POST", { postId, midia, publicaEm }),
+  reagendar: (filaId: number, publicaEm: number) => comCorpo<Reagendado>(`/api/fila/${filaId}`, "PATCH", { publicaEm }),
+  cancelar: (filaId: number) => semCorpo(`/api/fila/${filaId}`, "DELETE"),
+  restaurarAgendado: (filaId: number) => comCorpo<ItemAgendado>(`/api/fila/${filaId}/restaurar`, "POST"),
+};
+
+export type ApiCalendario = typeof apiCalendario;
 
 export type Carga<T> = { estado: "carregando" } | { estado: "pronto"; dados: T } | { estado: "erro"; erro: ErroDeApi | Error };
 
