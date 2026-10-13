@@ -5,7 +5,7 @@ import type { UIMessage } from "ai";
 import { abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa, type Conversa } from "../agent/conversas";
 import type { Modelo } from "../agent/models";
 import { tarefasDaConversa, type TrabalhoDoBot } from "../agent/tarefas";
-import { db, type Agendamento, type Agora, type Historico, type Peca } from "../db";
+import { db, newMediaId, type Agendamento, type Agora, type Historico, type Peca } from "../db";
 import { rotas } from "./rotas";
 
 /** Modelo que falha o teste se for chamado: nenhuma destas rotas deve chegar ao bot. */
@@ -389,4 +389,12 @@ describe("apagar e restaurar mensagens", () => {
     expect([tarde.status, await tarde.json()]).toEqual([409, { erro: "A conversa mudou depois dessas mensagens. Não dá para pôr de volta no mesmo lugar." }]);
     expect(idsDe(id)).toEqual(["u1", "a1", "u2", "a2", "u4"]);
   });
+});
+
+test("GET /media/:id de um arquivo que sumiu do disco devolve 404, não 500", async () => {
+  const id = newMediaId("/tmp/em-marketing-arte-que-nao-existe.jpg");
+
+  const res = await fetch(url(`/media/${id}`));
+
+  expect([res.status, await res.json()]).toEqual([404, { erro: "Não encontrado." }]);
 });

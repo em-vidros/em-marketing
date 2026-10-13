@@ -223,10 +223,11 @@ export function rotas(opcoes: OpcoesChat = {}) {
 
     // Público de propósito: a Meta baixa a imagem por esta URL na hora de publicar, sem sessão.
     // O id é aleatório de 128 bits e expira depois da publicação.
-    "/media/:id": (req: BunRequest<"/media/:id">) => {
+    "/media/:id": async (req: BunRequest<"/media/:id">) => {
       const row = db.query("SELECT path, expired FROM media WHERE id = ?").get(req.params.id) as { path: string; expired: number } | null;
-      if (!row || row.expired) return naoEncontrado();
-      return new Response(Bun.file(row.path), { headers: { "content-type": "image/jpeg" } });
+      const arquivo = row && !row.expired ? Bun.file(row.path) : null;
+      if (!arquivo || !(await arquivo.exists())) return naoEncontrado();
+      return new Response(arquivo, { headers: { "content-type": "image/jpeg" } });
     },
   };
 }
