@@ -129,6 +129,8 @@ addColumn("posts", "pilar", "pilar TEXT"); // §12.1, cota do mês
 addColumn("conversas", "user_id", "user_id TEXT");
 addColumn("conversas", "titulo", "titulo TEXT");
 addColumn("conversas", "mensagens", "mensagens TEXT NOT NULL DEFAULT '[]'");
+addColumn("conversas", "arquivada_em", "arquivada_em INTEGER"); // epoch ms; NULL = na lista principal
+addColumn("conversas", "apagada_em", "apagada_em INTEGER"); // epoch ms; NULL = viva. O boot remove de vez depois de 30 dias.
 addColumn("media", "mtime", "mtime INTEGER");
 db.run("CREATE INDEX IF NOT EXISTS conversas_usuario ON conversas(user_id, updated_at)");
 
@@ -205,7 +207,7 @@ export function pecasDoUsuario(userId: string): Peca[] {
   const linhas = db
     .query(
       `SELECT p.id, p.headline, p.legenda, p.brief, p.pilar, p.formato, p.status, p.created_at, p.arts, p.chosen,
-         (SELECT c.id FROM conversas c WHERE c.post_id = p.id AND c.user_id = ? ORDER BY c.updated_at DESC LIMIT 1) AS conversa_id
+         (SELECT c.id FROM conversas c WHERE c.post_id = p.id AND c.user_id = ? AND c.apagada_em IS NULL ORDER BY c.updated_at DESC LIMIT 1) AS conversa_id
        FROM posts p ORDER BY p.created_at DESC, p.id DESC`,
     )
     .all(userId) as (ColunasDoPost & {
@@ -344,7 +346,7 @@ export function tarefasFeitas(userId: string, desde: number, ate: number, limite
     .query(
       `SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.resumo, t.erro, t.atualizada_em
        FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
-       WHERE c.user_id = ? AND t.status IN ('concluida', 'falhou') AND t.atualizada_em >= ? AND t.atualizada_em < ?
+       WHERE c.user_id = ? AND c.apagada_em IS NULL AND t.status IN ('concluida', 'falhou') AND t.atualizada_em >= ? AND t.atualizada_em < ?
        ORDER BY t.atualizada_em DESC LIMIT ?`,
     )
     .all(userId, desde, ate, limite) as {
@@ -385,7 +387,7 @@ export function tarefasEmCurso(userId: string): TarefaEmCurso[] {
     .query(
       `SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.criada_em, t.mensagens
        FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
-       WHERE c.user_id = ? AND t.status IN ('na_fila', 'trabalhando') ORDER BY t.criada_em DESC`,
+       WHERE c.user_id = ? AND c.apagada_em IS NULL AND t.status IN ('na_fila', 'trabalhando') ORDER BY t.criada_em DESC`,
     )
     .all(userId) as {
     id: string;
@@ -428,7 +430,7 @@ export function aprovacoesPendentes(userId: string): AprovacaoPendente[] {
     .query(
       `SELECT c.id, c.titulo, c.mensagens, p.headline, p.pilar, p.arts, p.chosen
        FROM conversas c LEFT JOIN posts p ON p.id = c.post_id
-       WHERE c.user_id = ? AND c.mensagens LIKE '%approval-requested%' ORDER BY c.updated_at DESC`,
+       WHERE c.user_id = ? AND c.apagada_em IS NULL AND c.mensagens LIKE '%approval-requested%' ORDER BY c.updated_at DESC`,
     )
     .all(userId) as (ColunasDoPost & {
     id: string;

@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import { db } from "../db";
 import type { BotId } from "./bots";
+import { conversasDoBot, type Conversa } from "./conversas";
 
 /**
  * Uma delegação do Chefe a um especialista. O especialista trabalha na conversa
@@ -121,8 +122,29 @@ export function tarefasAtivas(userId: string): ResumoTarefa[] {
     db
       .query(
         `SELECT ${colunas} FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
-         WHERE c.user_id = ? AND t.status IN (${ATIVOS.map(() => "?").join(",")}) ORDER BY t.criada_em DESC`,
+         WHERE c.user_id = ? AND c.apagada_em IS NULL AND t.status IN (${ATIVOS.map(() => "?").join(",")}) ORDER BY t.criada_em DESC`,
       )
       .all(userId, ...ATIVOS) as Omit<Linha, "mensagens">[]
   ).map(resumoDaLinha);
+}
+
+/**
+ * GET /api/bots/:id/tarefas. O que o bot fez nas conversas do usuário, do mais recente para trás.
+ * Um especialista trabalha em tarefas; o Chefe, em conversas. `proximo` é o offset da página seguinte.
+ */
+export type TrabalhoDoBot =
+  | { tipo: "tarefas"; itens: ResumoTarefa[]; proximo: number | null }
+  | { tipo: "conversas"; itens: Conversa[]; proximo: number | null };
+
+export function trabalhoDoBot(userId: string, botId: BotId, offset: number, limite: number): TrabalhoDoBot {
+  const pagina = <T>(linhas: T[]) => ({ itens: linhas.slice(0, limite), proximo: linhas.length > limite ? offset + limite : null });
+  if (botId === "chefe") return { tipo: "conversas", ...pagina(conversasDoBot(userId, botId, offset, limite + 1)) };
+  const colunas = COLUNAS_RESUMO.split(", ").map((c) => `t.${c}`).join(", ");
+  const linhas = db
+    .query(
+      `SELECT ${colunas} FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
+       WHERE c.user_id = ? AND c.apagada_em IS NULL AND t.bot_id = ? ORDER BY t.criada_em DESC, t.id LIMIT ? OFFSET ?`,
+    )
+    .all(userId, botId, limite + 1, offset) as Omit<Linha, "mensagens">[];
+  return { tipo: "tarefas", ...pagina(linhas.map(resumoDaLinha)) };
 }

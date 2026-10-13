@@ -1,3 +1,4 @@
+import { purgarConversasApagadas } from "../agent/conversas";
 import { startScheduler } from "../domain/scheduler";
 import site from "../web/index.html";
 import { rotas } from "./rotas";
@@ -18,5 +19,7 @@ const server = Bun.serve({
 });
 
 startScheduler();
+const purgadas = purgarConversasApagadas();
+if (purgadas > 0) console.log(`${purgadas} conversa(s) apagada(s) há mais de 30 dias removida(s) de vez.`);
 
 console.log(`em-marketing ouvindo em :${server.port}`);
