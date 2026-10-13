@@ -68,7 +68,7 @@ export function Bolha({ aberto, acoes }: { aberto: Aberto | null; acoes: AcoesDa
   const inicial = useRef<HTMLElement | null>(null);
 
   return (
-    <Popover.Root modal="trap-focus" open={aberto !== null} onOpenChange={(a) => !a && acoes.fechar()} onOpenChangeComplete={(a) => !a && setMostrado(null)}>
+    <Popover.Root open={aberto !== null} onOpenChange={(a) => !a && acoes.fechar()} onOpenChangeComplete={(a) => !a && setMostrado(null)}>
       <Popover.Portal>
         {atual && (
           <Popover.Positioner
@@ -85,6 +85,7 @@ export function Bolha({ aberto, acoes }: { aberto: Aberto | null; acoes: AcoesDa
               data-teclado="isolado"
               initialFocus={inicial}
               finalFocus={false}
+              onKeyDown={prenderTab}
               className="cal-popover w-[min(320px,calc(100vw-24px))] rounded-cartao border border-linha bg-superficie p-4 text-sm shadow-[0_12px_40px_rgb(15_13_10/0.14),0_1px_3px_rgb(15_13_10/0.08)] outline-none"
             >
               <Popover.Arrow className="cal-seta">
@@ -92,7 +93,9 @@ export function Bolha({ aberto, acoes }: { aberto: Aberto | null; acoes: AcoesDa
                   <path d="M0 8 8 .5 16 8" fill="var(--color-superficie)" stroke="var(--color-linha-forte)" />
                 </svg>
               </Popover.Arrow>
-              <Popover.Close className="sr-only">Fechar</Popover.Close>
+              <Popover.Close className="sr-only focus-visible:not-sr-only focus-visible:absolute focus-visible:top-2 focus-visible:right-2 focus-visible:rounded-full focus-visible:bg-hover focus-visible:px-2.5 focus-visible:py-1 focus-visible:text-xs">
+                Fechar
+              </Popover.Close>
               <NoPopover.Provider value>
                 <Conteudo key={chaveDoAberto(atual)} aberto={atual} acoes={acoes} inicial={inicial} />
               </NoPopover.Provider>
@@ -102,6 +105,25 @@ export function Bolha({ aberto, acoes }: { aberto: Aberto | null; acoes: AcoesDa
       </Popover.Portal>
     </Popover.Root>
   );
+}
+
+/**
+ * O Tab dá a volta dentro do popover, como num diálogo: sem gatilho, o modo trap-focus do
+ * Base UI deixava o foco escapar pela guarda para o body.
+ */
+function prenderTab(e: React.KeyboardEvent<HTMLElement>) {
+  if (e.key !== "Tab") return;
+  const focaveis = [...e.currentTarget.querySelectorAll<HTMLElement>("button, [href], input, textarea, select, [tabindex]")].filter(
+    (el) => el.tabIndex >= 0 && !(el as HTMLButtonElement).disabled && el.getClientRects().length > 0,
+  );
+  const primeiro = focaveis[0];
+  const ultimo = focaveis.at(-1);
+  if (!primeiro || !ultimo) return;
+  const ativo = document.activeElement;
+  if (e.shiftKey ? ativo === primeiro || !e.currentTarget.contains(ativo) : ativo === ultimo) {
+    e.preventDefault();
+    (e.shiftKey ? ultimo : primeiro).focus();
+  }
 }
 
 const chaveDoAberto = (a: Aberto) =>
@@ -144,12 +166,29 @@ function Titulo({ children }: { children: ReactNode }) {
   return useContext(NoPopover) ? <Popover.Title className={classe}>{children}</Popover.Title> : <h3 className={classe}>{children}</h3>;
 }
 
-function Campos({ dia, hora, aoDia, aoHora, idBase, horaOpcional }: { dia: Dia; hora: string; aoDia: (d: Dia) => void; aoHora: (h: string) => void; idBase: string; horaOpcional?: boolean }) {
+function Campos({
+  dia,
+  hora,
+  aoDia,
+  aoHora,
+  idBase,
+  horaOpcional,
+  inicial,
+}: {
+  dia: Dia;
+  hora: string;
+  aoDia: (d: Dia) => void;
+  aoHora: (h: string) => void;
+  idBase: string;
+  horaOpcional?: boolean;
+  /** Recebe o foco ao abrir, quando o campo de dia é a primeira coisa a fazer. */
+  inicial?: RefObject<HTMLElement | null>;
+}) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
       <label htmlFor={`${idBase}-dia`} className="flex flex-col gap-1">
         <span className={rotuloCampo}>Dia</span>
-        <input id={`${idBase}-dia`} type="date" required value={dia} onChange={(e) => e.target.value && aoDia(e.target.value as Dia)} className={`${campo} tabular`} />
+        <input ref={inicial as RefObject<HTMLInputElement> | undefined} id={`${idBase}-dia`} type="date" required value={dia} onChange={(e) => e.target.value && aoDia(e.target.value as Dia)} className={`${campo} tabular`} />
       </label>
       <label htmlFor={`${idBase}-hora`} className="flex flex-col gap-1">
         <span className={rotuloCampo}>{horaOpcional ? "Hora (opcional)" : "Hora"}</span>
@@ -383,7 +422,7 @@ function DetalheAgendado({ item, acoes, inicial }: { item: ItemAgendado; acoes: 
   return (
     <form onSubmit={mudarHorario} className="flex flex-col gap-3">
       <Cabecalho capa={item.capa} titulo={tituloDe(item)} linha={quando} />
-      <Campos dia={dia} hora={hora} aoDia={(d) => (setDia(d), setErro(null))} aoHora={(h) => (setHora(h), setErro(null))} idBase={id} />
+      <Campos dia={dia} hora={hora} aoDia={(d) => (setDia(d), setErro(null))} aoHora={(h) => (setHora(h), setErro(null))} idBase={id} inicial={inicial} />
       <p className="text-[13px] text-pretty text-tinta-2">Arraste no calendário ou troque o dia e a hora aqui. A mudança pede confirmação.</p>
       <p role="alert" className="text-[13px] text-erro empty:hidden">
         {erro}
@@ -392,7 +431,7 @@ function DetalheAgendado({ item, acoes, inicial }: { item: ItemAgendado; acoes: 
         <button type="button" onClick={() => (acoes.fechar(), acoes.cancelar(item))} className={botaoPerigo}>
           Cancelar agendamento
         </button>
-        <button ref={inicial as RefObject<HTMLButtonElement>} type="submit" disabled={!mudou} className={`${botaoPrincipal} disabled:cursor-default disabled:opacity-40`}>
+        <button type="submit" disabled={!mudou} className={`${botaoPrincipal} disabled:cursor-default disabled:opacity-40`}>
           Mudar horário
         </button>
       </div>
