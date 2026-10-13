@@ -1,15 +1,19 @@
 import { readdirSync } from "node:fs";
+import { safeValidateUIMessages } from "ai";
 import type { BunRequest } from "bun";
 import { z } from "zod";
 import { BOTS, ehBotId, type BotId } from "../agent/bots";
 import { configDoBot, detalheDoBot, gravarVersao, restaurarPadrao, restaurarVersao, versaoDoBot, versoesDoBot } from "../agent/config";
 import {
   apagarConversa,
+  apagarMensagem,
   conversaDoUsuario,
   conversasDoUsuario,
   mensagensDaConversa,
   mudarConversa,
   restaurarConversa,
+  restaurarMensagens,
+  type Recusa,
 } from "../agent/conversas";
 import { ehModelId, modelos, problemaDoModelo, type ModelId } from "../agent/models";
 import { pegarTarefa, tarefasAtivas, tarefasDaConversa, trabalhoDoBot } from "../agent/tarefas";
@@ -61,6 +65,8 @@ async function lerCorpo<S extends z.ZodType>(req: Request, schema: S): Promise<{
   return r.success ? { dados: r.data } : { resposta: invalido(r.error.issues[0]?.message ?? "Pedido inválido.") };
 }
 
+const recusar = ({ status, erro }: Recusa) => Response.json({ erro }, { status });
+
 const algumCampo = (o: object) => Object.values(o).some((v) => v !== undefined);
 
 const texto = (campo: string, max: number) =>
@@ -92,6 +98,16 @@ const EdicaoConversa = z
     { error: "Mande um objeto JSON." },
   )
   .refine(algumCampo, "Mande titulo ou arquivada.");
+
+/** POST /api/conversas/:id/mensagens/restaurar: o corpo é a resposta do DELETE da mensagem. */
+const Remocao = z.object(
+  {
+    removidas: z.array(z.unknown(), { error: "removidas precisa ser uma lista." }).min(1, "Mande ao menos uma mensagem."),
+    depoisDe: z.string({ error: "depoisDe precisa ser texto ou null." }).nullable(),
+    antesDe: z.string({ error: "antesDe precisa ser texto ou null." }).nullable(),
+  },
+  { error: "Mande um objeto JSON." },
+);
 
 const Pagina = z.object({
   offset: z.coerce.number({ error: "offset precisa ser um número." }).int("offset precisa ser inteiro.").min(0, "offset não pode ser negativo.").default(0),
@@ -154,6 +170,22 @@ export function rotas(opcoes: OpcoesChat = {}) {
       POST: comSessao<"/api/conversas/:id/restaurar">((req, u) => {
         const conversa = restaurarConversa(u.id, req.params.id);
         return conversa ? Response.json(conversa) : naoEncontrado();
+      }),
+    },
+    "/api/conversas/:id/mensagens/:mensagemId": {
+      DELETE: comSessao<"/api/conversas/:id/mensagens/:mensagemId">((req, u) => {
+        const r = apagarMensagem(u.id, req.params.id, req.params.mensagemId);
+        return r.ok ? Response.json({ removidas: r.removidas, depoisDe: r.depoisDe, antesDe: r.antesDe }) : recusar(r);
+      }),
+    },
+    "/api/conversas/:id/mensagens/restaurar": {
+      POST: comSessao<"/api/conversas/:id/mensagens/restaurar">(async (req, u) => {
+        const corpo = await lerCorpo(req, Remocao);
+        if ("resposta" in corpo) return corpo.resposta;
+        const removidas = await safeValidateUIMessages({ messages: corpo.dados.removidas });
+        if (!removidas.success) return invalido("As mensagens mandadas não são válidas.");
+        const r = restaurarMensagens(u.id, req.params.id, { ...corpo.dados, removidas: removidas.data });
+        return r.ok ? Response.json({ mensagens: r.mensagens }) : recusar(r);
       }),
     },
     "/api/conversas/:id/tarefas": {

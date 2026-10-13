@@ -115,3 +115,76 @@ export function mensagensDaConversa(id: string): UIMessage[] {
 export function gravarMensagens(id: string, mensagens: UIMessage[]): void {
   db.query("UPDATE conversas SET mensagens = ?, updated_at = datetime('now') WHERE id = ?").run(JSON.stringify(mensagens), id);
 }
+
+/** Gravar o histórico sem mexer em updated_at: apagar ou restaurar uma mensagem não muda a ordem da lista. */
+function trocarMensagens(id: string, mensagens: UIMessage[]): void {
+  db.query("UPDATE conversas SET mensagens = ? WHERE id = ?").run(JSON.stringify(mensagens), id);
+}
+
+/**
+ * Conversas com um turno do bot em andamento. O turno grava o histórico inteiro quando termina;
+ * uma mensagem apagada ou editada no meio dele voltaria nessa gravação. Por isso só um escreve por vez.
+ */
+const respondendo = new Set<string>();
+
+export const AINDA_RESPONDENDO = "O bot ainda está respondendo nesta conversa. Espere a resposta terminar.";
+
+/** false se a conversa já tem um turno em andamento. Quem recebe true chama terminarTurno no fim. */
+export function comecarTurno(id: string): boolean {
+  if (respondendo.has(id)) return false;
+  respondendo.add(id);
+  return true;
+}
+
+export function terminarTurno(id: string): void {
+  respondendo.delete(id);
+}
+
+export type Recusa = { ok: false; status: 404 | 409; erro: string };
+
+const NAO_ENCONTRADA: Recusa = { ok: false, status: 404, erro: "Não encontrado." };
+const OCUPADA: Recusa = { ok: false, status: 409, erro: AINDA_RESPONDENDO };
+
+/** O que DELETE /api/conversas/:id/mensagens/:mensagemId tirou e entre quais mensagens estava. O restaurar recebe este mesmo objeto. */
+export interface Remocao {
+  removidas: UIMessage[];
+  depoisDe: string | null;
+  antesDe: string | null;
+}
+
+/**
+ * Apagar a mensagem do usuário tira o turno: ela e as respostas do bot até a próxima mensagem do usuário.
+ * Apagar uma mensagem do bot tira só ela. Tarefas, posts, fila e artes ficam como estão.
+ */
+export function apagarMensagem(userId: string, conversaId: string, mensagemId: string): ({ ok: true } & Remocao) | Recusa {
+  if (!conversaDoUsuario(userId, conversaId)) return NAO_ENCONTRADA;
+  if (respondendo.has(conversaId)) return OCUPADA;
+  const mensagens = mensagensDaConversa(conversaId);
+  const i = mensagens.findIndex((m) => m.id === mensagemId);
+  if (i === -1) return NAO_ENCONTRADA;
+  const proximaDoUsuario = mensagens.findIndex((m, j) => j > i && m.role === "user");
+  const fim = mensagens[i]!.role !== "user" ? i + 1 : proximaDoUsuario === -1 ? mensagens.length : proximaDoUsuario;
+  trocarMensagens(conversaId, mensagens.toSpliced(i, fim - i));
+  return { ok: true, removidas: mensagens.slice(i, fim), depoisDe: mensagens[i - 1]?.id ?? null, antesDe: mensagens[fim]?.id ?? null };
+}
+
+const MUDOU: Recusa = { ok: false, status: 409, erro: "A conversa mudou depois dessas mensagens. Não dá para pôr de volta no mesmo lugar." };
+
+/**
+ * Põe de volta o que apagarMensagem tirou, entre depoisDe e antesDe. Se elas já estão lá, não muda nada.
+ * Se as vizinhas não estão mais lado a lado, a posição é ambígua e o pedido é recusado.
+ */
+export function restaurarMensagens(userId: string, conversaId: string, { removidas, depoisDe, antesDe }: Remocao): { ok: true; mensagens: UIMessage[] } | Recusa {
+  if (!conversaDoUsuario(userId, conversaId)) return NAO_ENCONTRADA;
+  if (respondendo.has(conversaId)) return OCUPADA;
+  const mensagens = mensagensDaConversa(conversaId);
+  const idEm = (j: number) => mensagens[j]?.id ?? null;
+  const inicio = depoisDe === null ? 0 : mensagens.findIndex((m) => m.id === depoisDe) + 1;
+  if (depoisDe !== null && inicio === 0) return MUDOU;
+  const ids = removidas.map((m) => m.id);
+  if (ids.every((id, k) => idEm(inicio + k) === id) && idEm(inicio + ids.length) === antesDe) return { ok: true, mensagens };
+  if (idEm(inicio) !== antesDe || mensagens.some((m) => ids.includes(m.id))) return MUDOU;
+  const restauradas = mensagens.toSpliced(inicio, 0, ...removidas);
+  trocarMensagens(conversaId, restauradas);
+  return { ok: true, mensagens: restauradas };
+}

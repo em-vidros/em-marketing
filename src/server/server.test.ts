@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { MockLanguageModelV4 } from "ai/test";
 import type { ConfigBot, DetalheBot, VersaoBot } from "../agent/config";
-import { abrirConversaDoUsuario, type Conversa } from "../agent/conversas";
+import type { UIMessage } from "ai";
+import { abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa, type Conversa } from "../agent/conversas";
 import type { Modelo } from "../agent/models";
-import type { TrabalhoDoBot } from "../agent/tarefas";
+import { tarefasDaConversa, type TrabalhoDoBot } from "../agent/tarefas";
 import { db, type Agendamento, type Agora, type Historico, type Peca } from "../db";
 import { rotas } from "./rotas";
 
@@ -333,5 +334,58 @@ describe("gestão de conversas", () => {
     expect(doChefe.itens.map((c) => c.id)).toContain(viva);
     expect(doChefe.itens.map((c) => c.id)).not.toContain(apagada);
     expect((await fetch(url("/api/bots/inexistente/tarefas"), { headers: { cookie: ana.cookie } })).status).toBe(404);
+  });
+});
+
+const msg = (id: string, role: "user" | "assistant"): UIMessage => ({ id, role, parts: [{ type: "text", text: `texto de ${id}` }] });
+
+/** Uma conversa da Ana com estas mensagens já salvas. */
+async function conversaComMensagens(ids: string[]) {
+  const ana = await sessao("ana@emvidros.com.br");
+  const id = `mensagens-${crypto.randomUUID()}`;
+  abrirConversaDoUsuario(ana.id, id, "chefe", "Turnos");
+  gravarMensagens(id, ids.map((m) => msg(m, m.startsWith("u") ? "user" : "assistant")));
+  return { id, cookie: ana.cookie, caminho: (resto: string) => `/api/conversas/${id}/mensagens/${resto}` };
+}
+
+const idsDe = (conversaId: string) => mensagensDaConversa(conversaId).map((m) => m.id);
+
+describe("apagar e restaurar mensagens", () => {
+  test("apagar a mensagem do usuário tira o turno inteiro e deixa as tarefas; a do bot sai sozinha", async () => {
+    const { id, cookie, caminho } = await conversaComMensagens(["u1", "a1", "u2", "a2", "a3", "u3", "a4"]);
+    const bia = await sessao("bia@emvidros.com.br");
+    semearTarefa(`${id}-t`, id, "concluida", Date.now());
+
+    const pelaBia = await enviar(caminho("u2"), bia.cookie, "DELETE");
+    const turno = await enviar(caminho("u2"), cookie, "DELETE");
+    const doBot = await enviar(caminho("a4"), cookie, "DELETE");
+    const deNovo = await enviar(caminho("a4"), cookie, "DELETE");
+    await enviar(`/api/conversas/${id}`, cookie, "DELETE");
+    const naApagada = await enviar(caminho("u1"), cookie, "DELETE");
+
+    expect(pelaBia.status).toBe(404);
+    expect([turno.status, await turno.json()]).toEqual([200, { removidas: [msg("u2", "user"), msg("a2", "assistant"), msg("a3", "assistant")], depoisDe: "a1", antesDe: "u3" }]);
+    expect([doBot.status, await doBot.json()]).toEqual([200, { removidas: [msg("a4", "assistant")], depoisDe: "u3", antesDe: null }]);
+    expect([deNovo.status, naApagada.status]).toEqual([404, 404]);
+    expect(idsDe(id)).toEqual(["u1", "a1", "u3"]);
+    expect(tarefasDaConversa(id).map((t) => t.id)).toEqual([`${id}-t`]);
+  });
+
+  test("restaurar põe o turno de volta no lugar, repetir não duplica, e recusa se a conversa mudou depois dele", async () => {
+    const { id, cookie, caminho } = await conversaComMensagens(["u1", "a1", "u2", "a2", "u3", "a3"]);
+    const meio = await (await enviar(caminho("u2"), cookie, "DELETE")).json();
+
+    const volta = await enviar(caminho("restaurar"), cookie, "POST", meio);
+    const deNovo = await enviar(caminho("restaurar"), cookie, "POST", meio);
+    const fim = await (await enviar(caminho("u3"), cookie, "DELETE")).json();
+    gravarMensagens(id, [...mensagensDaConversa(id), msg("u4", "user")]);
+    const tarde = await enviar(caminho("restaurar"), cookie, "POST", fim);
+
+    const ordem = ["u1", "a1", "u2", "a2", "u3", "a3"];
+    expect(volta.status).toBe(200);
+    expect(((await volta.json()) as { mensagens: UIMessage[] }).mensagens.map((m) => m.id)).toEqual(ordem);
+    expect(((await deNovo.json()) as { mensagens: UIMessage[] }).mensagens.map((m) => m.id)).toEqual(ordem);
+    expect([tarde.status, await tarde.json()]).toEqual([409, { erro: "A conversa mudou depois dessas mensagens. Não dá para pôr de volta no mesmo lugar." }]);
+    expect(idsDe(id)).toEqual(["u1", "a1", "u2", "a2", "u4"]);
   });
 });
