@@ -7,6 +7,7 @@ const JUNTOS: Escopo[][] = [
   ["global", "lista"],
   ["global", "conversa"],
   ["global", "calendario"],
+  ["global", "composer"],
 ];
 
 describe("tabela de atalhos", () => {

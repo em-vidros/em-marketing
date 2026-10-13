@@ -5,10 +5,12 @@ import { BOTS, type BotId } from "../bots";
  * conversa e age na conversa focada na barra, ou na aberta; `conversa` vale com o foco dentro
  * de um elemento marcado com `data-escopo="conversa"`. As duas últimas nunca valem juntas,
  * então a mesma tecla pode ter um sentido em cada uma (R renomeia a linha, R recusa o cartão).
+ * `composer` vale só no composer vazio; o despachante nunca resolve este escopo, quem lê a
+ * tecla é o próprio composer, já que num campo uma tecla sem modificador é texto.
  * `calendario` vale com o foco dentro de `data-escopo="calendario"` e, como `conversa`, tira
  * a `lista`: ali as setas andam pelos dias, não pelas conversas.
  */
-export type Escopo = "global" | "lista" | "conversa" | "calendario";
+export type Escopo = "global" | "lista" | "conversa" | "composer" | "calendario";
 
 export type Grupo = "Geral" | "Navegação" | "Conversas" | "Bots" | "Aprovação" | "Calendário";
 
@@ -91,6 +93,12 @@ export const ATALHOS = {
   "cal-mover-depois": { teclas: ["alt+arrowright"], rotulo: "Mover o item para o dia seguinte", grupo: "Calendário", escopo: "calendario", repete: true },
   "cal-apagar": { teclas: ["delete", "backspace"], rotulo: "Apagar a pauta selecionada", grupo: "Calendário", escopo: "calendario" },
   "cal-limpar": { teclas: ["escape"], rotulo: "Tirar a seleção", grupo: "Calendário", escopo: "calendario" },
+  "mensagem-proxima": { teclas: ["j", "arrowdown"], rotulo: "Próxima mensagem", grupo: "Conversas", escopo: "conversa", repete: true },
+  "mensagem-anterior": { teclas: ["k", "arrowup"], rotulo: "Mensagem anterior", grupo: "Conversas", escopo: "conversa", repete: true },
+  "mensagem-editar": { teclas: ["e"], rotulo: "Editar a mensagem focada", grupo: "Conversas", escopo: "conversa" },
+  "mensagem-apagar": { teclas: ["mod+backspace"], rotulo: "Apagar a mensagem focada", grupo: "Conversas", escopo: "conversa" },
+  "mensagem-refazer": { teclas: ["shift+r"], rotulo: "Refazer a resposta focada", grupo: "Conversas", escopo: "conversa" },
+  "mensagem-editar-ultima": { teclas: ["arrowup"], rotulo: "Editar sua última mensagem", grupo: "Conversas", escopo: "composer" },
 } satisfies Record<string, Atalho>;
 
 export type AtalhoId = keyof typeof ATALHOS;
