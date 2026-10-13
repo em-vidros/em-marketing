@@ -204,8 +204,16 @@ function artesDo({ arts, chosen }: ColunasDoPost): string[] {
 
 export const capaDo = (p: ColunasDoPost): string | null => artesDo(p)[0] ?? null;
 
-/** posts.headline guarda o JSON {headline, apoio} que agent/post.ts grava; a tela mostra só o texto. */
-export const headlineDo = (coluna: string | null): string | null => (coluna ? (JSON.parse(coluna) as { headline: string }).headline : null);
+/** posts.headline guarda o JSON {headline, apoio} que agent/post.ts grava; a tela mostra só o texto.
+ * Linhas do pipeline antigo guardam o texto puro, e uma linha dessas não pode derrubar a lista inteira. */
+export function headlineDo(coluna: string | null): string | null {
+  if (!coluna) return null;
+  try {
+    const valor: unknown = JSON.parse(coluna);
+    if (valor && typeof valor === "object" && typeof (valor as { headline?: unknown }).headline === "string") return (valor as { headline: string }).headline;
+  } catch {}
+  return coluna;
+}
 
 /** "2026-10-15 21:00:00" (UTC, sem fuso, como o SQLite grava) para ISO com Z. */
 export const isoDoSqlite = (s: string) => `${s.replace(" ", "T")}Z`;
