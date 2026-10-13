@@ -1,3 +1,4 @@
+import { readdirSync } from "node:fs";
 import type { BunRequest } from "bun";
 import { BOTS } from "../agent/bots";
 import { conversaDoUsuario, conversasDoUsuario, mensagensDaConversa } from "../agent/conversas";
@@ -5,6 +6,14 @@ import { pegarTarefa, tarefasAtivas, tarefasDaConversa } from "../agent/tarefas"
 import { db } from "../db";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
+
+/** Ícones e logos de brand/assets (espelho da pasta oficial; `bun run assets`). Lidos no boot, servidos da memória. */
+const marca = Object.fromEntries([
+  ...readdirSync("brand/assets/web").map((nome) => [`/${nome}`, Bun.file(`brand/assets/web/${nome}`)] as const),
+  ...readdirSync("brand/assets/logo")
+    .filter((nome) => nome.endsWith(".svg"))
+    .map((nome) => [`/logo/${nome}`, Bun.file(`brand/assets/logo/${nome}`)] as const),
+]);
 
 const naoEncontrado = () => Response.json({ erro: "Não encontrado." }, { status: 404 });
 
@@ -20,8 +29,7 @@ const bots = Object.values(BOTS).map(({ id, nome, descricao, sugestoes }) => ({ 
 
 export function rotas(opcoes: OpcoesChat = {}) {
   return {
-    // Vira o HTML import de src/web/index.html na fase 5.
-    "/": new Response("em-marketing: o site chega na fase 5.", { headers: { "content-type": "text/plain; charset=utf-8" } }),
+    ...marca,
     "/health": () => Response.json({ ok: true, ts: new Date().toISOString() }),
 
     "/api/auth/*": (req: Request) => auth.handler(req),

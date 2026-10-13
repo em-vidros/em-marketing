@@ -1,0 +1,124 @@
+@import "tailwindcss";
+
+/* Tokens do tema claro do Grok (.specs/project/REFACTOR.md, "Visual do site"). Só aqui. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  --color-fundo: #f9f8f7;
+  --color-painel: #f5f3f2;
+  --color-hover: #f0eeed;
+  --color-ativo: #ece9e7;
+  --color-superficie: #ffffff;
+
+  --color-tinta: #050505;
+  --color-tinta-2: #636363;
+  --color-tinta-3: #858585;
+  --color-tinta-4: #a3a3a3;
+  --color-sobre-tinta: #fcfcfc;
+
+  --color-linha: rgb(15 13 10 / 0.06);
+  --color-linha-forte: rgb(15 13 10 / 0.1);
+
+  --color-trabalhando: #63b5af;
+  --color-esperando: hsl(45 100% 45%);
+  --color-erro: #b42318;
+
+  --radius-item: 12px;
+  --radius-cartao: 16px;
+  --radius-balao: 24px;
+  --radius-composer: 28px;
+
+  --ease-saida: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@layer base {
+  html {
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-fundo text-tinta font-sans text-sm/normal;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-tinta);
+    outline-offset: 2px;
+  }
+  ::placeholder {
+    color: var(--color-tinta-4);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Resposta no toque, não no clique (apple-design). */
+@utility pressiona {
+  transition: transform 100ms var(--ease-saida);
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/* Shimmer do texto de passo atual. Keyframe e gradiente vêm do ThinkingState do Beautiful UI (MIT, Shane Levine). */
+@keyframes brilho {
+  from {
+    background-position: 150%;
+  }
+  to {
+    background-position: -50%;
+  }
+}
+@utility brilho {
+  color: transparent;
+  background: linear-gradient(90deg, var(--color-tinta-3) 35%, var(--color-tinta) 50%, var(--color-tinta-3) 65%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: brilho 1.4s linear infinite;
+}
+
+@keyframes flutua {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8%);
+  }
+}
+@utility flutua {
+  animation: flutua 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes gira {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flutua,
+  .pressiona:active {
+    animation: none;
+    transform: none;
+  }
+  .brilho {
+    animation: none;
+    color: var(--color-tinta-2);
+    background: none;
+  }
+  .girando {
+    animation-duration: 3s !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vidro {
+    backdrop-filter: none;
+    background-color: var(--color-fundo);
+  }
+}
