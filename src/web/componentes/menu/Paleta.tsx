@@ -100,9 +100,12 @@ export function Paleta({
               {!so && (
                 <Grupo titulo="Ações">
                   {acao("nova-conversa")}
+                  {acao("focar-composer")}
                   {acao("buscar")}
-                  {acao("atalhos")}
                   {acao("desfazer")}
+                  {acao("config-bot")}
+                  {acao("barra-lateral")}
+                  {acao("atalhos")}
                 </Grupo>
               )}
 

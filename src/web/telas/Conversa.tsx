@@ -1,11 +1,11 @@
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useApi } from "../api";
+import { useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState } from "react";
+import { useApi, useNomesDosBots } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
-import { CartaoAprovacao } from "../componentes/CartaoAprovacao";
+import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
 import { atividadeDe } from "../componentes/ia/atividade";
@@ -17,6 +17,7 @@ import { Passos } from "../componentes/Passos";
 import type { EstadoBot } from "../equipe";
 import { MOLA, MOLA_REDUZIDA } from "../movimento";
 import { navegar } from "../rota";
+import { ehCampo, useAtalho } from "../teclado/motor";
 import { ehAprovacao, ehDelegacao, passosDe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao } from "../tipos";
 
 export interface Vivo {
@@ -62,6 +63,7 @@ export function TelaConversa(props: Props) {
 }
 
 function Cabecalho({ abrirMenu, estadoDoChefe, titulo }: Pick<Props, "abrirMenu" | "estadoDoChefe"> & { titulo: string | null }) {
+  const { chefe } = useNomesDosBots();
   useEffect(() => {
     document.title = titulo ? `${titulo} · EM Marketing` : "EM Marketing";
   }, [titulo]);
@@ -70,9 +72,9 @@ function Cabecalho({ abrirMenu, estadoDoChefe, titulo }: Pick<Props, "abrirMenu"
       <BotaoMenu abrir={abrirMenu} />
       <Avatar bot="chefe" tamanho={34} estado={estadoDoChefe.tipo} anel="var(--color-fundo)" />
       <span className="flex min-w-0 flex-col">
-        <span className="leading-tight font-semibold">Chefe</span>
+        <span className="truncate leading-tight font-semibold">{chefe.nome}</span>
         <span aria-live="polite" className={`truncate text-xs ${estadoDoChefe.tipo === "trabalhando" ? "brilho" : "text-tinta-3"}`}>
-          {estadoDoChefe.tipo === "parado" ? (titulo ?? "Recebe o pedido e divide o trabalho") : estadoDoChefe.texto}
+          {estadoDoChefe.tipo === "parado" ? (titulo ?? chefe.descricao) : estadoDoChefe.texto}
         </span>
       </span>
     </header>
@@ -82,12 +84,13 @@ function Cabecalho({ abrirMenu, estadoDoChefe, titulo }: Pick<Props, "abrirMenu"
 const texto = (m: Mensagem) => m.parts.map((p) => (p.type === "text" ? p.text : "")).join("");
 
 function Sugestoes({ enviar }: { enviar: (t: string) => void }) {
+  const { chefe } = useNomesDosBots();
   const [bots] = useApi<{ id: string; sugestoes: string[] }[]>("/api/bots");
   const sugestoes = bots.estado === "pronto" ? (bots.dados.find((b) => b.id === "chefe")?.sugestoes ?? []) : [];
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-5 px-4 py-12 text-center">
       <Avatar bot="chefe" tamanho={56} />
-      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-balance">Novo pedido ao Chefe</h1>
+      <h1 className="text-2xl font-semibold tracking-[-0.02em] text-balance">Novo pedido para {chefe.nome}</h1>
       <ul className="flex max-w-xl flex-wrap justify-center gap-2">
         {sugestoes.map((s) => (
           <li key={s}>
@@ -152,6 +155,7 @@ function Chat({
   });
   const respondendo = chat.status === "submitted" || chat.status === "streaming";
   const reduzir = useReducedMotion();
+  const nomes = useNomesDosBots();
   const jaEstavam = useMemo(() => new Set(inicial.map((m) => m.id)), [inicial]);
   const fim = useGrudaNoFim([chat.messages, chat.error]);
 
@@ -187,7 +191,52 @@ function Chat({
     chat.sendMessage({ text: t });
   }
 
-  const responder = (approvalId: string, aprovado: boolean) => chat.addToolApprovalResponse({ id: approvalId, approved: aprovado });
+  // Responder duas vezes ao mesmo pedido publicaria duas vezes: clique, A e R passam por aqui.
+  const respondidas = useRef(new Set<string>());
+  const [, renderizar] = useReducer((n: number) => n + 1, 0);
+  const responder = (approvalId: string, aprovado: boolean) => {
+    if (respondidas.current.has(approvalId)) return;
+    respondidas.current.add(approvalId);
+    renderizar();
+    void chat.addToolApprovalResponse({ id: approvalId, approved: aprovado });
+  };
+  const pendentes = aprovacoesPendentes(chat.messages, respondidas.current);
+  const cartaoDe = (approvalId: string) => document.querySelector<HTMLElement>(`[data-aprovacao="${CSS.escape(approvalId)}"]`);
+
+  /** A ou R no cartão focado. Sem pedido pendente ali, a tecla segue adiante. */
+  const decidirFocado = (aprovado: boolean) => () => {
+    const id = document.activeElement?.closest<HTMLElement>("[data-aprovacao]")?.dataset.aprovacao;
+    if (!id || !pendentes.includes(id)) return false;
+    responder(id, aprovado);
+  };
+  useAtalho("aprovar", decidirFocado(true));
+  useAtalho("recusar", decidirFocado(false));
+
+  // Um pedido novo, chegado agora, recebe o foco para A ou R valerem na hora. Quem está digitando
+  // ou com a paleta aberta não perde o foco; Esc no composer leva ao cartão.
+  const vistas = useRef(new Set(aprovacoesPendentes(inicial, new Set())));
+  const novo = pendentes.find((p) => !vistas.current.has(p));
+  useEffect(() => {
+    if (!novo) return;
+    vistas.current.add(novo);
+    const foco = document.activeElement;
+    if (ehCampo(foco) || foco?.closest('[data-teclado="isolado"], [aria-modal="true"]')) return;
+    cartaoDe(novo)?.focus();
+  }, [novo]);
+  const aoTeclar = (e: React.KeyboardEvent) => {
+    const alvo = pendentes.at(-1);
+    if (e.key !== "Escape" || !alvo || !(e.target instanceof HTMLTextAreaElement)) return;
+    e.preventDefault();
+    cartaoDe(alvo)?.focus();
+  };
+
+  useAtalho("painel-tarefas", () => {
+    if (painel) return fechar();
+    const ultima = [...delegacoes.keys()].at(-1);
+    if (!ultima) return false;
+    abrir(ultima, document.querySelector<HTMLElement>(`[data-abre-tarefa="${CSS.escape(ultima)}"]`) ?? (document.activeElement as HTMLElement));
+  });
+  useAtalho("focar-composer", () => document.getElementById("mensagem")?.focus());
 
   const erro = chat.error ? lerErro(chat.error) : null;
   const ultima = chat.messages.at(-1);
@@ -196,7 +245,7 @@ function Chat({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <main id="conteudo" className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
         <Cabecalho abrirMenu={abrirMenu} estadoDoChefe={estadoDoChefe} titulo={titulo} />
         {chat.messages.length === 0 ? (
           <Sugestoes enviar={enviar} />
@@ -223,6 +272,7 @@ function Chat({
                       painel={painel}
                       abrir={abrir}
                       responder={responder}
+                      respondidas={respondidas.current}
                     />
                   ))
                 )}
@@ -248,7 +298,7 @@ function Chat({
           </div>
         )}
         <Composer
-          rotulo="Mensagem ao Chefe"
+          rotulo={`Mensagem para ${nomes.chefe.nome}`}
           placeholder="O que vamos postar?"
           respondendo={respondendo}
           enviar={enviar}
@@ -300,6 +350,7 @@ function ParteDoChefe({
   painel,
   abrir,
   responder,
+  respondidas,
 }: {
   parte: Parte;
   /** A mensagem desta parte ainda está chegando. */
@@ -307,6 +358,7 @@ function ParteDoChefe({
   painel: string | null;
   abrir: (tarefaId: string, origem: HTMLElement) => void;
   responder: (id: string, aprovado: boolean) => void;
+  respondidas: ReadonlySet<string>;
 }) {
   if (parte.type === "reasoning") return <Raciocinio texto={parte.text} ativo={noAr && parte.state === "streaming"} />;
   if (parte.type === "text") {
@@ -314,7 +366,8 @@ function ParteDoChefe({
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-[#1a1a1a]" /> : null;
   }
   if (ehDelegacao(parte)) return <CartaoTarefa parte={parte as ParteDelegacao} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
-  if (ehAprovacao(parte)) return <CartaoAprovacao parte={parte} responder={responder} />;
+  if (ehAprovacao(parte))
+    return <CartaoAprovacao parte={parte} respondida={parte.state === "approval-requested" && respondidas.has(parte.approval.id)} responder={responder} />;
   const [passo] = passosDe({ id: "", role: "assistant", parts: [parte] });
   return passo ? <Passos passos={[passo]} className="text-sm" /> : null;
 }

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { Conversa } from "../../tipos";
 import { type ApiConversas, type Aviso, criarConversas } from "./conversas";
+import { criarPilhaDeDesfazer } from "./desfazer";
 
 const conversa = (id: string, atualizadaEm: string): Conversa => ({
   id,
@@ -46,30 +47,32 @@ const ids = (l: readonly Conversa[]) => l.map((c) => c.id);
 test("excluir e depois Desfazer restaura a conversa no servidor e no lugar dela na lista", async () => {
   const { api, chamadas } = servidor();
   const avisos: Aviso[] = [];
-  const s = criarConversas(api, (a) => avisos.push(a));
+  const pilha = criarPilhaDeDesfazer();
+  const s = criarConversas(api, (a) => avisos.push(a), pilha);
   await s.carregar();
 
   await s.excluir("a");
   expect(ids(s.ler().ativas)).toEqual(["b"]);
   const aviso = avisos.find((a) => a.tipo === "desfazivel");
-  expect(aviso?.tipo === "desfazivel" && aviso.verbo).toBe("excluída");
+  expect(aviso?.tipo === "desfazivel" && aviso.texto).toBe("Conversa excluída:");
 
-  if (aviso?.tipo === "desfazivel") aviso.desfazer();
+  if (aviso?.tipo === "desfazivel") void pilha.consumir(aviso.chave);
   await Bun.sleep(0);
   expect(chamadas).toEqual(["apagar a", "restaurar a"]);
   expect(ids(s.ler().ativas)).toEqual(["a", "b"]);
   expect(ids(await api.listar(false))).toEqual(["a", "b"]);
   // O ⌘Z depois do toast não desfaz a mesma coisa de novo.
-  expect(s.desfazerUltimo()).toBeNull();
+  expect(pilha.desfazerUltimo()).toBeNull();
 });
 
 test("⌘Z desfaz o último arquivamento", async () => {
   const { api } = servidor();
-  const s = criarConversas(api, () => {});
+  const pilha = criarPilhaDeDesfazer();
+  const s = criarConversas(api, () => {}, pilha);
   await s.carregar();
   await s.arquivar("b", true);
   expect(ids(s.ler().arquivadas)).toEqual(["b"]);
-  expect(s.desfazerUltimo()).not.toBeNull();
+  expect(pilha.desfazerUltimo()).not.toBeNull();
   await Bun.sleep(0);
   expect(ids(s.ler().ativas)).toEqual(["a", "b"]);
   expect(ids(await api.listar(true))).toEqual([]);
@@ -78,10 +81,31 @@ test("⌘Z desfaz o último arquivamento", async () => {
 test("falha do servidor devolve a conversa à lista e avisa, sem deixar desfazer pendurado", async () => {
   const { api } = servidor("apagar");
   const avisos: Aviso[] = [];
-  const s = criarConversas(api, (a) => avisos.push(a));
+  const pilha = criarPilhaDeDesfazer();
+  const s = criarConversas(api, (a) => avisos.push(a), pilha);
   await s.carregar();
   await s.excluir("a");
   expect(ids(s.ler().ativas)).toEqual(["a", "b"]);
   expect(avisos.map((a) => a.tipo)).toEqual(["erro"]);
-  expect(s.desfazerUltimo()).toBeNull();
+  expect(pilha.desfazerUltimo()).toBeNull();
+});
+
+test("⌘Z segue a ordem do app inteiro: desfaz a config do bot por cima e depois a conversa", async () => {
+  const { api } = servidor();
+  const pilha = criarPilhaDeDesfazer();
+  const s = criarConversas(api, () => {}, pilha);
+  await s.carregar();
+  await s.arquivar("b", true);
+  const desfeito: string[] = [];
+  pilha.empilhar(() => void desfeito.push("restauração do bot"));
+
+  pilha.desfazerUltimo();
+  await Bun.sleep(0);
+  expect(desfeito).toEqual(["restauração do bot"]);
+  expect(ids(s.ler().arquivadas)).toEqual(["b"]);
+
+  pilha.desfazerUltimo();
+  await Bun.sleep(0);
+  expect(ids(s.ler().ativas)).toEqual(["a", "b"]);
+  expect(pilha.vazia()).toBe(true);
 });

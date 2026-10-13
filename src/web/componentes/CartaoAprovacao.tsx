@@ -1,6 +1,8 @@
-import { useRef, useState } from "react";
-import { faseDa, type ParteAprovacao } from "../tipos";
+import { useEffect, useRef } from "react";
+import { ariaDe, ehMac } from "../teclado/atalhos";
+import { ehAprovacao, faseDa, type Mensagem, type ParteAprovacao } from "../tipos";
 import { COR_DO_ROTULO, IconeDaFase } from "./ia/LinhaFerramenta";
+import { Teclas } from "./menu/Teclas";
 
 const MIDIA = { IMAGE: "Feed", STORIES: "Stories" } as const;
 
@@ -41,41 +43,66 @@ function desfecho(p: ParteAprovacao): { texto: string; erro?: boolean } | null {
   }
 }
 
-/** Pedido de aprovação de publicar_agora e agendar_publicacao. Um clique só vale; o segundo é ignorado. */
-export function CartaoAprovacao({ parte, responder }: { parte: ParteAprovacao; responder: (id: string, aprovado: boolean) => void }) {
-  const [respondeu, setRespondeu] = useState(false);
-  const enviado = useRef(false);
+/** Os pedidos de aprovação ainda sem resposta, nem do servidor nem desta tela. */
+export function aprovacoesPendentes(mensagens: readonly Mensagem[], respondidas: ReadonlySet<string>): string[] {
+  return mensagens.flatMap((m) =>
+    m.parts.flatMap((p) => (ehAprovacao(p) && p.state === "approval-requested" && !respondidas.has(p.approval.id) ? [p.approval.id] : [])),
+  );
+}
+
+/**
+ * Pedido de aprovação de publicar_agora e agendar_publicacao. A conversa guarda quem já foi
+ * respondido, então clique, A e R valem uma vez só. O cartão é focável e as teclas A e R
+ * agem nele; as dicas aparecem com o foco dentro.
+ */
+export function CartaoAprovacao({ parte, respondida, responder }: { parte: ParteAprovacao; respondida: boolean; responder: (id: string, aprovado: boolean) => void }) {
   const { titulo, detalhe } = pergunta(parte);
   const fim = desfecho(parte);
+  const pendente = parte.state === "approval-requested";
+  const secao = useRef<HTMLElement>(null);
 
-  function decidir(aprovado: boolean) {
-    if (enviado.current || parte.state !== "approval-requested") return;
-    enviado.current = true;
-    setRespondeu(true);
-    responder(parte.approval.id, aprovado);
-  }
+  // O botão some ou fica desabilitado ao responder; o foco fica no cartão, que anuncia o desfecho.
+  useEffect(() => {
+    const foco = document.activeElement;
+    if (respondida && (foco === document.body || secao.current?.contains(foco))) secao.current?.focus();
+  }, [respondida]);
 
   return (
-    <section aria-label={titulo} className="rounded-cartao border border-linha bg-superficie px-4 py-3.5 text-sm/normal">
+    <section
+      ref={secao}
+      aria-label={titulo}
+      data-escopo="conversa"
+      data-aprovacao={pendente ? parte.approval.id : undefined}
+      tabIndex={pendente && !respondida ? 0 : -1}
+      className="group/aprovacao rounded-cartao border border-linha bg-superficie px-4 py-3.5 text-sm/normal outline-offset-2 focus-visible:outline-2 focus-visible:outline-tinta"
+    >
       <p className="font-medium">{titulo}</p>
       <p className="text-tinta-2">{detalhe}</p>
-      {parte.state === "approval-requested" ? (
+      {pendente ? (
         <div className="mt-3 flex justify-end gap-2">
           <button
             type="button"
-            disabled={respondeu}
-            onClick={() => decidir(false)}
-            className="pressiona h-9 cursor-pointer rounded-full bg-linha px-4 text-[13px] font-medium transition-colors duration-150 hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
+            disabled={respondida}
+            onClick={() => responder(parte.approval.id, false)}
+            aria-keyshortcuts={ariaDe("recusar", ehMac)}
+            className="pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full bg-linha px-4 text-[13px] font-medium transition-colors duration-150 hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
           >
             Recusar
+            <span className="hidden group-focus-within/aprovacao:inline-flex">
+              <Teclas atalho="recusar" />
+            </span>
           </button>
           <button
             type="button"
-            disabled={respondeu}
-            onClick={() => decidir(true)}
-            className="pressiona h-9 cursor-pointer rounded-full bg-tinta px-4 text-[13px] font-medium text-sobre-tinta disabled:cursor-default disabled:opacity-50"
+            disabled={respondida}
+            onClick={() => responder(parte.approval.id, true)}
+            aria-keyshortcuts={ariaDe("aprovar", ehMac)}
+            className="pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full bg-tinta px-4 text-[13px] font-medium text-sobre-tinta disabled:cursor-default disabled:opacity-50"
           >
             Aprovar
+            <span className="hidden group-focus-within/aprovacao:inline-flex">
+              <Teclas atalho="aprovar" tom="escuro" />
+            </span>
           </button>
         </div>
       ) : (

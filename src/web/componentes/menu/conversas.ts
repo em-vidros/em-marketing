@@ -1,5 +1,6 @@
 import type { MudancaConversa } from "../../../agent/conversas";
 import type { Conversa } from "../../tipos";
+import type { PilhaDeDesfazer } from "./desfazer";
 
 /** O que a lista precisa do servidor. Injetado para os testes rodarem sem rede. */
 export interface ApiConversas {
@@ -15,14 +16,8 @@ export interface Lista {
   pronta: boolean;
 }
 
-export type Aviso =
-  | { tipo: "desfazivel"; chave: number; verbo: "excluída" | "arquivada" | "desarquivada"; titulo: string; desfazer: () => void }
-  | { tipo: "erro"; texto: string };
-
-interface Desfazivel {
-  chave: number;
-  desfazer: () => Promise<void>;
-}
+/** O toast: com `chave`, oferece Desfazer, que consome a mesma entrada da pilha que o ⌘Z. */
+export type Aviso = { tipo: "desfazivel"; chave: number; texto: string; nome?: string } | { tipo: "erro"; texto: string };
 
 /** atualizadaEm é texto ISO-like do SQLite; a ordem lexical é a ordem do tempo. */
 const maisNovaPrimeiro = (a: Conversa, b: Conversa) => b.atualizadaEm.localeCompare(a.atualizadaEm);
@@ -33,15 +28,13 @@ const com = (lista: readonly Conversa[], c: Conversa) => [...sem(lista, c.id), c
 /**
  * A lista de conversas da barra, com mudanças otimistas: a tela muda na hora, o servidor
  * confirma depois, e uma falha desfaz a mudança e avisa. Excluir e arquivar empilham um
- * desfazer, que o toast e o ⌘Z consomem.
+ * desfazer na pilha do app, que o toast e o ⌘Z consomem.
  */
-export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void) {
+export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void, pilha: PilhaDeDesfazer) {
   let estado: Lista = { ativas: [], arquivadas: [], pronta: false };
   const ouvintes = new Set<() => void>();
-  const pilha: Desfazivel[] = [];
   /** Excluídas esperando o servidor: uma releitura no meio não pode trazê-las de volta. */
   const apagando = new Set<string>();
-  let proximaChave = 1;
 
   const mudar = (novo: Partial<Lista>) => {
     estado = { ...estado, ...novo };
@@ -53,41 +46,22 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void) {
   const tirar = (id: string) => mudar({ ativas: sem(estado.ativas, id), arquivadas: sem(estado.arquivadas, id) });
   const falhou = (texto: string) => avisar({ tipo: "erro", texto });
 
-  function empilhar(desfazer: () => Promise<void>): Desfazivel {
-    const d = { chave: proximaChave++, desfazer };
-    pilha.push(d);
-    if (pilha.length > 20) pilha.shift();
-    return d;
-  }
-  /** Tira da pilha antes de rodar: o botão do toast e o ⌘Z nunca desfazem a mesma coisa duas vezes. */
-  function consumir(chave: number) {
-    const i = pilha.findIndex((d) => d.chave === chave);
-    if (i < 0) return Promise.resolve();
-    const [d] = pilha.splice(i, 1);
-    return d!.desfazer();
-  }
-
-  const descartar = (d: Desfazivel) => {
-    const i = pilha.indexOf(d);
-    if (i >= 0) pilha.splice(i, 1);
-  };
-
   async function arquivar(id: string, paraArquivar: boolean, comDesfazer = true): Promise<void> {
     const antes = achar(id);
     if (!antes || (antes.arquivadaEm !== null) === paraArquivar) return;
     recolocar({ ...antes, arquivadaEm: paraArquivar ? Date.now() : null });
     const pedido = api.mudar(id, { arquivada: paraArquivar });
     const d = comDesfazer
-      ? empilhar(async () => {
+      ? pilha.empilhar(async () => {
           await pedido.catch(() => {});
           await arquivar(id, !paraArquivar, false);
         })
       : null;
     try {
       recolocar(await pedido);
-      if (d && pilha.includes(d)) avisar({ tipo: "desfazivel", chave: d.chave, verbo: paraArquivar ? "arquivada" : "desarquivada", titulo: antes.titulo, desfazer: () => void consumir(d.chave) });
+      if (d !== null && pilha.contem(d)) avisar({ tipo: "desfazivel", chave: d, texto: paraArquivar ? "Conversa arquivada:" : "Conversa desarquivada:", nome: antes.titulo });
     } catch {
-      if (d) descartar(d);
+      if (d !== null) pilha.descartar(d);
       recolocar(antes);
       falhou(paraArquivar ? "Não deu para arquivar a conversa." : "Não deu para desarquivar a conversa.");
     }
@@ -132,7 +106,7 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void) {
       apagando.add(id);
       tirar(id);
       const pedido = api.apagar(id);
-      const d = empilhar(async () => {
+      const d = pilha.empilhar(async () => {
         recolocar(antes);
         try {
           await pedido;
@@ -146,22 +120,14 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void) {
       try {
         await pedido;
         // Um ⌘Z antes da resposta já desfez: o toast não tem mais o que oferecer.
-        if (pilha.includes(d)) avisar({ tipo: "desfazivel", chave: d.chave, verbo: "excluída", titulo: antes.titulo, desfazer: () => void consumir(d.chave) });
+        if (pilha.contem(d)) avisar({ tipo: "desfazivel", chave: d, texto: "Conversa excluída:", nome: antes.titulo });
       } catch {
-        descartar(d);
+        pilha.descartar(d);
         recolocar(antes);
         falhou("Não deu para excluir a conversa.");
       } finally {
         apagando.delete(id);
       }
-    },
-
-    /** O ⌘Z: desfaz a última exclusão ou arquivamento, se houver. */
-    desfazerUltimo(): number | null {
-      const d = pilha.at(-1);
-      if (!d) return null;
-      void consumir(d.chave);
-      return d.chave;
     },
   };
 }

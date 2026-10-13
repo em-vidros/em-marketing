@@ -6,6 +6,7 @@ import { BOT_IDS } from "./bots";
 import { Barra } from "./componentes/Barra";
 import { Avisos, fecharAviso, mostrarAviso } from "./componentes/menu/Avisos";
 import { criarConversas } from "./componentes/menu/conversas";
+import { pilhaDeDesfazer, useTemDesfazer } from "./componentes/menu/desfazer";
 import { FolhaAtalhos } from "./componentes/menu/FolhaAtalhos";
 import type { AcoesConversa } from "./componentes/menu/MenuConversa";
 import { type ModoPaleta, Paleta } from "./componentes/menu/Paleta";
@@ -41,6 +42,17 @@ export function App() {
 
 const VAZIO: Vivo = { mensagens: [], respondendo: false };
 
+/** O breakpoint md do Tailwind: daqui para cima a barra lateral é fixa; abaixo, gaveta. */
+const DESKTOP = "(min-width: 48rem)";
+const CHAVE_BARRA = "barra-oculta";
+const lerBarraOculta = () => {
+  try {
+    return localStorage.getItem(CHAVE_BARRA) === "1";
+  } catch {
+    return false;
+  }
+};
+
 /** As linhas de conversa da barra que está na tela: no celular, a da gaveta; no desktop, a fixa. */
 function linhasVisiveis(): HTMLAnchorElement[] {
   const lista = [...document.querySelectorAll<HTMLElement>("[data-lista-conversas]")].find((l) => l.getClientRects().length > 0);
@@ -65,15 +77,25 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   const [paleta, setPaleta] = useState<ModoPaleta | null>(null);
   const [folha, setFolha] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
-  const abrirMenu = useCallback(() => setMenu(true), []);
+  const [barraOculta, setBarraOculta] = useState(lerBarraOculta);
+  const reduzir = useReducedMotion();
+  const mostrarBarra = useCallback((mostrar: boolean) => {
+    setBarraOculta(!mostrar);
+    try {
+      localStorage.setItem(CHAVE_BARRA, mostrar ? "0" : "1");
+    } catch {}
+  }, []);
+  /** O botão de menu: no celular abre a gaveta; no desktop, mostra a barra que o ⌘\ escondeu. */
+  const abrirMenu = useCallback(() => (matchMedia(DESKTOP).matches ? mostrarBarra(true) : setMenu(true)), [mostrarBarra]);
   const fecharMenu = useCallback(() => setMenu(false), []);
   const respondendo = vivo.respondendo;
-  const [conversas] = useState(() => criarConversas(apiConversas, mostrarAviso));
+  const [conversas] = useState(() => criarConversas(apiConversas, mostrarAviso, pilhaDeDesfazer));
+  const temDesfazer = useTemDesfazer();
   const lista = useSyncExternalStore(conversas.assinar, conversas.ler);
   const bots = useNomesDosBots();
   const [atividade, relerAtividade] = useApi<ResumoTarefa[]>("/api/atividade", respondendo ? 3000 : 15000);
   const ativas = atividade.estado === "pronto" ? atividade.dados : [];
-  const estados = estadosDaEquipe(ativas, vivo.mensagens, respondendo);
+  const estados = estadosDaEquipe(ativas, vivo.mensagens, respondendo, bots);
 
   useTeclado();
   useEffect(() => void conversas.carregar(), [conversas]);
@@ -146,11 +168,18 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   useAtalho("paleta", () => setPaleta((p) => (p ? null : "tudo")));
   useAtalho("buscar", () => setPaleta("conversas"));
   useAtalho("atalhos", () => setFolha(true));
-  useAtalho("desfazer", () => {
-    const chave = conversas.desfazerUltimo();
-    if (chave === null) return false;
-    fecharAviso(chave);
-  });
+  // Ligado só com algo na pilha: a paleta esconde o Desfazer e o ⌘Z vazio segue para o navegador.
+  useAtalho(
+    "desfazer",
+    () => {
+      const chave = pilhaDeDesfazer.desfazerUltimo();
+      if (chave === null) return false;
+      fecharAviso(chave);
+    },
+    temDesfazer,
+  );
+  useAtalho("barra-lateral", () => (matchMedia(DESKTOP).matches ? mostrarBarra(barraOculta) : setMenu((m) => !m)));
+  useAtalho("config-bot", () => navegar(`/bots/${rota.tela === "bot" ? rota.id : "chefe"}/config`));
   useAtalho("nova-conversa", novoPedido);
   useAtalho("ir-atividade", () => navegar("/atividade"));
   useAtalho("ir-biblioteca", () => navegar("/biblioteca"));
@@ -200,8 +229,16 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
 
   return (
     <DicasProvider>
-      <div className="flex h-dvh overflow-hidden">
-        <div className="hidden w-[clamp(232px,20vw,272px)] flex-none border-r border-linha md:block">{barra(() => {})}</div>
+      <div data-barra={barraOculta ? "oculta" : undefined} className="group/shell flex h-dvh overflow-hidden">
+        <motion.div
+          initial={false}
+          animate={{ width: barraOculta ? 0 : "auto" }}
+          transition={reduzir ? { duration: 0 } : MOLA}
+          inert={barraOculta}
+          className={`hidden flex-none overflow-hidden border-r md:block ${barraOculta ? "border-transparent" : "border-linha"}`}
+        >
+          <div className="h-full w-[clamp(232px,20vw,272px)]">{barra(() => {})}</div>
+        </motion.div>
         <Gaveta aberta={menu} fechar={fecharMenu}>
           {barra(fecharMenu)}
         </Gaveta>

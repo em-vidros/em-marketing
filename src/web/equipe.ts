@@ -1,4 +1,4 @@
-import { BOT_IDS, BOTS, type BotId } from "./bots";
+import { BOT_IDS, type BotId } from "./bots";
 import { atividadeDe, textoDa } from "./componentes/ia/atividade";
 import { ehAprovacao, ehDelegacao, especialistaDa, type Mensagem, type ParteDelegacao, type ResumoTarefa } from "./tipos";
 
@@ -24,8 +24,14 @@ export function passoAtual(p: ParteDelegacao): string | null {
 /**
  * O estado de cada bot, juntando as tarefas ativas do usuário (todas as conversas) com o
  * que está ao vivo na conversa aberta, que tem o passo atual e manda quando os dois falam.
+ * `nomes` são os nomes em vigor, que o usuário pode trocar na config do bot.
  */
-export function estadosDaEquipe(atividade: readonly ResumoTarefa[], mensagens: readonly Mensagem[], respondendo: boolean): EstadosDaEquipe {
+export function estadosDaEquipe(
+  atividade: readonly ResumoTarefa[],
+  mensagens: readonly Mensagem[],
+  respondendo: boolean,
+  nomes: Record<BotId, { nome: string }>,
+): EstadosDaEquipe {
   const estados = Object.fromEntries(BOT_IDS.map((id) => [id, { tipo: "parado", texto: "Parado" }])) as EstadosDaEquipe;
 
   for (const t of [...atividade].reverse()) {
@@ -44,7 +50,7 @@ export function estadosDaEquipe(atividade: readonly ResumoTarefa[], mensagens: r
   const trabalhando = BOT_IDS.find((id) => id !== "chefe" && estados[id].tipo === "trabalhando");
   if (ultima?.parts.some((p) => ehAprovacao(p) && p.state === "approval-requested"))
     estados.chefe = { tipo: "esperando", texto: "Esperando você" };
-  else if (trabalhando) estados.chefe = { tipo: "delegando", texto: `Esperando o ${BOTS[trabalhando].nome}` };
+  else if (trabalhando) estados.chefe = { tipo: "delegando", texto: `Esperando ${nomes[trabalhando].nome}` };
   else if (respondendo) estados.chefe = { tipo: "trabalhando", texto: textoDa(atividadeDe(ultima, true)) };
 
   return estados;

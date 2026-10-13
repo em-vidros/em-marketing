@@ -1,13 +1,12 @@
 import { motion } from "motion/react";
 import { useEffect, useId, useReducer } from "react";
-import type { ConfigBot } from "../../agent/config";
 import type { Agora } from "../../db";
 import type { Modelo } from "../../agent/models";
-import { useApi } from "../api";
-import { BOT_IDS, BOTS } from "../bots";
+import { type NomesDosBots, useApi, useNomesDosBots } from "../api";
+import { BOT_IDS } from "../bots";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
-import { Configuracao } from "../componentes/bot/Configuracao";
+import { Configuracao, useFormularioDoBot } from "../componentes/bot/Configuracao";
 import { formulario, sujo, type DetalheBot } from "../componentes/bot/formulario";
 import { Trabalho } from "../componentes/bot/Trabalho";
 import { Segmentado } from "../componentes/Segmentado";
@@ -26,11 +25,11 @@ const ABAS = [
 const caminhoDa = (id: BotId, aba: Aba) => (aba === "config" ? `/bots/${id}/config` : `/bots/${id}`);
 
 /** O estado do cabeçalho, das tarefas ativas. O Chefe espera você quando há aprovação pendente. */
-function estadoDo(id: BotId, ativas: readonly ResumoTarefa[], aprovacoes: number): EstadoBot {
+function estadoDo(id: BotId, ativas: readonly ResumoTarefa[], aprovacoes: number, nomes: NomesDosBots): EstadoBot {
   if (id === "chefe") {
     if (aprovacoes > 0) return { tipo: "esperando", texto: "Esperando você" };
     const ocupado = ativas.find((t) => t.status === "trabalhando") ?? ativas[0];
-    return ocupado ? { tipo: "delegando", texto: `Esperando o ${BOTS[ocupado.botId].nome}` } : { tipo: "parado", texto: "Parado" };
+    return ocupado ? { tipo: "delegando", texto: `Esperando ${nomes[ocupado.botId].nome}` } : { tipo: "parado", texto: "Parado" };
   }
   if (ativas.some((t) => t.status === "trabalhando")) return { tipo: "trabalhando", texto: "Trabalhando" };
   return { tipo: "parado", texto: ativas.length > 0 ? "Na fila" : "Parado" };
@@ -51,21 +50,22 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
   const [f, despachar] = useReducer(formulario, { fase: "carregando" });
   const [config] = useApi<DetalheBot>(`/api/bots/${id}/config`);
   const [modelos] = useApi<Modelo[]>("/api/modelos");
-  const [bots] = useApi<ConfigBot[]>(aba === "config" ? "/api/bots" : null);
+  const nomes = useNomesDosBots();
   const [atividade] = useApi<ResumoTarefa[]>("/api/atividade", 3000);
   const [agora] = useApi<Agora>(id === "chefe" ? "/api/atividade/agora" : null, 5000);
   const painel = useId();
+  useFormularioDoBot(id, despachar);
 
   useEffect(() => {
     if (config.estado === "pronto") despachar({ tipo: "chegou", detalhe: config.dados });
   }, [config]);
 
   const salvo = f.fase === "pronto" ? f.salvo : null;
-  const nome = salvo?.nome ?? BOTS[id].nome;
-  const descricao = salvo?.descricao ?? BOTS[id].papel;
+  const nome = salvo?.nome ?? nomes[id].nome;
+  const descricao = salvo?.descricao ?? nomes[id].descricao;
   const ativas =
     atividade.estado === "pronto" ? atividade.dados.filter((t) => id === "chefe" || t.botId === id) : atividade.estado === "erro" ? [] : null;
-  const estado = estadoDo(id, ativas ?? [], agora.estado === "pronto" ? agora.dados.esperando.length : 0);
+  const estado = estadoDo(id, ativas ?? [], agora.estado === "pronto" ? agora.dados.esperando.length : 0, nomes);
   const modelo = salvo && modelos.estado === "pronto" ? (modelos.dados.find((m) => m.id === salvo.modelo)?.nome ?? salvo.modelo) : null;
 
   useEffect(() => {
@@ -132,7 +132,7 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
                 <ul className="sticky top-6 flex flex-col gap-0.5">
                   {BOT_IDS.map((b) => {
                     const atual = b === id;
-                    const rotulo = b === id ? nome : bots.estado === "pronto" ? (bots.dados.find((c) => c.id === b)?.nome ?? BOTS[b].nome) : BOTS[b].nome;
+                    const rotulo = b === id ? nome : nomes[b].nome;
                     return (
                       <li key={b}>
                         <a

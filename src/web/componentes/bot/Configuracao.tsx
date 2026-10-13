@@ -1,10 +1,13 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useId, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import type { Modelo } from "../../../agent/models";
-import { useApi, type Carga } from "../../api";
+import { recarregarBots, useApi, useNomesDosBots, type Carga } from "../../api";
 import { BOTS } from "../../bots";
 import { MOLA, MOLA_REDUZIDA } from "../../movimento";
 import type { BotId } from "../../tipos";
+import { fecharAviso, mostrarAviso } from "../menu/Avisos";
+import { pilhaDeDesfazer } from "../menu/desfazer";
 import { dataCurta } from "../peca";
 import { enviar } from "./enviar";
 import {
@@ -23,10 +26,42 @@ import {
 
 type Pronto = Extract<Formulario, { fase: "pronto" }>;
 
-/** O aviso com "Desfazer" depois de descartar ou restaurar. Fica até a pessoa fechar ou editar de novo. */
-interface Aviso {
-  texto: string;
-  desfazer: () => void;
+/**
+ * O formulário de cada página de bot montada. O desfazer de uma restauração roda no servidor e
+ * pode chegar depois de trocar de aba; por aqui ele acha o formulário que estiver na tela.
+ */
+const formularios = new Map<BotId, Dispatch<Acao>>();
+
+/**
+ * As entradas da pilha de desfazer que reescrevem o formulário. Editar o rascunho as invalida,
+ * porque desfazer jogaria a edição fora; sair da página invalida o descarte, cujo rascunho some.
+ */
+const doFormulario = new Map<BotId, { descarte?: number; restauro?: number }>();
+
+function largar(id: BotId, qual: "descarte" | "restauro") {
+  const chave = doFormulario.get(id)?.[qual];
+  if (chave === undefined) return;
+  pilhaDeDesfazer.descartar(chave);
+  fecharAviso(chave);
+  delete doFormulario.get(id)![qual];
+}
+
+function empilhar(id: BotId, qual: "descarte" | "restauro", desfazer: () => void | Promise<void>, texto: string) {
+  largar(id, qual);
+  const chave = pilhaDeDesfazer.empilhar(desfazer);
+  doFormulario.set(id, { ...doFormulario.get(id), [qual]: chave });
+  mostrarAviso({ tipo: "desfazivel", chave, texto });
+}
+
+/** Liga o formulário da página ao desfazer. Chame na página do bot, que é dona do reducer. */
+export function useFormularioDoBot(id: BotId, despachar: Dispatch<Acao>) {
+  useEffect(() => {
+    formularios.set(id, despachar);
+    return () => {
+      formularios.delete(id);
+      largar(id, "descarte");
+    };
+  }, [id, despachar]);
 }
 
 const conta = (n: number) => n.toLocaleString("pt-BR");
@@ -309,6 +344,14 @@ function Versoes({
   useEffect(recarregar, [f.salvo.versaoId, recarregar]);
   const [confirmando, setConfirmando] = useState<number | "padrao" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
+  const nomes = useNomesDosBots();
+  const abridores = useRef(new Map<number | "padrao", HTMLButtonElement | null>());
+  /** Cancelar devolve o foco ao botão que abriu a confirmação, que volta a existir ao fechar. */
+  const cancelar = () => {
+    const alvo = confirmando;
+    flushSync(() => setConfirmando(null));
+    if (alvo !== null) abridores.current.get(alvo)?.focus();
+  };
   const temRascunho = sujo(f);
   const nomeDo = (m: string) => (modelos.estado === "pronto" ? (modelos.dados.find((x) => x.id === m)?.nome ?? m) : m);
   const noPadrao = CAMPOS.every((c) => f.salvo.padrao[c]);
@@ -335,7 +378,7 @@ function Versoes({
             }
             rotulo="Restaurar padrão"
             confirmar={() => fazer(padrao, "Padrão do código restaurado.")}
-            cancelar={() => setConfirmando(null)}
+            cancelar={cancelar}
           />
         ) : (
           <div className="flex flex-wrap items-center gap-3">
@@ -343,6 +386,7 @@ function Versoes({
               {noPadrao ? "Em uso: o texto original do código." : "Cada gravação vira uma versão. Restaurar grava uma versão nova, então nada se perde."}
             </p>
             <button
+              ref={(el) => void abridores.current.set("padrao", el)}
               type="button"
               onClick={() => pedir("padrao", padrao, "")}
               disabled={noPadrao && !temRascunho}
@@ -364,7 +408,7 @@ function Versoes({
         <p className="border-t border-linha px-5 py-4 text-erro">Não deu para carregar as versões. {carga.erro.message}</p>
       ) : carga.dados.length === 0 ? (
         <p className="border-t border-linha px-5 py-4 text-pretty text-tinta-3">
-          Nenhuma versão gravada. O {BOTS[id].nome} usa o texto original do código até alguém salvar uma mudança.
+          Nenhuma versão gravada. {nomes[id].nome} usa o texto original do código até alguém salvar uma mudança.
         </p>
       ) : (
         <ol className="flex flex-col">
@@ -386,6 +430,7 @@ function Versoes({
                   </div>
                   {!emUso && confirmando !== v.id && (
                     <button
+                      ref={(el) => void abridores.current.set(v.id, el)}
                       type="button"
                       onClick={() => pedir(v.id, caminho, texto)}
                       aria-label={`Restaurar a versão de ${dataCurta.format(v.criadaEm)}`}
@@ -400,7 +445,7 @@ function Versoes({
                     pergunta="Restaurar esta versão? O que você editou e não salvou se perde."
                     rotulo="Restaurar"
                     confirmar={() => fazer(caminho, texto)}
-                    cancelar={() => setConfirmando(null)}
+                    cancelar={cancelar}
                   />
                 )}
                 <details className="group">
@@ -427,71 +472,45 @@ function Versoes({
   );
 }
 
-/** A barra que aparece com alterações não salvas, ou o aviso com "Desfazer". Mesmo lugar, nunca os dois. */
-function Barra({ f, aviso, salvar, descartar, fecharAviso }: { f: Pronto; aviso: Aviso | null; salvar: () => void; descartar: () => void; fecharAviso: () => void }) {
+/** A barra que aparece com alterações não salvas. O desfazer de descartar e restaurar vai pelo toast do app. */
+function Barra({ f, salvar, descartar }: { f: Pronto; salvar: () => void; descartar: () => void }) {
   const reduzir = useReducedMotion();
-  const mostrar = sujo(f) ? "salvar" : aviso ? "aviso" : null;
+  const mostrar = sujo(f);
   const fora = reduzir ? { opacity: 0 } : { opacity: 0, transform: "translateY(12px) scale(0.98)" };
   return (
     <div className="pointer-events-none sticky bottom-0 z-10 flex justify-center pt-6 pb-[max(16px,env(safe-area-inset-bottom))]">
       <div role="status" className="sr-only">
-        {mostrar === "aviso" ? aviso?.texto : mostrar === "salvar" ? (f.erro ?? "") : ""}
+        {mostrar ? (f.erro ?? "") : ""}
       </div>
-      <AnimatePresence mode="wait" initial={false}>
+      <AnimatePresence initial={false}>
         {mostrar && (
           <motion.div
-            key={mostrar}
             initial={fora}
             animate={{ opacity: 1, transform: "translateY(0px) scale(1)" }}
             exit={fora}
             transition={reduzir ? MOLA_REDUZIDA : MOLA}
             className="pointer-events-auto flex w-full max-w-xl items-center gap-2 rounded-[20px] bg-tinta py-2 pr-2 pl-4 text-sobre-tinta shadow-[0_8px_30px_rgb(15_13_10/0.18)]"
           >
-            {mostrar === "salvar" ? (
-              <>
-                <p className={`mr-auto line-clamp-2 min-w-0 flex-1 text-[13px] ${f.erro ? "text-[#ffb4ab]" : "text-sobre-tinta/80"}`}>
-                  {f.erro ?? "Alterações não salvas"}
-                </p>
-                <button
-                  type="button"
-                  onClick={descartar}
-                  aria-keyshortcuts="Escape"
-                  className="pressiona flex flex-none items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-sobre-tinta/80 transition-colors duration-150 hover:bg-white/10 hover:text-sobre-tinta"
-                >
-                  Descartar <kbd className="hidden font-sans text-xs text-sobre-tinta/50 sm:inline">Esc</kbd>
-                </button>
-                <button
-                  type="button"
-                  onClick={salvar}
-                  disabled={f.enviando}
-                  aria-keyshortcuts="Meta+S"
-                  className="pressiona flex flex-none items-center gap-1.5 rounded-full bg-sobre-tinta px-3.5 py-1.5 font-medium text-tinta disabled:cursor-progress disabled:opacity-70"
-                >
-                  {f.enviando ? "Salvando…" : "Salvar"} <kbd className="hidden font-sans text-xs text-tinta-3 sm:inline">⌘S</kbd>
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="mr-auto min-w-0 flex-1 text-[13px] text-sobre-tinta/80">{aviso?.texto}</p>
-                <button
-                  type="button"
-                  onClick={aviso?.desfazer}
-                  className="pressiona rounded-full px-3 py-1.5 font-medium text-sobre-tinta transition-colors duration-150 hover:bg-white/10"
-                >
-                  Desfazer
-                </button>
-                <button
-                  type="button"
-                  onClick={fecharAviso}
-                  aria-label="Fechar aviso"
-                  className="pressiona grid size-8 place-items-center rounded-full text-sobre-tinta/60 transition-colors duration-150 hover:bg-white/10 hover:text-sobre-tinta"
-                >
-                  <svg aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                    <path d="M2 2l8 8M10 2l-8 8" />
-                  </svg>
-                </button>
-              </>
-            )}
+            <p className={`mr-auto line-clamp-2 min-w-0 flex-1 text-[13px] ${f.erro ? "text-[#ffb4ab]" : "text-sobre-tinta/80"}`}>
+              {f.erro ?? "Alterações não salvas"}
+            </p>
+            <button
+              type="button"
+              onClick={descartar}
+              aria-keyshortcuts="Escape"
+              className="pressiona flex flex-none items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-sobre-tinta/80 transition-colors duration-150 hover:bg-white/10 hover:text-sobre-tinta"
+            >
+              Descartar <kbd className="hidden font-sans text-xs text-sobre-tinta/50 sm:inline">Esc</kbd>
+            </button>
+            <button
+              type="button"
+              onClick={salvar}
+              disabled={f.enviando}
+              aria-keyshortcuts="Meta+S"
+              className="pressiona flex flex-none items-center gap-1.5 rounded-full bg-sobre-tinta px-3.5 py-1.5 font-medium text-tinta disabled:cursor-progress disabled:opacity-70"
+            >
+              {f.enviando ? "Salvando…" : "Salvar"} <kbd className="hidden font-sans text-xs text-tinta-3 sm:inline">⌘S</kbd>
+            </button>
           </motion.div>
         )}
       </AnimatePresence>
@@ -504,12 +523,12 @@ function Barra({ f, aviso, salvar, descartar, fecharAviso }: { f: Pronto; aviso:
  * cabeçalho; aqui ficam os campos, o histórico e os atalhos ⌘S e Esc.
  */
 export function Configuracao({ id, f, despachar, modelos }: { id: BotId; f: Pronto; despachar: Dispatch<Acao>; modelos: Carga<Modelo[]> }) {
-  const [aviso, setAviso] = useState<Aviso | null>(null);
   const ids = useId();
   const campos = useRef<Partial<Record<CampoEditavel, HTMLElement | null>>>({});
 
   const editar = (campo: CampoEditavel, valor: string) => {
-    setAviso(null);
+    largar(id, "descarte");
+    largar(id, "restauro");
     despachar({ tipo: "editar", campo, valor });
   };
 
@@ -520,7 +539,9 @@ export function Configuracao({ id, f, despachar, modelos }: { id: BotId; f: Pron
     const primeiro = CAMPOS.find((c) => problemas[c]);
     if (primeiro) return campos.current[primeiro]?.focus();
     try {
-      despachar({ tipo: "chegou", detalhe: await enviar<DetalheBot>(`/api/bots/${id}/config`, "PUT", mudanca(f.salvo, f.rascunho)) });
+      const detalhe = await enviar<DetalheBot>(`/api/bots/${id}/config`, "PUT", mudanca(f.salvo, f.rascunho));
+      despachar({ tipo: "chegou", detalhe });
+      if (detalhe.versaoId !== f.salvo.versaoId) void recarregarBots();
     } catch (e) {
       despachar({ tipo: "falhou", erro: `Não salvou. ${(e as Error).message}` });
     }
@@ -529,23 +550,27 @@ export function Configuracao({ id, f, despachar, modelos }: { id: BotId; f: Pron
   const descartar = () => {
     if (!sujo(f)) return;
     despachar({ tipo: "descartar" });
-    setAviso({ texto: "Alterações descartadas.", desfazer: () => (despachar({ tipo: "recuperar" }), setAviso(null)) });
+    empilhar(id, "descarte", () => formularios.get(id)?.({ tipo: "recuperar" }), "Alterações descartadas.");
   };
 
   /** Restaura e oferece voltar à versão que estava em uso, que continua no histórico. */
   const restaurar = async (caminho: string, texto: string) => {
     const anterior = f.salvo.versaoId;
     despachar({ tipo: "chegou", detalhe: await enviar<DetalheBot>(caminho, "POST") });
+    void recarregarBots();
     const volta = anterior === null ? `/api/bots/${id}/padrao` : `/api/bots/${id}/versoes/${anterior}/restaurar`;
-    setAviso({
-      texto,
-      desfazer: () => {
-        setAviso(null);
+    empilhar(
+      id,
+      "restauro",
+      () =>
         enviar<DetalheBot>(volta, "POST")
-          .then((detalhe) => despachar({ tipo: "chegou", detalhe }))
-          .catch((e: Error) => setAviso({ texto: `Não deu para desfazer. ${e.message}`, desfazer: () => setAviso(null) }));
-      },
-    });
+          .then((detalhe) => {
+            formularios.get(id)?.({ tipo: "chegou", detalhe });
+            void recarregarBots();
+          })
+          .catch((e: Error) => mostrarAviso({ tipo: "erro", texto: `Não deu para desfazer. ${e.message}` })),
+      texto,
+    );
   };
 
   const atalhos = useRef({ salvar, descartar });
@@ -623,7 +648,7 @@ export function Configuracao({ id, f, despachar, modelos }: { id: BotId; f: Pron
         As mudanças valem a partir da próxima mensagem, inclusive nas conversas que já existem. Não precisa reiniciar nada.
       </p>
       <Versoes id={id} f={f} modelos={modelos} restaurar={restaurar} />
-      <Barra f={f} aviso={aviso} salvar={() => void salvar()} descartar={descartar} fecharAviso={() => setAviso(null)} />
+      <Barra f={f} salvar={() => void salvar()} descartar={descartar} />
     </form>
   );
 }
