@@ -58,7 +58,7 @@ export function Paleta({
         <Dialog.Popup
           data-teclado="isolado"
           aria-label={so ? "Buscar conversas" : "Paleta de comandos"}
-          className="fixed top-[max(16px,12vh)] left-1/2 z-[71] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-balao border border-linha bg-superficie shadow-[0_24px_64px_rgb(15_13_10/0.18),0_2px_6px_rgb(15_13_10/0.06)] outline-none"
+          className="fixed top-[max(16px,12vh)] left-1/2 z-[71] w-[min(640px,calc(100vw-32px))] -translate-x-1/2 overflow-hidden rounded-[20px] border border-linha bg-superficie shadow-[0_24px_64px_rgb(15_13_10/0.18),0_2px_6px_rgb(15_13_10/0.06)] outline-none"
         >
           <Command label={so ? "Buscar conversas" : "Paleta de comandos"} loop filter={filtrar}>
             <div className="flex items-center gap-3 border-b border-linha px-5">

@@ -74,7 +74,7 @@ function Faixa({ id, texto, nome, vida, children }: { id: string | number; texto
   return (
     <div
       {...pausa}
-      className="flex w-[min(420px,calc(100vw-32px))] items-center gap-2 rounded-cartao bg-tinta py-1.5 pr-1.5 pl-4 text-sm text-white/60 shadow-[0_12px_32px_rgb(0_0_0/0.22)]"
+      className="flex w-[min(420px,calc(100vw-32px))] items-center gap-2 rounded-[22px] bg-tinta py-1.5 pr-1.5 pl-4 text-sm text-white/60 shadow-[0_12px_32px_rgb(0_0_0/0.22)]"
     >
       <p className="line-clamp-3 min-w-0 flex-1 [overflow-wrap:anywhere]">
         {texto} {nome && <span className="text-white">{nome}</span>}
