@@ -213,7 +213,7 @@ function PainelAgendado() {
               detalhe={[a.pilar, MIDIA[a.tipo]].filter(Boolean).join(" · ")}
               quando={dataCurta.format(new Date(a.publicarEm))}
               estado={ESTADO_FILA[a.status]}
-              titulo={a.status === "failed" && a.erro ? a.erro : undefined}
+              motivo={a.status === "failed" ? (a.erro ?? "O Instagram não disse o motivo.") : undefined}
             />
           ))}
         </Secao>
@@ -228,7 +228,7 @@ function LinhaDePeca({
   detalhe,
   quando,
   estado,
-  titulo,
+  motivo,
   href,
 }: {
   capa: string | null;
@@ -236,7 +236,8 @@ function LinhaDePeca({
   detalhe: string;
   quando: string;
   estado?: { rotulo: string; cor: string };
-  titulo?: string;
+  /** Por que a publicação falhou, numa linha própria embaixo da peça. */
+  motivo?: string;
   href?: string;
 }) {
   const corpo = (
@@ -250,15 +251,16 @@ function LinhaDePeca({
         <span className="text-xs text-tinta-2 tabular">{quando}</span>
         {estado && <span className={`text-xs ${estado.cor}`}>{estado.rotulo}</span>}
       </span>
+      {motivo && <span className="col-start-2 col-end-4 text-[13px] text-pretty text-erro [overflow-wrap:anywhere]">Não publicou. {motivo}</span>}
     </>
   );
   const classe = "grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] px-3 py-2.5";
   return href ? (
-    <a href={href} target="_blank" rel="noreferrer" title={titulo} className={`${classe} transition-colors duration-150 hover:bg-hover`}>
+    <a href={href} target="_blank" rel="noreferrer" className={`${classe} transition-colors duration-150 hover:bg-hover`}>
       {corpo}
     </a>
   ) : (
-    <div title={titulo} className={classe}>
+    <div className={classe}>
       {corpo}
     </div>
   );

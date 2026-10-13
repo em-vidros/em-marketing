@@ -155,101 +155,105 @@ export function Barra({
   const { aoNavegar } = lista;
 
   return (
-    <nav aria-label="Navegação" className="flex h-full flex-col gap-5 overflow-y-auto overscroll-contain bg-painel px-2.5 py-3.5">
-      <div className="flex items-center gap-2.5 px-2.5 py-1">
-        <img src="/logo/em-simbolo.svg" alt="" width={26} height={14} className="h-3.5 w-auto" />
-        <span className="text-[15px] font-semibold tracking-[-0.015em]">EM Marketing</span>
-      </div>
+    <nav aria-label="Navegação" className="flex h-full flex-col gap-5 overflow-hidden bg-painel py-3.5">
+      <div className="flex flex-col gap-5 px-2.5">
+        <div className="flex items-center gap-2.5 px-2.5 py-1">
+          <img src="/logo/em-simbolo.svg" alt="" width={26} height={14} className="h-3.5 w-auto" />
+          <span className="text-[15px] font-semibold tracking-[-0.015em]">EM Marketing</span>
+        </div>
 
-      <div className="flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={() => (novoPedido(), aoNavegar())}
-          aria-keyshortcuts={ariaDe("nova-conversa", ehMac)}
-          className="pressiona flex h-10 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-full border border-linha-forte px-3 font-medium transition-colors duration-150 hover:bg-hover"
-        >
-          <svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M11.5 2.5l2 2L7 11l-2.7.7L5 9z" />
-            <path d="M13 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3.5" />
-          </svg>
-          Novo pedido
-          <span className="ml-auto max-md:hidden">
-            <Teclas atalho="nova-conversa" />
-          </span>
-        </button>
-        <Dica rotulo="Buscar e comandos" atalho="paleta" lado="bottom">
+        <div className="flex items-center gap-1.5">
           <button
             type="button"
-            onClick={abrirPaleta}
-            aria-label="Buscar e comandos"
-            aria-keyshortcuts={ariaDe("paleta", ehMac)}
-            className="pressiona grid size-10 flex-none cursor-pointer place-items-center rounded-full text-tinta-2 transition-colors duration-150 hover:bg-hover hover:text-tinta"
+            onClick={() => (novoPedido(), aoNavegar())}
+            aria-keyshortcuts={ariaDe("nova-conversa", ehMac)}
+            className="pressiona flex h-10 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-full border border-linha-forte px-3 font-medium transition-colors duration-150 hover:bg-hover"
           >
-            <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
-              <circle cx="7" cy="7" r="4.75" />
-              <path d="M10.5 10.5 14 14" strokeLinecap="round" />
+            <svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M11.5 2.5l2 2L7 11l-2.7.7L5 9z" />
+              <path d="M13 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h3.5" />
             </svg>
+            Novo pedido
+            <span className="ml-auto max-md:hidden">
+              <Teclas atalho="nova-conversa" />
+            </span>
           </button>
-        </Dica>
-      </div>
-
-      <section aria-label="Equipe" className="flex flex-col gap-px">
-        <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-3">Equipe</h2>
-        <ul className="flex flex-col gap-px">
-          {BOT_IDS.map((id) => {
-            const caminho = `/bots/${id}`;
-            const atual = telaAtual === caminho || telaAtual.startsWith(`${caminho}/`);
-            return (
-              <li key={id}>
-                <Dica rotulo={`Abrir ${bots[id].nome}`} atalho={atalhoDoBot(id)}>
-                  <a href={caminho} aria-current={atual ? "page" : undefined} onClick={(e) => (aoClicarLink(e), aoNavegar())} className={`${linkDe(atual)} py-1.5`}>
-                    <Avatar bot={id} tamanho={26} estado={estados[id].tipo} />
-                    <span className="flex min-w-0 flex-col">
-                      <span className="truncate leading-tight font-medium text-tinta">{bots[id].nome}</span>
-                      <span className="truncate text-xs text-tinta-3">{estados[id].texto}</span>
-                    </span>
-                  </a>
-                </Dica>
-              </li>
-            );
-          })}
-        </ul>
-      </section>
-
-      <div data-lista-conversas className="flex flex-col gap-5">
-        <Grupo titulo="Hoje" conversas={hoje} alvoTab={alvoTab} {...lista} />
-        <Grupo titulo="Antes" conversas={antes} alvoTab={alvoTab} {...lista} />
-        {arquivadas.length > 0 && (
-          <section aria-label="Arquivadas" className="flex flex-col gap-px">
+          <Dica rotulo="Buscar e comandos" atalho="paleta" lado="bottom">
             <button
               type="button"
-              aria-expanded={mostrarArquivadas}
-              onClick={alternarArquivadas}
-              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-item px-3 text-xs text-tinta-3 hover:text-tinta"
+              onClick={abrirPaleta}
+              aria-label="Buscar e comandos"
+              aria-keyshortcuts={ariaDe("paleta", ehMac)}
+              className="pressiona grid size-10 flex-none cursor-pointer place-items-center rounded-full text-tinta-2 transition-colors duration-150 hover:bg-hover hover:text-tinta"
             >
-              Arquivadas
-              <span className="tabular font-mono">{arquivadas.length}</span>
-              <svg
-                aria-hidden="true"
-                width="10"
-                height="10"
-                viewBox="0 0 10 10"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`transition-transform duration-150 ${mostrarArquivadas ? "rotate-90" : ""}`}
-              >
-                <path d="M3.5 2l3 3-3 3" />
+              <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
+                <circle cx="7" cy="7" r="4.75" />
+                <path d="M10.5 10.5 14 14" strokeLinecap="round" />
               </svg>
             </button>
-            {mostrarArquivadas && arquivadas.map((c) => <Linha key={c.id} c={c} tabulavel={c.id === alvoTab} {...lista} />)}
-          </section>
-        )}
+          </Dica>
+        </div>
       </div>
 
-      <div className="mt-auto flex flex-col gap-px">
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-2.5">
+        <section aria-label="Equipe" className="flex flex-col gap-px">
+          <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-3">Equipe</h2>
+          <ul className="flex flex-col gap-px">
+            {BOT_IDS.map((id) => {
+              const caminho = `/bots/${id}`;
+              const atual = telaAtual === caminho || telaAtual.startsWith(`${caminho}/`);
+              return (
+                <li key={id}>
+                  <Dica rotulo={`Abrir ${bots[id].nome}`} atalho={atalhoDoBot(id)}>
+                    <a href={caminho} aria-current={atual ? "page" : undefined} onClick={(e) => (aoClicarLink(e), aoNavegar())} className={`${linkDe(atual)} py-1.5`}>
+                      <Avatar bot={id} tamanho={26} estado={estados[id].tipo} />
+                      <span className="flex min-w-0 flex-col">
+                        <span className="truncate leading-tight font-medium text-tinta">{bots[id].nome}</span>
+                        <span className="truncate text-xs text-tinta-3">{estados[id].texto}</span>
+                      </span>
+                    </a>
+                  </Dica>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+
+        <div data-lista-conversas className="flex flex-col gap-5">
+          <Grupo titulo="Hoje" conversas={hoje} alvoTab={alvoTab} {...lista} />
+          <Grupo titulo="Antes" conversas={antes} alvoTab={alvoTab} {...lista} />
+          {arquivadas.length > 0 && (
+            <section aria-label="Arquivadas" className="flex flex-col gap-px">
+              <button
+                type="button"
+                aria-expanded={mostrarArquivadas}
+                onClick={alternarArquivadas}
+                className="flex h-8 cursor-pointer items-center gap-1.5 rounded-item px-3 text-xs text-tinta-3 hover:text-tinta"
+              >
+                Arquivadas
+                <span className="tabular font-mono">{arquivadas.length}</span>
+                <svg
+                  aria-hidden="true"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className={`transition-transform duration-150 ${mostrarArquivadas ? "rotate-90" : ""}`}
+                >
+                  <path d="M3.5 2l3 3-3 3" />
+                </svg>
+              </button>
+              {mostrarArquivadas && arquivadas.map((c) => <Linha key={c.id} c={c} tabulavel={c.id === alvoTab} {...lista} />)}
+            </section>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-px px-2.5">
         <Dica rotulo="Atividade" atalho="ir-atividade">
           <a href="/atividade" onClick={(e) => (aoClicarLink(e), aoNavegar())} className={`${linkDe(telaAtual === "/atividade")} justify-between`}>
             Atividade
