@@ -2,7 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { APICallError, isToolUIPart, simulateReadableStream, type LanguageModel, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { abrirConversaDoUsuario, mensagensDaConversa } from "../agent/conversas";
+import { AINDA_RESPONDENDO, abrirConversaDoUsuario, apagarMensagem, conversaDoUsuario, mensagensDaConversa } from "../agent/conversas";
 import { criarPost, gravarPost, transicionar, type EtapaPost, type Evento } from "../agent/post";
 import { db } from "../db";
 import { rotaDeChat } from "./chat";
@@ -52,13 +52,13 @@ function conversaComPost(): string {
   return id;
 }
 
-/** POST /api/chat como o useChat manda, e os chunks do stream de resposta. */
+/** POST /api/chat como o useChat manda. */
+const pedir = (rota: ReturnType<typeof rotaDeChat>, conversaId: string, ultima: UIMessage, botId = "chefe") =>
+  rota(new Request("http://localhost/api/chat", { method: "POST", body: JSON.stringify({ id: conversaId, botId, messages: [ultima] }) }), usuario);
+
+/** POST /api/chat e os chunks do stream de resposta. */
 async function postar(rota: ReturnType<typeof rotaDeChat>, conversaId: string, ultima: UIMessage) {
-  const req = new Request("http://localhost/api/chat", {
-    method: "POST",
-    body: JSON.stringify({ id: conversaId, botId: "chefe", messages: [ultima] }),
-  });
-  const corpo = await (await rota(req, usuario)).text();
+  const corpo = await (await pedir(rota, conversaId, ultima)).text();
   return corpo
     .split("\n")
     .filter((l) => l.startsWith("data: ") && l !== "data: [DONE]")
@@ -109,6 +109,108 @@ describe("aprovação de tool", () => {
     expect(agendados(id)).toBe(1);
     expect(parteSalva(id)).toMatchObject({ state: "output-available", output: { ok: true } });
     expect(reenvio).not.toContainEqual(expect.objectContaining({ type: "tool-output-available", toolCallId: "agendar-1" }));
+  });
+});
+
+const doUsuario = (id: string, texto: string): UIMessage => ({ id, role: "user", parts: [{ type: "text", text: texto }] });
+const textos = (conversaId: string) => mensagensDaConversa(conversaId).map((m) => [m.role, m.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("")]);
+const responde = (texto: string) =>
+  turnoDoModelo([{ type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: texto }, { type: "text-end", id: "t" }], "stop");
+
+describe("editar e apagar mensagens", () => {
+  test("editar a mensagem do usuário descarta o que veio depois e o bot responde ao texto novo", async () => {
+    const modelo = new MockLanguageModelV4({ doStream: async () => responde("Ok.") });
+    const rota = rotaDeChat({ resolverModelo: () => modelo });
+    const id = `editar-${crypto.randomUUID()}`;
+    await postar(rota, id, doUsuario("u1", "pedido-original"));
+    await postar(rota, id, doUsuario("u2", "pedido-seguinte"));
+
+    await postar(rota, id, doUsuario("u1", "pedido-editado"));
+
+    const visto = JSON.stringify(modelo.doStreamCalls.at(-1)?.prompt);
+    expect(visto).toContain("pedido-editado");
+    expect(visto).not.toContain("pedido-original");
+    expect(visto).not.toContain("pedido-seguinte");
+    expect(textos(id)).toEqual([
+      ["user", "pedido-editado"],
+      ["assistant", "Ok."],
+    ]);
+  });
+
+  test("a mensagem do bot não se edita, nem como mensagem do usuário nem reescrita pelo cliente", async () => {
+    const rota = rotaDeChat({ resolverModelo: () => new MockLanguageModelV4({ doStream: async () => responde("Ok.") }) });
+    const id = `editar-bot-${crypto.randomUUID()}`;
+    await postar(rota, id, doUsuario("u1", "Oi"));
+    const doBot = mensagensDaConversa(id)[1]!;
+
+    const comoUsuario = await pedir(rota, id, doUsuario(doBot.id, "reescrita"));
+    await (await pedir(rota, id, { ...doBot, parts: [{ type: "text", text: "reescrita" }] })).text();
+
+    expect([comoUsuario.status, await comoUsuario.json()]).toEqual([400, { erro: "Só dá para editar as suas mensagens." }]);
+    expect(textos(id).map(([, t]) => t).join(" ")).not.toContain("reescrita");
+  });
+
+  test("a aprovação de uma mensagem apagada é recusada e não agenda nada", async () => {
+    const id = conversaComPost();
+    const rota = rotaDeChat({ resolverModelo: chefeQueAgenda, segredoAprovacao: "segredo" });
+    await postar(rota, id, doUsuario("u1", "Agende para quinta às 18h."));
+    const aprovacao = aprovar(id);
+
+    const apagada = apagarMensagem(usuario.id, id, aprovacao.id);
+    const res = await pedir(rota, id, aprovacao);
+
+    expect(apagada.ok).toBe(true);
+    expect([res.status, await res.json()]).toEqual([409, { erro: "Esta mensagem não está mais na conversa." }]);
+    expect(agendados(id)).toBe(0);
+    expect(parteSalva(id)).toBeUndefined();
+  });
+
+  test("enquanto o bot responde, editar, mandar e apagar mensagem dão 409", async () => {
+    const portao = Promise.withResolvers<void>();
+    let chamadas = 0;
+    const modelo = new MockLanguageModelV4({
+      doStream: async () => {
+        if (chamadas++ === 1) await portao.promise;
+        return responde("Ok.");
+      },
+    });
+    const rota = rotaDeChat({ resolverModelo: () => modelo });
+    const id = `ocupada-${crypto.randomUUID()}`;
+    await postar(rota, id, doUsuario("u1", "primeira"));
+    const emCurso = await pedir(rota, id, doUsuario("u2", "segunda"));
+
+    const edicao = await pedir(rota, id, doUsuario("u1", "editada"));
+    const apagar = apagarMensagem(usuario.id, id, "u1");
+    portao.resolve();
+    await emCurso.text();
+    const depois = apagarMensagem(usuario.id, id, "u2");
+
+    expect([edicao.status, await edicao.json()]).toEqual([409, { erro: AINDA_RESPONDENDO }]);
+    expect(apagar).toEqual({ ok: false, status: 409, erro: AINDA_RESPONDENDO });
+    expect(depois.ok).toBe(true);
+    expect(textos(id)).toEqual([
+      ["user", "primeira"],
+      ["assistant", "Ok."],
+    ]);
+  });
+});
+
+describe("conversa direta com um especialista", () => {
+  test("a conversa fica com a Legenda e o modelo dela não recebe as tools de publicar", async () => {
+    const modelo = new MockLanguageModelV4({ doStream: async () => responde("Revisei.") });
+    const id = `direta-${crypto.randomUUID()}`;
+
+    await (await pedir(rotaDeChat({ resolverModelo: () => modelo }), id, doUsuario("u1", "Revise esta legenda."), "legenda")).text();
+
+    const tools = modelo.doStreamCalls[0]?.tools?.map((t) => t.name);
+    expect(conversaDoUsuario(usuario.id, id)?.botId).toBe("legenda");
+    expect(tools).toContain("redigir_legenda");
+    expect(tools).not.toContain("publicar_agora");
+    expect(tools).not.toContain("agendar_publicacao");
+    expect(textos(id)).toEqual([
+      ["user", "Revise esta legenda."],
+      ["assistant", "Revisei."],
+    ]);
   });
 });
 
