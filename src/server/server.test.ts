@@ -29,12 +29,6 @@ async function cadastrar(email: string) {
   });
 }
 
-async function entrar(email: string): Promise<string> {
-  const res = await cadastrar(email);
-  expect(res.status).toBe(200);
-  return res.headers.getSetCookie().map((c) => c.split(";")[0]).join("; ");
-}
-
 const pedidoDeChat = (id: string) =>
   JSON.stringify({ id, botId: "chefe", trigger: "submit-message", messages: [{ id: "m1", role: "user", parts: [{ type: "text", text: "Oi" }] }] });
 
@@ -53,9 +47,8 @@ describe("servidor", () => {
   });
 
   test("um usuário não lê nem continua a conversa de outro", async () => {
-    await entrar("ana@emvidros.com.br");
-    const deBia = await entrar("bia@emvidros.com.br");
-    const ana = db.query("SELECT id FROM user WHERE email = ?").get("ana@emvidros.com.br") as { id: string };
+    const ana = await sessao("ana@emvidros.com.br");
+    const { cookie: deBia } = await sessao("bia@emvidros.com.br");
     abrirConversaDoUsuario(ana.id, "conversa-da-ana", "chefe", "Post do Dia do Vidraceiro");
 
     const leitura = await fetch(url("/api/conversas/conversa-da-ana"), { headers: { cookie: deBia } });
