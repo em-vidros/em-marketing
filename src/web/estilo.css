@@ -184,3 +184,94 @@
     animation-name: aparece;
   }
 }
+
+/*
+ * Barra, menus e paleta (componentes/menu). Hover do Linear: entra na hora e sai em 150 ms,
+ * para o destaque nunca atrasar o cursor numa lista.
+ */
+.linha {
+  transition: background-color 150ms ease;
+}
+@media (hover: hover) {
+  .linha:hover {
+    background-color: var(--color-hover);
+    transition-duration: 0s;
+  }
+  .linha:hover .acoes-linha {
+    opacity: 1;
+    transition-duration: 0s;
+  }
+}
+.linha[data-atual],
+.linha[data-popup-open] {
+  background-color: var(--color-ativo);
+}
+/* O anel de foco fica na linha inteira, por dentro, para não encostar na vizinha. */
+.linha:has(> a:focus-visible),
+a.linha:focus-visible {
+  outline: 2px solid var(--color-tinta);
+  outline-offset: -2px;
+}
+.acoes-linha {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.linha:focus-within .acoes-linha,
+.acoes-linha[data-popup-open] {
+  opacity: 1;
+}
+@media (hover: none) {
+  .acoes-linha {
+    opacity: 1;
+  }
+}
+
+/* Menus de "…" e de clique direito: 200 ms de scale .95 a partir do gatilho (medido no Grok). */
+.menu-popup {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 200ms var(--ease-saida),
+    scale 200ms var(--ease-saida);
+}
+.menu-popup[data-starting-style],
+.menu-popup[data-ending-style] {
+  opacity: 0;
+  scale: 0.95;
+}
+.menu-popup[data-ending-style] {
+  transition-duration: 150ms;
+}
+
+.dica {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 125ms var(--ease-saida),
+    scale 125ms var(--ease-saida);
+}
+.dica[data-starting-style],
+.dica[data-ending-style] {
+  opacity: 0;
+  scale: 0.97;
+}
+.dica[data-instant] {
+  transition: none;
+}
+
+.linha-paleta[data-selected="true"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 10px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-tinta);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-popup[data-starting-style],
+  .menu-popup[data-ending-style],
+  .dica[data-starting-style],
+  .dica[data-ending-style] {
+    scale: 1;
+  }
+}
