@@ -1,0 +1,173 @@
+<!-- @dsCard group="Conteúdo" -->
+<meta charset="utf-8">
+<title>Pilares e calendário — EM Vidros</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap');
+/* EM Vidros — Brandbook · base compartilhada dos cards
+   Copiada inline em cada card para mantê-los auto-contidos. */
+
+
+:root {
+  --teal: #2F646A;
+  --teal-l: #63B5AF;
+  --graf: #414141;
+  --off: #F0EFEA;
+  --areia: #E4E1D8;
+  --linha: #D8D5CE;
+  --cinza: #8A8A8A;
+  --atencao: #B4552E;
+
+  --bg: #F0EFEA;
+  --fg: #414141;
+  --card: #FFFFFF;
+  --muted: #8A8A8A;
+  --rule: #D8D5CE;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+    --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+  --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+}
+:root[data-theme="light"] {
+  --bg: #F0EFEA; --fg: #414141; --card: #FFFFFF;
+  --muted: #8A8A8A; --rule: #D8D5CE; --areia: #E4E1D8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: clamp(20px, 4vw, 44px);
+  background: var(--bg);
+  color: var(--fg);
+  /* Fallbacks geométricos: se o Google Fonts for bloqueado, a página ainda
+     cai numa sans e nunca numa serifada. */
+  font-family: Poppins, "Century Gothic", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--teal-l); margin: 0 0 10px;
+}
+
+h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+h2 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; }
+p  { margin: 0 0 14px; max-width: 68ch; }
+.lead { color: var(--muted); max-width: 62ch; margin-bottom: 4px; }
+
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; }
+
+/* tabelas — sempre roláveis, o body nunca rola na horizontal */
+.scroll { overflow-x: auto; margin: 0 0 18px; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+
+.box { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; }
+
+.yes, .no { border-left: 3px solid; padding: 14px 16px; border-radius: 0 6px 6px 0; background: var(--card); }
+.yes { border-color: var(--teal); }
+.no  { border-color: var(--atencao); }
+.yes .tag, .no .tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+.yes .tag { color: var(--teal); }
+.no .tag  { color: var(--atencao); }
+
+.note { font-size: 13px; color: var(--muted); border-left: 2px solid var(--rule); padding-left: 14px; margin: 18px 0; }
+</style>
+<div class="wrap">
+<p class="eyebrow">Capítulos 12 e 13</p>
+<h1>Pilares de conteúdo</h1>
+<p class="lead">Taxonomia sem proporção não é estratégia. Cada pilar tem percentual do mês, objetivo, formato e CTA próprios.</p>
+
+<div style="display:flex;height:52px;border-radius:6px;overflow:hidden;margin-bottom:8px">
+  <div style="flex:40;background:#2F646A;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;letter-spacing:.08em">PROVA 40%</div>
+  <div style="flex:25;background:#448584;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:600;letter-spacing:.08em">AUTORIDADE 25%</div>
+  <div style="flex:20;background:#63B5AF;display:flex;align-items:center;justify-content:center;color:#1B2E30;font-size:12px;font-weight:600;letter-spacing:.08em">GENTE 20%</div>
+  <div style="flex:15;background:#A9CFCB;display:flex;align-items:center;justify-content:center;color:#1B2E30;font-size:12px;font-weight:600;letter-spacing:.08em">MARCA 15%</div>
+</div>
+
+<div class="scroll">
+<table>
+  <tr><th>Pilar</th><th>%</th><th>Objetivo</th><th>Formato preferido</th><th>Tipografia</th><th>CTA</th></tr>
+  <tr><td><strong>PROVA</strong></td><td>40%</td><td>Demonstrar capacidade e entrega</td><td>Reel · foto real</td><td>Poppins</td><td>Orçamento / unidade</td></tr>
+  <tr><td><strong>AUTORIDADE</strong></td><td>25%</td><td>Ensinar e sustentar especificação</td><td>Carrossel · Reel explicativo</td><td>Poppins</td><td>Salvar / consultar</td></tr>
+  <tr><td><strong>GENTE</strong></td><td>20%</td><td>Humanizar e atrair talento</td><td>Reel · foto real</td><td>Poppins ou Playfair</td><td>Vaga / nenhum</td></tr>
+  <tr><td><strong>MARCA</strong></td><td>15%</td><td>Posicionar e marcar data</td><td>Feed estático · Reel</td><td>Playfair Display</td><td>Nenhum</td></tr>
+</table>
+</div>
+
+<h2>O que entra em cada um</h2>
+<div class="grid g2">
+  <div class="box"><div class="eyebrow">Prova</div>Obra entregue · produto na prateleira · pronta entrega · capacidade fabril · número de produção · antes/depois de instalação · detalhe de acabamento.</div>
+  <div class="box"><div class="eyebrow">Autoridade</div>Diferença entre tipos de vidro · escolha de espessura · norma e certificação · erro comum de especificação · manutenção · aplicação por ambiente.</div>
+  <div class="box"><div class="eyebrow">Gente</div>Bastidor de fábrica · rota de entrega · equipe · vaga · aniversário de colaborador · treinamento · segurança do trabalho.</div>
+  <div class="box"><div class="eyebrow">Marca</div>Aniversário da empresa · data setorial · data cívica e religiosa da região · campanha institucional · comunicado de funcionamento.</div>
+</div>
+
+<h2>Meta de formato</h2>
+<div class="yes"><span class="tag">Trava</span><strong>60% do mês em vídeo vertical</strong>, distribuído entre os pilares. PROVA e GENTE têm a maior obrigação de vídeo — são os pilares que produziram os dois Reels de 100 mil views.</div>
+
+<h2>Datas comemorativas — trava</h2>
+<p>Data comemorativa é <strong>15% do mês, no máximo</strong>, e vive inteira dentro do pilar MARCA. Uma data só entra se passar em um destes três testes:</p>
+<div class="grid g3">
+  <div class="box" style="font-size:13.5px"><strong>a.</strong> É do setor — Dia do Vidraceiro, do Serralheiro, da Construção.</div>
+  <div class="box" style="font-size:13.5px"><strong>b.</strong> É da região onde há unidade — aniversário de cidade, padroeiro.</div>
+  <div class="box" style="font-size:13.5px"><strong>c.</strong> É da empresa — aniversário, marco, certificação.</div>
+</div>
+<p class="note">Data que não passa em nenhum dos três <strong>não vira post</strong>. Sem Dia do Sorvete, sem Dia do Abraço.</p>
+
+<h1 style="margin-top:52px">Calendário e horários</h1>
+
+<div class="no" style="margin-bottom:20px"><span class="tag">Aviso</span>Estes horários foram <strong>inferidos</strong> do desempenho dos 59 posts analisados, cruzado com benchmark de indústria e construção civil no Brasil. <strong>Não vieram do Instagram Insights da conta</strong>, ao qual não houve acesso. Tratar como <strong>hipótese a validar em 30 dias</strong>. Se o dado real contradisser, o dado real vence.</div>
+
+<h2>O que os dados observados mostram</h2>
+<div class="scroll">
+<table>
+  <tr><th>Dia</th><th>Posts</th><th>Likes médios</th><th>Views médias</th></tr>
+  <tr><td>Terça</td><td>10</td><td>34</td><td><strong>15.900</strong></td></tr>
+  <tr><td>Segunda</td><td>13</td><td>27</td><td><strong>8.775</strong></td></tr>
+  <tr><td>Quinta</td><td>7</td><td><strong>70</strong></td><td>1.495</td></tr>
+  <tr><td>Sexta</td><td>11</td><td>27</td><td>852</td></tr>
+  <tr><td>Quarta</td><td>11</td><td>28</td><td>821</td></tr>
+  <tr><td>Sábado</td><td>3</td><td>23</td><td>424</td></tr>
+  <tr><td>Domingo</td><td>4</td><td>24</td><td>0</td></tr>
+</table>
+</div>
+<p style="font-size:13px;color:var(--muted)">Por horário, os picos de alcance estão às <strong>10h, 13h e 11h</strong>; os picos de like às <strong>17h e 12h</strong>.</p>
+
+<h2>Grade recomendada</h2>
+<div class="scroll">
+<table>
+  <tr><th>Dia</th><th>Horário</th><th>Pilar</th><th>Formato</th></tr>
+  <tr><td><strong>Segunda</strong></td><td>11h</td><td>AUTORIDADE</td><td>Carrossel ou Reel explicativo</td></tr>
+  <tr><td><strong>Terça</strong></td><td>10h</td><td>PROVA</td><td><strong>Reel</strong></td></tr>
+  <tr><td><strong>Quinta</strong></td><td>12h</td><td>GENTE</td><td><strong>Reel</strong></td></tr>
+  <tr><td><strong>Sexta</strong></td><td>13h</td><td>PROVA</td><td>Reel ou foto real</td></tr>
+  <tr><td style="color:var(--muted)">2× por mês, variável</td><td>09h</td><td>MARCA</td><td>Feed estático</td></tr>
+</table>
+</div>
+<p><strong>Total: 8 a 10 publicações por mês</strong>, com 5 a 6 em vídeo.</p>
+<p class="note"><strong>Sábado e domingo não recebem publicação de rotina.</strong> Volume baixo e desempenho fraco. Exceção: data comemorativa que cai no fim de semana.</p>
+
+<h2>Stories</h2>
+<p>Diários, de segunda a sexta, 2 a 4 por dia. Não obedecem à grade de pilares. Servem para bastidor bruto, repost de cliente, enquete e lembrete. Story é onde a marca pode ser informal — sem abandonar as regras de emoji e de logotipo.</p>
+
+<h2>Como validar em 30 dias</h2>
+<p>Comparar no Insights: alcance médio por dia da semana · alcance médio por faixa de horário · retenção dos Reels nos 3 primeiros segundos · crescimento de seguidores após a limpeza da base. Ajustar a grade e <strong>atualizar este capítulo com a data da revisão</strong>.</p>
+</div>

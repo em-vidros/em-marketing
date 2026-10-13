@@ -1,0 +1,918 @@
+@import "tailwindcss";
+
+/* Tokens do tema claro do Grok (.specs/project/REFACTOR.md, "Visual do site"). Só aqui. */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+
+  --color-fundo: #f9f8f7;
+  --color-painel: #f5f3f2;
+  --color-hover: #f0eeed;
+  --color-ativo: #ece9e7;
+  --color-superficie: #ffffff;
+
+  --color-tinta: #050505;
+  --color-tinta-2: #636363;
+  --color-tinta-3: #696969;
+  /* Só para desabilitado, traço e preenchimento: não passa contraste de texto. */
+  --color-tinta-4: #a3a3a3;
+  --color-corpo: #1a1a1a;
+  --color-sobre-tinta: #fcfcfc;
+
+  --color-linha: rgb(15 13 10 / 0.06);
+  --color-linha-forte: rgb(15 13 10 / 0.1);
+
+  --color-trabalhando: #63b5af;
+  --color-esperando: hsl(45 100% 45%);
+  --color-esperando-texto: hsl(45 100% 26%);
+  --color-trabalhando-texto: #2f646a;
+  --color-borda-campo: #8f8f8f;
+  --color-erro-sobre-tinta: #ffb4ab;
+  --color-erro: #b42318;
+
+  --radius-item: 12px;
+  --radius-cartao: 16px;
+  --radius-balao: 24px;
+  --radius-composer: 28px;
+
+  --ease-saida: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@layer base {
+  html {
+    font-feature-settings: "cv11", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-fundo text-tinta font-sans text-sm/normal;
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-tinta);
+    outline-offset: 2px;
+  }
+  ::placeholder {
+    color: var(--color-tinta-3);
+  }
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Resposta no toque, não no clique (apple-design). A transição já inclui as cores: um
+ * transition-colors no mesmo elemento sobrescreveria esta e o aperto deixaria de animar.
+ */
+@utility pressiona {
+  transition-property: scale, color, background-color, border-color, opacity;
+  transition-duration: 100ms, 150ms, 150ms, 150ms, 150ms;
+  transition-timing-function: var(--ease-saida), ease, ease, ease, ease;
+  &:active:not(:disabled) {
+    scale: 0.97;
+  }
+}
+
+/* Linhas e cartões grandes: o aperto quase não aparece, e o realce do hover entra na hora (como .linha). */
+@utility pressiona-leve {
+  transition-property: scale, color, background-color, border-color, opacity;
+  transition-duration: 100ms, 150ms, 150ms, 150ms, 150ms;
+  transition-timing-function: var(--ease-saida), ease, ease, ease, ease;
+  &:active:not(:disabled) {
+    scale: 0.99;
+  }
+  @media (hover: hover) {
+    &:hover {
+      transition-duration: 100ms, 0s, 0s, 0s, 150ms;
+    }
+  }
+}
+
+/* Linha sem aperto: o realce entra na hora e sai em 150 ms. */
+@utility realce {
+  transition: color 150ms ease, background-color 150ms ease;
+  @media (hover: hover) {
+    &:hover {
+      transition-duration: 0s;
+    }
+  }
+}
+
+/* Shimmer do texto de passo atual. Keyframe e gradiente vêm do ThinkingState do Beautiful UI (MIT, Shane Levine). */
+@keyframes brilho {
+  from {
+    background-position: 150%;
+  }
+  to {
+    background-position: -50%;
+  }
+}
+@utility brilho {
+  color: transparent;
+  background: linear-gradient(90deg, var(--color-tinta-3) 35%, var(--color-tinta) 50%, var(--color-tinta-3) 65%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: brilho 1.4s linear infinite;
+}
+
+@keyframes flutua {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8%);
+  }
+}
+@utility flutua {
+  animation: flutua 1.6s cubic-bezier(0.45, 0, 0.55, 1) infinite;
+}
+
+@keyframes gira {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flutua {
+    animation: none;
+  }
+  .pressiona:active,
+  .pressiona-leve:active {
+    scale: none;
+  }
+  .brilho {
+    animation: none;
+    color: var(--color-tinta-2);
+    background: none;
+  }
+  .girando {
+    animation-duration: 3s !important;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .vidro {
+    backdrop-filter: none;
+    background-color: var(--color-fundo);
+  }
+}
+
+/*
+ * Indicadores de IA (componentes/ia). Keyframes, tempos e o rastro do stream vêm do Beautiful UI
+ * (beautifului.dev, MIT, Shane Levine): pixel-on, pop-in, fade-up e .stream-tail.
+ */
+@keyframes pixel {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  18%,
+  42% {
+    opacity: 1;
+  }
+}
+@keyframes surge {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+@keyframes sobe {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+@keyframes aparece {
+  from {
+    opacity: 0;
+  }
+}
+@utility surge {
+  animation: surge 250ms var(--ease-saida) both;
+}
+@utility sobe {
+  animation: sobe 250ms var(--ease-saida) both;
+}
+
+/* Palavra nova do stream: sai do desfoque, como o rastro do StreamText. O Streamdown põe o nome em --sd-animation. */
+@keyframes sd-rastro {
+  from {
+    opacity: 0.2;
+    filter: blur(1.6px);
+  }
+}
+[data-sd-animate] {
+  animation: var(--sd-animation, sd-rastro) var(--sd-duration, 260ms) var(--sd-easing, ease-out) var(--sd-delay, 0ms) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pixel {
+    animation: none !important;
+  }
+  .surge,
+  .sobe {
+    animation-name: aparece;
+  }
+  [data-sd-animate] {
+    animation-name: aparece;
+  }
+  /* O Sonner corta toda a transição com movimento reduzido; o aviso ainda entra e sai num fade. */
+  [data-sonner-toaster] [data-sonner-toast] {
+    transition: opacity 200ms ease !important;
+  }
+}
+
+/*
+ * Barra, menus e paleta (componentes/menu). Hover do Linear: entra na hora e sai em 150 ms,
+ * para o destaque nunca atrasar o cursor numa lista.
+ */
+.linha {
+  transition: background-color 150ms ease;
+}
+@media (hover: hover) {
+  .linha:hover {
+    background-color: var(--color-hover);
+    transition-duration: 0s;
+  }
+  .linha:hover .acoes-linha {
+    opacity: 1;
+    transition-duration: 0s;
+  }
+}
+.linha[data-atual],
+.linha[data-popup-open] {
+  background-color: var(--color-ativo);
+}
+/* O anel de foco fica na linha inteira, por dentro, para não encostar na vizinha. */
+.linha:has(> a:focus-visible),
+a.linha:focus-visible {
+  outline: 2px solid var(--color-tinta);
+  outline-offset: -2px;
+}
+.acoes-linha {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.linha:focus-within .acoes-linha,
+.acoes-linha[data-popup-open] {
+  opacity: 1;
+}
+@media (hover: none) {
+  .acoes-linha {
+    opacity: 1;
+  }
+}
+
+/* Menus de "…" e de clique direito: 200 ms de scale .95 a partir do gatilho (medido no Grok). */
+.menu-popup {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 200ms var(--ease-saida),
+    scale 200ms var(--ease-saida);
+}
+.menu-popup[data-starting-style],
+.menu-popup[data-ending-style] {
+  opacity: 0;
+  scale: 0.95;
+}
+.menu-popup[data-ending-style] {
+  transition-duration: 150ms;
+}
+
+.dica {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 125ms var(--ease-saida),
+    scale 125ms var(--ease-saida);
+}
+.dica[data-starting-style],
+.dica[data-ending-style] {
+  opacity: 0;
+  scale: 0.97;
+}
+.dica[data-instant] {
+  transition: none;
+}
+
+/* A gaveta do celular entra e sai pela esquerda; o Base UI espera o fim da transição para desmontar. */
+.gaveta {
+  transition: transform 350ms var(--ease-saida);
+}
+.gaveta[data-starting-style],
+.gaveta[data-ending-style] {
+  transform: translateX(-100%);
+}
+.gaveta[data-ending-style] {
+  transition-duration: 250ms;
+}
+.gaveta-fundo {
+  transition: opacity 200ms ease-out;
+}
+.gaveta-fundo[data-starting-style],
+.gaveta-fundo[data-ending-style] {
+  opacity: 0;
+}
+
+.linha-paleta[data-selected="true"]::before {
+  content: "";
+  position: absolute;
+  inset-block: 10px;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--color-tinta);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gaveta {
+    transition-property: opacity;
+  }
+  .gaveta[data-starting-style],
+  .gaveta[data-ending-style] {
+    transform: none;
+    opacity: 0;
+  }
+  .menu-popup[data-starting-style],
+  .menu-popup[data-ending-style],
+  .dica[data-starting-style],
+  .dica[data-ending-style] {
+    scale: 1;
+  }
+}
+
+/*
+ * Ações de cada mensagem (componentes/mensagem): aparecem na hora com o ponteiro em cima ou o
+ * foco dentro, e saem em 150 ms, como as ações da linha da barra. No toque ficam sempre à mostra.
+ */
+.acoes-mensagem {
+  opacity: 0;
+  transition: opacity 150ms ease;
+}
+.mensagem:focus-within > .acoes-mensagem,
+.mensagem:has([data-popup-open]) > .acoes-mensagem {
+  opacity: 1;
+  transition-duration: 0s;
+}
+@media (hover: hover) {
+  .mensagem:hover > .acoes-mensagem {
+    opacity: 1;
+    transition-duration: 0s;
+  }
+}
+@media (hover: none) {
+  .acoes-mensagem {
+    opacity: 1;
+  }
+}
+
+/*
+ * Calendário (telas/Calendario.tsx). O vermelho do hoje fica perto do systemRed da Apple, escurecido
+ * até o número branco passar 4,5:1. Os pilares saem da família do teal da marca e de neutros, longe
+ * das cores dos bots: a barra passa 3:1 no branco e o texto passa 4,5:1 no próprio fundo.
+ */
+@theme {
+  --color-hoje: #d93025;
+  --color-pilar-prova: #2f8f87;
+  --color-pilar-prova-fundo: #e5f2f0;
+  --color-pilar-prova-texto: #1d5550;
+  --color-pilar-autoridade: #2f646a;
+  --color-pilar-autoridade-fundo: #e4ecec;
+  --color-pilar-autoridade-texto: #1f4549;
+  --color-pilar-gente: #3d8fae;
+  --color-pilar-gente-fundo: #e4f0f5;
+  --color-pilar-gente-texto: #1d4d60;
+  --color-pilar-marca: #6b665f;
+  --color-pilar-marca-fundo: #eeece9;
+  --color-pilar-marca-texto: #3b3833;
+}
+
+[data-tom] {
+  --barra: var(--color-borda-campo);
+  --fundo: var(--color-hover);
+  --texto: #3d3d3d;
+}
+[data-tom="PROVA"] {
+  --barra: var(--color-pilar-prova);
+  --fundo: var(--color-pilar-prova-fundo);
+  --texto: var(--color-pilar-prova-texto);
+}
+[data-tom="AUTORIDADE"] {
+  --barra: var(--color-pilar-autoridade);
+  --fundo: var(--color-pilar-autoridade-fundo);
+  --texto: var(--color-pilar-autoridade-texto);
+}
+[data-tom="GENTE"] {
+  --barra: var(--color-pilar-gente);
+  --fundo: var(--color-pilar-gente-fundo);
+  --texto: var(--color-pilar-gente-texto);
+}
+[data-tom="MARCA"] {
+  --barra: var(--color-pilar-marca);
+  --fundo: var(--color-pilar-marca-fundo);
+  --texto: var(--color-pilar-marca-texto);
+}
+[data-tom="publicado"] {
+  --barra: var(--color-tinta-4);
+  --fundo: var(--color-painel);
+  --texto: var(--color-tinta-2);
+}
+[data-tom="falha"] {
+  --barra: var(--color-erro);
+  --fundo: #fdecea;
+  --texto: var(--color-erro);
+}
+[data-tom="data"] {
+  --barra: var(--color-tinta-3);
+  --fundo: var(--color-ativo);
+  --texto: var(--color-pilar-marca-texto);
+}
+
+.cal-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 16px;
+  text-align: left;
+  color: var(--color-tinta);
+  cursor: default;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.cal-item[data-movel] {
+  touch-action: manipulation;
+}
+.cal-item[data-estado="arrastada"] {
+  opacity: 0.35;
+}
+.cal-item[data-estado="assentando"] {
+  opacity: 0;
+}
+.cal-hora {
+  flex: none;
+  color: var(--color-tinta-3);
+}
+
+/* Mês: barra fina na cor do tom e a hora à direita, sem fundo, como o Mac. */
+.cal-linha {
+  height: 18px;
+  flex: none;
+  padding: 0 4px 0 3px;
+  border-radius: 5px;
+}
+.cal-linha::before {
+  content: "";
+  flex: none;
+  width: 3px;
+  height: 12px;
+  border-radius: 2px;
+  background: var(--barra);
+}
+.cal-linha[data-tom="falha"],
+.cal-linha[data-tom="publicado"] {
+  color: var(--texto);
+}
+
+/* Dia inteiro: pílula tingida. */
+.cal-pilula {
+  height: 18px;
+  flex: none;
+  padding: 0 6px;
+  border-radius: 5px;
+  background: var(--fundo);
+  color: var(--texto);
+  font-weight: 500;
+}
+
+/* Grade de horas: bloco tingido com a barra de 3px à esquerda. */
+.cal-bloco {
+  position: absolute;
+  gap: 4px;
+  padding: 0 3px 0 7px;
+  overflow: hidden;
+  border-radius: 6px;
+  background: var(--fundo);
+  color: var(--texto);
+  box-shadow: inset 3px 0 0 var(--barra), 0 0 0 1px var(--color-superficie);
+  z-index: 1;
+}
+.cal-bloco .cal-hora {
+  color: inherit;
+}
+/* Coluna estreita: o título fica, a capa e depois a hora saem (a hora segue no nome acessível). */
+.cal-bloco {
+  container-type: inline-size;
+}
+@container (max-width: 150px) {
+  .cal-bloco > .cal-capa {
+    display: none;
+  }
+}
+@container (max-width: 96px) {
+  .cal-bloco > .cal-hora {
+    display: none;
+  }
+}
+.cal-capa {
+  flex: none;
+  width: 18px;
+  height: 22px;
+  border-radius: 3px;
+  object-fit: cover;
+  outline: 1px solid rgb(0 0 0 / 0.1);
+  outline-offset: -1px;
+}
+
+.cal-item[data-selecionado] {
+  background: var(--texto);
+  color: var(--color-superficie);
+}
+.cal-item[data-selecionado] .cal-hora {
+  color: inherit;
+}
+.cal-item[data-selecionado]::before {
+  background: currentColor;
+}
+.cal-bloco[data-selecionado] {
+  box-shadow: inset 3px 0 0 var(--barra), 0 0 0 1px var(--color-superficie), 0 2px 8px rgb(0 0 0 / 0.12);
+  z-index: 2;
+}
+.cal-item:focus-visible {
+  outline: 2px solid var(--color-tinta);
+  outline-offset: 1px;
+  z-index: 3;
+}
+
+.cal-provisorio {
+  background: var(--color-superficie);
+  color: var(--color-tinta-2);
+  outline: 1px dashed var(--color-tinta-3);
+  outline-offset: -1px;
+  box-shadow: none;
+  z-index: 3;
+}
+
+/* Hoje: círculo vermelho de 24px com o número branco. */
+.cal-hoje {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--color-hoje);
+  color: var(--color-sobre-tinta);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.cal-num {
+  color: var(--color-tinta);
+}
+.cal-num-mes {
+  font-weight: 600;
+}
+.cal-casa {
+  cursor: default;
+  outline-offset: -2px;
+}
+.cal-casa[data-fim-de-semana],
+.cal-coluna[data-fim-de-semana],
+.cal-dia-inteiro[data-fim-de-semana] {
+  background-color: var(--color-fundo);
+}
+.cal-casa[data-fora] .cal-num,
+.cal-casa[data-fora] .cal-num-mes {
+  color: var(--color-tinta-3);
+}
+.cal-casa[aria-selected="true"],
+.cal-dia-inteiro[data-selecionado] {
+  background-color: var(--color-ativo);
+}
+.cal-casa[data-alvo],
+.cal-dia-inteiro[data-alvo] {
+  background-color: var(--color-pilar-prova-fundo);
+}
+.cal-casa:focus-visible,
+.cal-dia-inteiro:focus-visible {
+  outline: 2px solid var(--color-tinta);
+  outline-offset: -2px;
+}
+
+.cal-mais {
+  flex: none;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  color: var(--color-tinta-2);
+  cursor: pointer;
+}
+@media (hover: hover) {
+  .cal-mais:hover {
+    background: var(--color-hover);
+    color: var(--color-tinta);
+  }
+}
+.cal-mais-bloco {
+  position: absolute;
+  height: 28px;
+  text-align: center;
+  background: var(--color-ativo);
+  z-index: 1;
+}
+
+.cal-ponto {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--barra);
+}
+
+/* Semana e dia: um contêiner rola nos dois eixos, cabeçalho e horas grudados. */
+.cal-horas {
+  --coluna-min: 0px;
+  scroll-padding-left: 56px;
+}
+.cal-grade {
+  grid-template-columns: 56px repeat(var(--colunas), minmax(var(--coluna-min), 1fr));
+  grid-template-rows: 44px auto 1440px;
+}
+@media (max-width: 39.99rem) {
+  .cal-horas[data-dias="7"] {
+    /* Duas colunas e meia: a metade que aparece avisa que a semana continua de lado. */
+    --coluna-min: calc((100vw - 56px) / 2.5);
+    scroll-snap-type: x mandatory;
+  }
+}
+.cal-cabeca,
+.cal-coluna,
+.cal-dia-inteiro {
+  scroll-snap-align: start;
+}
+.cal-dia-inteiro,
+.cal-canto-dia {
+  top: 44px;
+  min-height: 28px;
+}
+.cal-dia-inteiro {
+  background-color: var(--color-superficie);
+}
+.cal-coluna {
+  background-image: linear-gradient(to bottom, var(--color-linha-forte) 1px, transparent 1px);
+  background-size: 100% 60px;
+}
+
+/* A hora de agora: 2px e um ponto só na coluna de hoje, traço fraco nas outras, pílula nas horas. */
+.cal-agora,
+.cal-agora-fraco {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  z-index: 4;
+}
+.cal-agora {
+  height: 2px;
+  margin-top: -1px;
+  background: var(--color-hoje);
+}
+.cal-agora::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--color-hoje);
+}
+.cal-agora-fraco {
+  height: 1px;
+  background: color-mix(in srgb, var(--color-hoje) 25%, transparent);
+}
+.cal-pilula-agora {
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-hoje);
+  color: var(--color-sobre-tinta);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.cal-alvo {
+  position: absolute;
+  left: 1px;
+  right: 2px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgb(15 13 10 / 0.04);
+  outline: 1px dashed var(--color-tinta-3);
+  outline-offset: -1px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-tinta-2);
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* O fantasma do arrasto anda por transform, fora da grade, e o ponteiro passa através dele. */
+.cal-fantasma {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 80;
+  border-radius: 6px;
+  pointer-events: none;
+  visibility: hidden;
+  will-change: transform;
+}
+.cal-fantasma[data-visivel] {
+  visibility: visible;
+}
+.cal-fantasma .cal-item {
+  position: relative;
+  inset: auto;
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+}
+.cal-fantasma .cal-linha {
+  background: var(--color-superficie);
+}
+.cal-fantasma-hora {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 4px);
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-tinta);
+  color: var(--color-sobre-tinta);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 16px;
+  white-space: nowrap;
+}
+.cal-pronto-fantasma {
+  gap: 8px;
+  padding: 0 8px 0 6px;
+  border-radius: 8px;
+  background: var(--color-superficie);
+  box-shadow: inset 3px 0 0 var(--barra), 0 0 0 1px var(--color-linha-forte);
+}
+
+/* O popover entra de 0,96 a 1 a partir da seta e sai só no fade (NSPopover). */
+.cal-popover {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 200ms var(--ease-saida),
+    scale 200ms var(--ease-saida);
+}
+.cal-popover[data-starting-style] {
+  opacity: 0;
+  scale: 0.96;
+}
+.cal-popover[data-ending-style] {
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+.cal-seta {
+  display: flex;
+}
+.cal-seta[data-side="bottom"] {
+  top: -7px;
+}
+.cal-seta[data-side="top"] {
+  bottom: -7px;
+  rotate: 180deg;
+}
+.cal-seta[data-side="right"] {
+  left: -11px;
+  rotate: -90deg;
+}
+.cal-seta[data-side="left"] {
+  right: -11px;
+  rotate: 90deg;
+}
+
+.cal-chip {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  color: var(--color-tinta-2);
+  box-shadow: inset 0 0 0 1px var(--color-linha-forte);
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+@media (hover: hover) {
+  .cal-chip:hover {
+    background: var(--color-hover);
+    transition-duration: 0s;
+  }
+}
+.cal-chip:has(input:checked) {
+  background: var(--texto);
+  color: var(--color-superficie);
+  box-shadow: none;
+}
+.cal-chip:has(input:focus-visible) {
+  outline: 2px solid var(--color-tinta);
+  outline-offset: 2px;
+}
+@media (pointer: coarse) {
+  .cal-chip {
+    height: 40px;
+    padding: 0 14px;
+  }
+}
+.cal-chip[data-indisponivel] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cal-nav {
+  display: grid;
+  place-items: center;
+  min-width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: var(--color-hover);
+  color: var(--color-tinta);
+  cursor: pointer;
+  transition-property: scale, background-color;
+  transition-duration: 100ms, 150ms;
+  transition-timing-function: var(--ease-saida), ease;
+}
+.cal-nav:active {
+  scale: 0.97;
+}
+@media (hover: hover) {
+  .cal-nav:hover {
+    background: var(--color-ativo);
+  }
+}
+
+.cal-recusa {
+  display: block;
+  max-width: 260px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  background: var(--color-tinta);
+  color: var(--color-sobre-tinta);
+  font-size: 12px;
+  line-height: 16px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
+}
+
+.cal-barra-lista {
+  flex: none;
+  width: 3px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--barra);
+}
+
+.cal-folha {
+  transition: transform 350ms var(--ease-saida);
+}
+.cal-folha[data-starting-style],
+.cal-folha[data-ending-style] {
+  transform: translateY(100%);
+}
+.cal-folha[data-ending-style] {
+  transition-duration: 250ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cal-popover,
+  .cal-popover[data-ending-style] {
+    transition: opacity 150ms ease-out;
+  }
+  .cal-popover[data-starting-style] {
+    scale: 1;
+  }
+  .cal-folha {
+    transition: opacity 150ms ease-out;
+  }
+  .cal-folha[data-starting-style],
+  .cal-folha[data-ending-style] {
+    transform: none;
+    opacity: 0;
+  }
+  .cal-nav:active {
+    scale: none;
+  }
+}

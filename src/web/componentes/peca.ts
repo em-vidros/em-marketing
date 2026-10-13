@@ -1,0 +1,65 @@
+import type { Formato, Pilar, StatusPost, TipoMidia } from "../../db";
+
+export const PILARES: readonly Pilar[] = ["PROVA", "AUTORIDADE", "GENTE", "MARCA"];
+
+/** Rótulo e cor de cada status de peça. A cor nunca vem sozinha: o rótulo sempre aparece junto. */
+export const STATUS_POST: Record<StatusPost, { rotulo: string; cor: string }> = {
+  draft: { rotulo: "Rascunho", cor: "text-tinta-3" },
+  generated: { rotulo: "Artes geradas", cor: "text-tinta-2" },
+  chosen: { rotulo: "Arte escolhida", cor: "text-tinta-2" },
+  scheduled: { rotulo: "Agendado", cor: "text-esperando-texto" },
+  published: { rotulo: "Publicado", cor: "text-tinta-2" },
+  failed: { rotulo: "Falhou", cor: "text-erro" },
+  archived: { rotulo: "Arquivado", cor: "text-tinta-3" },
+};
+
+export const FORMATO: Record<Formato, string> = { feed: "Feed", stories: "Stories", ambos: "Feed e stories" };
+
+export const MIDIA: Record<TipoMidia, string> = { IMAGE: "Feed", STORIES: "Stories" };
+
+const FUSO = "America/Sao_Paulo";
+
+const anoDe = new Intl.DateTimeFormat("pt-BR", { year: "numeric", timeZone: FUSO });
+
+/** Uma data que o banco ou o modelo mandou torta vira "Data inválida" em vez de derrubar a tela. */
+const INVALIDA = "Data inválida";
+const valida = (d: Date | number) => !Number.isNaN(new Date(d).getTime());
+
+/** O ano só aparece quando não é o atual: "16 out" este ano, "16 out 2027" fora dele. */
+const ano = (d: Date | number) => {
+  const a = anoDe.format(d);
+  return a === anoDe.format(Date.now()) ? "" : ` ${a}`;
+};
+
+const comDia = (weekday: "long" | "short") =>
+  new Intl.DateTimeFormat("pt-BR", { weekday, day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+
+/** Sem os pontos, o "de" e o "-feira" que o Intl põe e só pesam na linha. */
+function semPeso(formato: Intl.DateTimeFormat) {
+  return {
+    format(d: Date | number) {
+      if (!valida(d)) return INVALIDA;
+      const p = Object.fromEntries(formato.formatToParts(d).map((x) => [x.type, x.value]));
+      return `${p.weekday!.replace("-feira", "").replace(".", "")}, ${p.day} ${p.month!.replace(".", "")}${ano(d)}, ${p.hour}:${p.minute}`;
+    },
+  };
+}
+
+/** "quinta, 16 out, 18:00" no horário de São Paulo, como no canvas. */
+export const dataEHora = semPeso(comDia("long"));
+
+/** "qui, 16 out, 18:00", para as linhas com pouco espaço. */
+export const dataCurta = semPeso(comDia("short"));
+
+const soHora = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+export const hora = { format: (d: Date | number) => (valida(d) ? soHora.format(d) : INVALIDA) };
+
+const diaEMes = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", timeZone: FUSO });
+
+/** "10 out" */
+export const dia = {
+  format: (d: Date | number) => (valida(d) ? diaEMes.format(d).replace(" de ", " ").replace(".", "") + ano(d) : INVALIDA),
+};
+
+/** Um agendamento cujo horário já ficou para trás: a interface avisa em vez de fingir que vai sair. */
+export const jaPassou = (d: Date | number) => valida(d) && new Date(d).getTime() < Date.now();

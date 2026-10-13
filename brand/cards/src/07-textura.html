@@ -1,0 +1,111 @@
+<!-- @dsCard group="Fundamentos" title="Textura" -->
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="grao"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+  <filter id="jateado"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="4" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+  <filter id="papel"><feTurbulence type="fractalNoise" baseFrequency="0.05 0.9" numOctaves="4" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+</svg>
+
+<p class="eyebrow">Capítulo 7</p>
+<h1>Textura — a linguagem de matéria</h1>
+<p class="lead">Textura não é enfeite neste sistema: é o que separa "peça de indústria" de "template genérico". <strong>Toda peça leva textura.</strong> Peça sem textura está incompleta.</p>
+
+<h2>As três texturas</h2>
+<div class="grid g3">
+
+  <div>
+    <div style="position:relative;height:150px;border-radius:6px 6px 0 0;overflow:hidden;background:#F0EFEA">
+      <div style="position:absolute;inset:0;filter:url(#grao);opacity:.09;mix-blend-mode:overlay"></div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display', 'Iowan Old Style', Georgia, serif;font-size:30px;color:#414141">Grão</div>
+    </div>
+    <div class="box" style="border-radius:0 0 6px 6px;border-top:none;font-size:13px">
+      <strong>GRÃO</strong> — ruído de filme fino e isotrópico. Tira a chapa digital do fundo.
+      <table style="min-width:0;margin-top:10px;font-size:12.5px">
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Mesclagem</td><td style="padding:4px 0;border:none">Overlay</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Opacidade</td><td style="padding:4px 0;border:none"><strong>6–10%</strong></td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Escala</td><td style="padding:4px 0;border:none">100%, sem esticar</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Onde</td><td style="padding:4px 0;border:none">Toda peça, atrás de tudo</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div style="position:relative;height:150px;border-radius:6px 6px 0 0;overflow:hidden;background:#E4E1D8">
+      <div style="position:absolute;inset:0;filter:url(#jateado);opacity:.30;mix-blend-mode:soft-light"></div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display', 'Iowan Old Style', Georgia, serif;font-size:30px;color:#414141">Jateado</div>
+    </div>
+    <div class="box" style="border-radius:0 0 6px 6px;border-top:none;font-size:13px">
+      <strong>JATEADO</strong> — ruído de baixa frequência que imita vidro fosco/acidato. A mais ligada ao produto.
+      <table style="min-width:0;margin-top:10px;font-size:12.5px">
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Mesclagem</td><td style="padding:4px 0;border:none">Soft Light</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Opacidade</td><td style="padding:4px 0;border:none"><strong>12–18%</strong></td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Escala</td><td style="padding:4px 0;border:none">100–140%</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Onde</td><td style="padding:4px 0;border:none">Faixa, card, destaque</td></tr>
+      </table>
+    </div>
+  </div>
+
+  <div>
+    <div style="position:relative;height:150px;border-radius:6px 6px 0 0;overflow:hidden;background:#F0EFEA">
+      <div style="position:absolute;inset:0;filter:url(#papel);opacity:.12;mix-blend-mode:multiply"></div>
+      <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'Playfair Display', 'Iowan Old Style', Georgia, serif;font-size:30px;color:#414141">Papel</div>
+    </div>
+    <div class="box" style="border-radius:0 0 6px 6px;border-top:none;font-size:13px">
+      <strong>PAPEL</strong> — fibra com manchas largas, para o registro editorial.
+      <table style="min-width:0;margin-top:10px;font-size:12.5px">
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Mesclagem</td><td style="padding:4px 0;border:none">Multiply</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Opacidade</td><td style="padding:4px 0;border:none"><strong>8–14%</strong></td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Escala</td><td style="padding:4px 0;border:none">100%</td></tr>
+        <tr><td style="padding:4px 8px 4px 0;border:none;color:var(--muted)">Onde</td><td style="padding:4px 0;border:none">Fundo de peça Playfair</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<h2>Arquivos entregues</h2>
+<p>Overlays em PNG 1080 × 1080, cinza neutro 128 — em Overlay ou Soft Light o cinza é neutro, então a textura só adiciona variação e nunca escurece nem clareia a peça no geral.</p>
+<div class="scroll">
+<table>
+  <tr><th>Arquivo</th><th>Uso</th></tr>
+  <tr><td><code>assets/texturas/emv-textura-grao.png</code></td><td>Canva, Photoshop, Affinity</td></tr>
+  <tr><td><code>assets/texturas/emv-textura-jateado.png</code></td><td>Canva, Photoshop, Affinity</td></tr>
+  <tr><td><code>assets/texturas/emv-textura-papel.png</code></td><td>Canva, Photoshop, Affinity</td></tr>
+  <tr><td><code>assets/texturas/_gerar-texturas.py</code></td><td>Regenerar em outra resolução ou intensidade</td></tr>
+</table>
+</div>
+
+<h2>Regras</h2>
+<div class="grid g2">
+  <div class="no"><span class="tag">Nunca</span>
+    <ol style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li>Duas texturas na mesma peça — uma escolha por arte</li>
+      <li>Textura sobre o logotipo</li>
+      <li>Textura sobre foto de produto — a foto já tem matéria própria</li>
+    </ol>
+  </div>
+  <div class="no"><span class="tag">Nunca</span>
+    <ol start="4" style="margin:0;padding-left:18px;font-size:13.5px;line-height:1.9">
+      <li>Acima de 18% — passou disso vira sujeira, não matéria</li>
+      <li>Esticada em uma direção só</li>
+      <li>Como camada sobreposta em vídeo — lá o grão vai na correção de cor</li>
+    </ol>
+  </div>
+</div>
+
+<h2>Receita para web</h2>
+<p>Equivalente ao GRÃO em SVG, sem carregar arquivo:</p>
+<pre style="background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:16px;overflow-x:auto;font-size:12.5px;line-height:1.7"><code>&lt;svg width="0" height="0" style="position:absolute"&gt;
+  &lt;filter id="grao"&gt;
+    &lt;feTurbulence type="fractalNoise" baseFrequency="0.85"
+                  numOctaves="3" stitchTiles="stitch"/&gt;
+    &lt;feColorMatrix type="saturate" values="0"/&gt;
+  &lt;/filter&gt;
+&lt;/svg&gt;
+
+.grao::after {
+  content: ""; position: absolute; inset: 0;
+  filter: url(#grao);
+  opacity: .08;              /* 6–10% */
+  mix-blend-mode: overlay;
+  pointer-events: none;
+}</code></pre>

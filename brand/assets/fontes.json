@@ -1,0 +1,20 @@
+{
+  "pasta": "/Users/henriquepereiramartins/Documents/Work/EM Vidros/Logos",
+  "arquivos": {
+    "logo/emvidros-oficial.svg": "Official Logos/SVG Logos/EM Vidros - Logo 2026.svg",
+    "logo/emvidros-oficial.png": "Official Logos/Separated Logos (PNG)/EM Vidros - Oficial.png",
+    "logo/emvidros-branca.svg": "Official Logos/SVG Logos/EM Vidros - Logo 2026 - Branca.svg",
+    "logo/emvidros-branca.png": "Official Logos/Separated Logos (PNG)/EM Vidros - Branco.png",
+    "logo/emvidros-cinza.svg": "Official Logos/SVG Logos/EM Vidros - Logo 2026 - Cinza.svg",
+    "logo/emvidros-raposa.svg": "Official Logos/SVG Logos/EM Vidros - Logo 2026 - Raposa.svg",
+    "logo/emvidros-imperatriz.svg": "Official Logos/SVG Logos/EM Vidros - Logo 2026 - Imperatriz.svg",
+    "logo/em-simbolo.svg": "Official Logos/SVG Logos/EM Vidros - Logo 2026 - EM.svg",
+    "logo/em-simbolo-cinza.svg": "Official Logos/SVG Logos/EM Vidros - Logo 2026 - EM Cinza.svg",
+    "logo/em-simbolo-branco.svg": "Official Logos/SVG Logos/EM Branco.svg",
+    "web/favicon.ico": "IconKitchen-Output/web/favicon.ico",
+    "web/apple-touch-icon.png": "IconKitchen-Output/web/apple-touch-icon.png",
+    "web/icon-192.png": "IconKitchen-Output/web/icon-192.png",
+    "web/icon-512.png": "IconKitchen-Output/web/icon-512.png",
+    "web/icon-512-maskable.png": "IconKitchen-Output/web/icon-512-maskable.png"
+  }
+}

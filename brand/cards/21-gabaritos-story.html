@@ -1,0 +1,195 @@
+<!-- @dsCard group="Gabaritos" -->
+<meta charset="utf-8">
+<title>Gabaritos — Story e capa de Reel — EM Vidros</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap');
+/* EM Vidros — Brandbook · base compartilhada dos cards
+   Copiada inline em cada card para mantê-los auto-contidos. */
+
+
+:root {
+  --teal: #2F646A;
+  --teal-l: #63B5AF;
+  --graf: #414141;
+  --off: #F0EFEA;
+  --areia: #E4E1D8;
+  --linha: #D8D5CE;
+  --cinza: #8A8A8A;
+  --atencao: #B4552E;
+
+  --bg: #F0EFEA;
+  --fg: #414141;
+  --card: #FFFFFF;
+  --muted: #8A8A8A;
+  --rule: #D8D5CE;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+    --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+  --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+}
+:root[data-theme="light"] {
+  --bg: #F0EFEA; --fg: #414141; --card: #FFFFFF;
+  --muted: #8A8A8A; --rule: #D8D5CE; --areia: #E4E1D8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: clamp(20px, 4vw, 44px);
+  background: var(--bg);
+  color: var(--fg);
+  /* Fallbacks geométricos: se o Google Fonts for bloqueado, a página ainda
+     cai numa sans e nunca numa serifada. */
+  font-family: Poppins, "Century Gothic", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--teal-l); margin: 0 0 10px;
+}
+
+h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+h2 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; }
+p  { margin: 0 0 14px; max-width: 68ch; }
+.lead { color: var(--muted); max-width: 62ch; margin-bottom: 4px; }
+
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; }
+
+/* tabelas — sempre roláveis, o body nunca rola na horizontal */
+.scroll { overflow-x: auto; margin: 0 0 18px; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+
+.box { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; }
+
+.yes, .no { border-left: 3px solid; padding: 14px 16px; border-radius: 0 6px 6px 0; background: var(--card); }
+.yes { border-color: var(--teal); }
+.no  { border-color: var(--atencao); }
+.yes .tag, .no .tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+.yes .tag { color: var(--teal); }
+.no .tag  { color: var(--atencao); }
+
+.note { font-size: 13px; color: var(--muted); border-left: 2px solid var(--rule); padding-left: 14px; margin: 18px 0; }
+</style>
+<div class="wrap">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="s1"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/></filter>
+</svg>
+
+<style>
+  .peca { container-type: inline-size; width: 100%; max-width: 260px; }
+  .art9 { position: relative; aspect-ratio: 1080/1920; overflow: hidden; border-radius: 4px;
+          border: 1px solid var(--rule); background: #F0EFEA; }
+  .art9 .grao { position: absolute; inset: 0; filter: url(#s1); opacity: .09; mix-blend-mode: overlay; pointer-events: none; }
+  /* zonas seguras: 250px topo = 13.02%, 320px base = 16.67%, 80px lateral = 7.407cqw */
+  .art9 .pad { position: absolute; left: 7.407cqw; right: 7.407cqw; top: 13.02%; bottom: 16.67%; display: flex; flex-direction: column; }
+  .art9 .logo { position: absolute; right: 7.407cqw; bottom: 18.5%; width: 16cqw; }
+  .zt, .zb { position: absolute; left: 0; right: 0; background: rgba(180,85,46,.13); }
+  .zt { top: 0; height: 13.02%; } .zb { bottom: 0; height: 16.67%; }
+  .zl { position: absolute; left: 0; right: 0; text-align: center; font-size: 2.1cqw; color: #B4552E; letter-spacing: .06em; }
+  .rot9 { font-size: 2.4cqw; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #2F646A; }
+  .tit9 { font-size: 8.0cqw; font-weight: 600; letter-spacing: -.02em; line-height: 1.10; color: #414141; }
+  .cor9 { font-size: 3.1cqw; line-height: 1.65; color: #6E6E6E; }
+  .dsp9 { font-family: 'Playfair Display', 'Iowan Old Style', Georgia, serif; font-size: 11cqw; font-weight: 500; line-height: 1.05; color: #2F646A; }
+  .spec { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-top: 12px; }
+  .spec b { color: var(--fg); font-weight: 600; }
+  .trio { display: grid; gap: 26px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+</style>
+
+<p class="eyebrow">Gabaritos</p>
+<h1>Story e capa de Reel — 1080 × 1920</h1>
+<p class="lead">As faixas em vermelho são as zonas cobertas pela interface do Instagram: <strong>250 px no topo</strong> e <strong>320 px na base</strong>. Nenhum texto entra ali.</p>
+
+<div class="trio">
+
+  <!-- 6. Story informativo -->
+  <div>
+    <div class="peca"><div class="art9">
+      <div class="grao"></div>
+      <div class="zt"></div><div class="zb"></div>
+      <div class="zl" style="top:5.5%">250 px — zona segura</div>
+      <div class="zl" style="bottom:7%">320 px — zona segura</div>
+      <div class="pad">
+        <div class="rot9">Comunicado</div>
+        <div style="flex:1"></div>
+        <div class="tit9" style="color:#B4552E">Feriado de<br>Tiradentes</div>
+        <div style="height:.3cqw;width:16cqw;background:#63B5AF;margin:4cqw 0"></div>
+        <div class="cor9">Todas as unidades fechadas em 21 de abril.<br>Retorno na segunda, dia 22, a partir das 8h.</div>
+        <div style="flex:1"></div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-oficial.svg" alt="">
+    </div></div>
+    <div class="spec"><b>6 · Story — comunicado</b><br>
+      Cor Atenção <code>#B4552E</code> no título, só aqui<br>
+      Poppins em tudo · sem emoji de alerta repetido<br>
+      Conteúdo inteiro dentro da zona segura</div>
+  </div>
+
+  <!-- 7. Capa de Reel -->
+  <div>
+    <div class="peca"><div class="art9" style="background:#2F646A">
+      <div class="grao" style="opacity:.12"></div>
+      <div style="position:absolute;left:0;right:0;top:14.8%;height:70.3%;border:.4cqw dashed rgba(255,255,255,.42)"></div>
+      <div style="position:absolute;left:0;right:0;top:15.8%;text-align:center;font-size:2.1cqw;color:rgba(255,255,255,.62);letter-spacing:.08em">RECORTE 1080 × 1350 — O QUE APARECE NA GRADE</div>
+      <div class="pad" style="justify-content:center">
+        <div class="rot9" style="color:#A9CFCB">Na estrada</div>
+        <div class="tit9" style="color:#fff;margin-top:2.4cqw">Rota de entrega:<br>Pinheiro</div>
+        <div style="height:.3cqw;width:16cqw;background:#63B5AF;margin:4cqw 0"></div>
+        <div class="cor9" style="color:#C6DEDC">90 km. Saída às 5h.</div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-branca.svg" alt="">
+    </div></div>
+    <div class="spec"><b>7 · Capa de Reel</b> — pilar PROVA ou GENTE<br>
+      Título em até 5 palavras · sempre desenhada, nunca quadro capturado<br>
+      Tudo que importa dentro do recorte <b>1080 × 1350</b><br>
+      Teste: as últimas nove capas juntas parecem da mesma marca?</div>
+  </div>
+
+  <!-- 8. Story editorial -->
+  <div>
+    <div class="peca"><div class="art9">
+      <div style="position:absolute;left:0;right:0;top:0;height:40%;background:#CBD3D2"></div>
+      <div style="position:absolute;left:50%;top:20%;transform:translate(-50%,-50%);font-size:2.2cqw;color:#7C8A89;letter-spacing:.1em">FOTO REAL DA OBRA</div>
+      <div class="grao"></div>
+      <div class="zt"></div><div class="zb"></div>
+      <!-- O texto começa abaixo da foto, nunca em cima da emenda. -->
+      <div class="pad" style="justify-content:flex-start;padding-top:12%">
+        <div class="dsp9" style="font-size:8.6cqw">Onze anos<br>de EM Vidros</div>
+        <div style="height:.3cqw;width:16cqw;background:#63B5AF;margin:4cqw 0"></div>
+        <div class="cor9">De uma fábrica na Raposa a seis unidades no Maranhão, Pará e Piauí.</div>
+      </div>
+      <img class="logo" src="../assets/logo/emvidros-oficial.svg" alt="">
+    </div></div>
+    <div class="spec"><b>8 · Story editorial</b> — pilar MARCA<br>
+      Playfair Display 500 · único lugar onde ela aparece em story<br>
+      Foto real na metade superior · sem CTA<br>
+      Textura GRÃO 9% sobre a peça inteira</div>
+  </div>
+
+</div>
+
+<h2>Como usar</h2>
+<div class="grid g2">
+  <div class="yes"><span class="tag">Sim</span>Copiar a estrutura: margem, posição do logotipo, hierarquia tipográfica e a camada de textura. O conteúdo muda; o esqueleto não.</div>
+  <div class="no"><span class="tag">Não</span>Tratar o gabarito como sugestão. Peça que sai da margem de 80 px, muda o logotipo de canto ou usa Playfair em conteúdo técnico está fora do sistema.</div>
+</div>
+</div>

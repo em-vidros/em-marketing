@@ -1,0 +1,85 @@
+<!-- @dsCard group="Fundamentos" title="Tipografia" -->
+
+<p class="eyebrow">Capítulo 5</p>
+<h1>Tipografia</h1>
+<p class="lead">Duas famílias, com fronteira rígida entre elas. A escolha do Poppins não foi estética — foi medida.</p>
+
+<h2>A evidência</h2>
+<p>Proporção de tinta letra a letra do wordmark <code>VIDROS</code> comparada contra as candidatas. A medida é invariante a tracking, então isola a forma da letra.</p>
+<div class="scroll">
+<table>
+  <tr><th>Fonte</th><th>Erro médio vs. wordmark</th><th></th></tr>
+  <tr><td><strong>Poppins 600</strong></td><td><strong>6,2%</strong></td><td><div style="background:var(--teal);height:8px;width:12%;border-radius:4px"></div></td></tr>
+  <tr><td>Poppins 700</td><td>6,8%</td><td><div style="background:var(--teal);height:8px;width:13%;border-radius:4px"></div></td></tr>
+  <tr><td>Montserrat 700</td><td>31,0%</td><td><div style="background:var(--atencao);height:8px;width:60%;border-radius:4px"></div></td></tr>
+  <tr><td>Montserrat 900</td><td>34,3%</td><td><div style="background:var(--atencao);height:8px;width:66%;border-radius:4px"></div></td></tr>
+</table>
+</div>
+<p class="note">Montserrat erra o <code>D</code> em 29% sozinho. Poppins é a família que casa com o logotipo.</p>
+
+<h2>O sistema</h2>
+<div class="grid g2">
+  <div class="box">
+    <div style="font-family:Poppins;font-weight:600;font-size:42px;letter-spacing:-.02em;line-height:1.1">Poppins</div>
+    <div style="color:var(--teal-l);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin:8px 0 10px">Fonte do sistema</div>
+    <div style="font-size:13.5px;color:var(--muted)">Corpo, dado técnico, rótulo, número, legenda, CTA, interface. <strong style="color:var(--fg)">Todo post técnico e de produto — inclusive o título.</strong></div>
+    <div style="margin-top:14px;font-size:13px;line-height:2">
+      <div style="font-weight:300">300 Light</div><div style="font-weight:400">400 Regular</div>
+      <div style="font-weight:500">500 Medium</div><div style="font-weight:600">600 SemiBold</div>
+      <div style="font-weight:700">700 Bold</div>
+    </div>
+  </div>
+  <div class="box">
+    <div style="font-family:'Playfair Display', 'Iowan Old Style', Georgia, serif;font-weight:500;font-size:42px;line-height:1.1">Playfair Display</div>
+    <div style="color:var(--teal-l);font-size:11px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;margin:8px 0 10px">Display emocional</div>
+    <div style="font-size:13.5px;color:var(--muted)">Somente headline de peça institucional, data comemorativa e campanha. É o registro que já funciona no feed.</div>
+    <div style="margin-top:14px;font-family:'Playfair Display', 'Iowan Old Style', Georgia, serif;font-size:15px;line-height:2">
+      <div style="font-weight:400">400 Regular</div><div style="font-weight:500">500 Medium</div><div style="font-weight:600">600 SemiBold</div>
+    </div>
+  </div>
+</div>
+
+<h2>A fronteira — regra dura</h2>
+<div class="grid g2">
+  <div class="no"><span class="tag">Nunca</span>
+    <div style="font-family:'Playfair Display', 'Iowan Old Style', Georgia, serif;font-size:26px;line-height:1.2;margin-bottom:6px">Temperado 10&nbsp;mm</div>
+    Playfair em peça técnica, de produto ou de dado. Se informa espessura, norma, medida, preço ou prazo, a peça é inteira em Poppins.</div>
+  <div class="yes"><span class="tag">Sempre</span>
+    <div style="font-family:Poppins;font-weight:600;font-size:26px;letter-spacing:-.02em;line-height:1.2;margin-bottom:6px">Temperado 10&nbsp;mm</div>
+    Poppins em tudo que é material. Playfair só quando a mensagem é sobre pessoas, datas e a empresa.</div>
+</div>
+<p class="note">Nunca as duas na mesma linha. Nunca Playfair em corpo de texto. Nunca Playfair abaixo de 32&nbsp;px.</p>
+
+<h2>Escala — feed 1080 × 1350</h2>
+<div class="scroll">
+<table>
+  <tr><th>Nível</th><th>Fonte</th><th>Tamanho</th><th>Peso</th><th>Entrelinha</th><th>Tracking</th></tr>
+  <tr><td>Display</td><td>Playfair Display</td><td>96–120 px</td><td>500</td><td>1,05</td><td>−1%</td></tr>
+  <tr><td>Título</td><td>Poppins</td><td>64–84 px</td><td>600</td><td>1,10</td><td>−2%</td></tr>
+  <tr><td>Subtítulo</td><td>Poppins</td><td>38–46 px</td><td>500</td><td>1,30</td><td>0</td></tr>
+  <tr><td>Corpo</td><td>Poppins</td><td>28–32 px</td><td>400</td><td><strong>1,65</strong></td><td>0</td></tr>
+  <tr><td>Rótulo / olho</td><td>Poppins</td><td>20–24 px</td><td>600</td><td>1,20</td><td><strong>+8%</strong>, caixa alta</td></tr>
+  <tr><td>Legenda / crédito</td><td>Poppins</td><td>18–20 px</td><td>400</td><td>1,40</td><td>0</td></tr>
+</table>
+</div>
+<p style="font-size:13px;color:var(--muted)">Story 1080 × 1920: multiplicar por 1,15 e respeitar as zonas seguras.</p>
+
+<h2>Poppins em texto corrido — cuidado obrigatório</h2>
+<p>Poppins tem altura de x alta, o que cansa em blocos longos. Duas compensações são obrigatórias:</p>
+<div class="grid g2">
+  <div class="yes"><span class="tag">Obrigatório</span><strong>Entrelinha nunca abaixo de 1,65</strong> no corpo.</div>
+  <div class="yes"><span class="tag">Obrigatório</span><strong>Máximo de 5 linhas</strong> de corpo por peça. Passou disso, o texto vai para a legenda do post.</div>
+</div>
+
+<h2>Unidades e números</h2>
+<div class="scroll">
+<table>
+  <tr><th>Certo</th><th>Errado</th></tr>
+  <tr><td><code>10 mm</code></td><td style="color:var(--muted)"><s>10mm</s> &nbsp; <s>10 MM</s></td></tr>
+  <tr><td><code>6, 8 e 10 mm</code></td><td style="color:var(--muted)"><s>06, 08 e 10mm</s></td></tr>
+  <tr><td><code>R$ 1.200,00</code></td><td style="color:var(--muted)"><s>R$1200,00</s> &nbsp; <s>1.200 reais</s></td></tr>
+  <tr><td><code>2 m²</code></td><td style="color:var(--muted)"><s>2m2</s> &nbsp; <s>2 metros quadrados</s></td></tr>
+  <tr><td><code>(98) 3131-4000</code></td><td style="color:var(--muted)"><s>98 3131 4000</s></td></tr>
+  <tr><td><code>0800 150 0103</code></td><td style="color:var(--muted)"><s>0800-150-0103</s></td></tr>
+</table>
+</div>

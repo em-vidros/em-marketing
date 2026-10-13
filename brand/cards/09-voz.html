@@ -1,0 +1,238 @@
+<!-- @dsCard group="Conteúdo" -->
+<meta charset="utf-8">
+<title>Voz, legenda e emoji — EM Vidros</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap');
+/* EM Vidros — Brandbook · base compartilhada dos cards
+   Copiada inline em cada card para mantê-los auto-contidos. */
+
+
+:root {
+  --teal: #2F646A;
+  --teal-l: #63B5AF;
+  --graf: #414141;
+  --off: #F0EFEA;
+  --areia: #E4E1D8;
+  --linha: #D8D5CE;
+  --cinza: #8A8A8A;
+  --atencao: #B4552E;
+
+  --bg: #F0EFEA;
+  --fg: #414141;
+  --card: #FFFFFF;
+  --muted: #8A8A8A;
+  --rule: #D8D5CE;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+    --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #1B1F20; --fg: #E8E6E1; --card: #242829;
+  --muted: #9BA0A0; --rule: #383D3E; --areia: #2C3132;
+}
+:root[data-theme="light"] {
+  --bg: #F0EFEA; --fg: #414141; --card: #FFFFFF;
+  --muted: #8A8A8A; --rule: #D8D5CE; --areia: #E4E1D8;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: clamp(20px, 4vw, 44px);
+  background: var(--bg);
+  color: var(--fg);
+  /* Fallbacks geométricos: se o Google Fonts for bloqueado, a página ainda
+     cai numa sans e nunca numa serifada. */
+  font-family: Poppins, "Century Gothic", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap { max-width: 1080px; margin: 0 auto; }
+
+.eyebrow {
+  font-size: 11px; font-weight: 600; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--teal-l); margin: 0 0 10px;
+}
+
+h1 { font-size: clamp(26px, 4vw, 38px); font-weight: 600; letter-spacing: -.02em; line-height: 1.15; margin: 0 0 10px; }
+h2 { font-size: 19px; font-weight: 600; letter-spacing: -.01em; margin: 40px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--rule); }
+h3 { font-size: 14px; font-weight: 600; margin: 24px 0 8px; }
+p  { margin: 0 0 14px; max-width: 68ch; }
+.lead { color: var(--muted); max-width: 62ch; margin-bottom: 4px; }
+
+code, .mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: .88em; }
+
+/* tabelas — sempre roláveis, o body nunca rola na horizontal */
+.scroll { overflow-x: auto; margin: 0 0 18px; -webkit-overflow-scrolling: touch; }
+table { border-collapse: collapse; width: 100%; min-width: 520px; font-size: 13.5px; }
+th, td { text-align: left; padding: 9px 14px 9px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 600; font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+
+.grid { display: grid; gap: 14px; }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+
+.box { background: var(--card); border: 1px solid var(--rule); border-radius: 6px; padding: 18px; }
+
+.yes, .no { border-left: 3px solid; padding: 14px 16px; border-radius: 0 6px 6px 0; background: var(--card); }
+.yes { border-color: var(--teal); }
+.no  { border-color: var(--atencao); }
+.yes .tag, .no .tag { font-size: 10px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; display: block; margin-bottom: 6px; }
+.yes .tag { color: var(--teal); }
+.no .tag  { color: var(--atencao); }
+
+.note { font-size: 13px; color: var(--muted); border-left: 2px solid var(--rule); padding-left: 14px; margin: 18px 0; }
+</style>
+<div class="wrap">
+<p class="eyebrow">Capítulos 9 a 11</p>
+<h1>Voz, legenda e emoji</h1>
+<p class="lead"><strong>Parceiro técnico.</strong> Fala com quem entende. Direto, competente, sem entusiasmo fabricado. A autoridade vem do dado, não do adjetivo.</p>
+
+<div class="scroll">
+<table>
+  <tr><th>A marca é</th><th>A marca não é</th></tr>
+  <tr><td>Direta</td><td style="color:var(--muted)">Seca ou grosseira</td></tr>
+  <tr><td>Técnica</td><td style="color:var(--muted)">Hermética</td></tr>
+  <tr><td>Confiante</td><td style="color:var(--muted)">Arrogante</td></tr>
+  <tr><td>Regional com orgulho</td><td style="color:var(--muted)">Provinciana</td></tr>
+  <tr><td>Objetiva</td><td style="color:var(--muted)">Fria</td></tr>
+</table>
+</div>
+
+<h2>Léxico</h2>
+<div class="grid g2">
+  <div class="yes"><span class="tag">Obrigatório</span>
+    vidro temperado · laminado · multilaminado · insulado · fumê · refletivo · espessura · esquadria · guarda-corpo · box · perfil de alumínio · ferragem · acessório · beneficiamento · INMETRO · Falcão Bauer · pronta entrega
+    <div style="font-size:12.5px;color:var(--muted);margin-top:10px">Usar o nome certo do produto é a forma mais barata de demonstrar competência.</div>
+  </div>
+  <div class="no"><span class="tag">Proibido</span>
+    <table style="min-width:0;font-size:12.5px">
+      <tr><td style="border:none;padding:3px 10px 3px 0"><s>soluções inovadoras</s>, <s>excelência</s></td><td style="border:none;padding:3px 0;color:var(--muted)">adjetivo vazio</td></tr>
+      <tr><td style="border:none;padding:3px 10px 3px 0"><s>o melhor</s>, <s>incomparável</s></td><td style="border:none;padding:3px 0;color:var(--muted)">superlativo sem prova</td></tr>
+      <tr><td style="border:none;padding:3px 10px 3px 0"><s>venha conferir</s>, <s>não perca</s></td><td style="border:none;padding:3px 0;color:var(--muted)">urgência de varejo</td></tr>
+      <tr><td style="border:none;padding:3px 10px 3px 0"><s>Você sabia que…?</s></td><td style="border:none;padding:3px 0;color:var(--muted)">abertura genérica</td></tr>
+      <tr><td style="border:none;padding:3px 10px 3px 0"><s>parceiro de sucesso</s></td><td style="border:none;padding:3px 0;color:var(--muted)">jargão de agência</td></tr>
+      <tr><td style="border:none;padding:3px 10px 3px 0"><s>🔥 IMPERDÍVEL 🔥</s></td><td style="border:none;padding:3px 0;color:var(--muted)">caixa alta com emoji</td></tr>
+    </table>
+  </div>
+</div>
+
+<h2>Substituições</h2>
+<div class="scroll">
+<table>
+  <tr><th>Em vez de</th><th>Escreva</th></tr>
+  <tr><td style="color:var(--muted)"><s>Vidro de alta qualidade e segurança</s></td><td>Temperado certificado pelo INMETRO nas espessuras 6, 8 e 10 mm</td></tr>
+  <tr><td style="color:var(--muted)"><s>Somos referência no Nordeste</s></td><td>Seis filiais no Maranhão, Pará e Piauí</td></tr>
+  <tr><td style="color:var(--muted)"><s>Atendimento diferenciado</s></td><td>Pronta entrega em box, portas e janelas em tamanhos padronizados</td></tr>
+  <tr><td style="color:var(--muted)"><s>Transforme seu ambiente!</s></td><td>Vidro fumê reduz o calor e mantém a vista</td></tr>
+</table>
+</div>
+
+<h1 style="margin-top:52px">Sistema de legenda</h1>
+
+<div style="background:var(--card);border:1px solid var(--rule);border-radius:6px;padding:22px;font-family:ui-monospace,Menlo,monospace;font-size:12.5px;line-height:2;margin-bottom:8px">
+  <div><span style="color:var(--teal-l)">[GANCHO]</span> &nbsp;&nbsp;1 linha · máx. 8 palavras · sem emoji · sem pergunta genérica</div>
+  <div style="color:var(--muted)">↵</div>
+  <div><span style="color:var(--teal-l)">[CORPO]</span> &nbsp;&nbsp;&nbsp;2 a 4 linhas · uma ideia por linha</div>
+  <div style="color:var(--muted)">↵</div>
+  <div><span style="color:var(--teal-l)">[CTA]</span> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;1 linha · um único pedido</div>
+  <div style="color:var(--muted)">↵</div>
+  <div><span style="color:var(--teal-l)">[HASHTAGS]</span> bloco separado · nunca no meio do texto</div>
+</div>
+<p class="note"><strong>As primeiras 8 palavras são o post.</strong> O Instagram corta o resto atrás do "mais". Gancho fraco é post perdido, por melhor que seja a arte.</p>
+
+<h2>Gancho</h2>
+<div class="scroll">
+<table>
+  <tr><th>Errado</th><th>Certo</th></tr>
+  <tr><td style="color:var(--muted)"><s>Você sabia que o vidro temperado é 5x mais resistente?</s></td><td>O temperado quebra em grãos. O comum, em lâminas.</td></tr>
+  <tr><td style="color:var(--muted)"><s>Confira nossos produtos!</s></td><td>Box pronto para levar hoje, em 6 lojas.</td></tr>
+  <tr><td style="color:var(--muted)"><s>A EM Vidros tem o melhor atendimento</s></td><td>Da medição à instalação em 7 dias.</td></tr>
+</table>
+</div>
+
+<h2>CTA — um só por post</h2>
+<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+  <span class="box" style="padding:8px 14px;font-size:13px">Fale com a unidade mais próxima.</span>
+  <span class="box" style="padding:8px 14px;font-size:13px">Peça o orçamento pelo 0800 150 0103.</span>
+  <span class="box" style="padding:8px 14px;font-size:13px">Confira a espessura certa para o seu projeto.</span>
+  <span class="box" style="padding:8px 14px;font-size:13px">Estamos contratando — link na bio.</span>
+  <span class="box" style="padding:8px 14px;font-size:13px">Salve para consultar depois.</span>
+</div>
+<p style="font-size:13px;color:var(--muted)">Nunca dois CTAs no mesmo post. Nunca CTA em post institucional ou de data comemorativa.</p>
+
+<h2>Legendas-modelo</h2>
+<div class="grid g2">
+  <div class="box"><div class="eyebrow">Prova</div><div style="white-space:pre-line;font-size:13.5px">Guarda-corpo em laminado 10 mm, entregue em São Luís.
+
+Vão livre de 2,40 m sem montante intermediário.
+Ferragem em inox escovado.
+Medição, beneficiamento e instalação por equipe própria.
+
+Peça o orçamento pelo 0800 150 0103.</div></div>
+  <div class="box"><div class="eyebrow">Autoridade</div><div style="white-space:pre-line;font-size:13.5px">O temperado quebra em grãos. O comum, em lâminas.
+
+Por isso a norma exige temperado em box, porta e guarda-corpo.
+Nossa linha é certificada pelo INMETRO e pelo Instituto Falcão Bauer nas espessuras 6, 8 e 10 mm.
+
+Confira a espessura certa para o seu projeto.</div></div>
+  <div class="box"><div class="eyebrow">Gente</div><div style="white-space:pre-line;font-size:13.5px">Rota de entrega: Pinheiro, a 90 km de São Luís.
+
+Saída às 5h, descarga às 8h30.
+Quatro pessoas, um caminhão, uma obra que não pode parar.
+
+Salve para consultar depois.</div></div>
+  <div class="box"><div class="eyebrow">Marca</div><div style="white-space:pre-line;font-size:13.5px">18 de maio. Dia do Vidraceiro.
+
+Quem transforma projeto em obra.
+Obrigado por trabalhar com a gente.</div></div>
+</div>
+<p style="font-size:13px;color:var(--muted);margin-top:12px">Banco completo com 12 modelos no <code>BRANDBOOK.md</code>, capítulo 10.4.</p>
+
+<h1 style="margin-top:52px">Emoji</h1>
+<div style="background:var(--card);border:1px solid var(--rule);border-left:3px solid var(--teal);border-radius:0 6px 6px 0;padding:20px;margin-bottom:16px">
+  <strong style="font-size:17px">Emoji é exceção, não padrão.</strong>
+  <div style="font-size:13.5px;color:var(--muted);margin-top:6px">A peça é limpa e minimalista. O emoji só entra quando faz um trabalho que a palavra não faria melhor — marcar estrutura ou sinalizar contato. Nunca para dar emoção. Hoje a conta usa 2,1 por legenda, com <code>✨</code> liderando em 17 ocorrências: decorativo puro, sai.</div>
+</div>
+
+<div class="grid g2">
+  <div class="yes"><span class="tag">Lista branca</span>
+    <table style="min-width:0;font-size:13px">
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">✓</td><td style="border:none;padding:3px 0">item concluído em lista</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">▪</td><td style="border:none;padding:3px 0">marcador de lista</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">→</td><td style="border:none;padding:3px 0">direcionar para link ou próximo passo</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">📐</td><td style="border:none;padding:3px 0">medida, especificação</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">🔧</td><td style="border:none;padding:3px 0">serviço, instalação</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">🏗️</td><td style="border:none;padding:3px 0">obra</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">📍</td><td style="border:none;padding:3px 0">localização de unidade</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">📞</td><td style="border:none;padding:3px 0">telefone</td></tr>
+      <tr><td style="border:none;padding:3px 12px 3px 0;font-size:16px">📲</td><td style="border:none;padding:3px 0">WhatsApp</td></tr>
+    </table>
+  </div>
+  <div class="no"><span class="tag">Lista negra</span>
+    <div style="font-size:20px;line-height:1.8;letter-spacing:.15em">🔥 😍 🤩 🙏 👏 ✨ 💯 🚀 ❤️ 💙 🩵 🤝 🎉 👉 👇 💡 ⭐</div>
+    <div style="font-size:13px;margin-top:10px">E qualquer emoji de rosto. <code>⚠️</code> só em comunicado real de funcionamento.</div>
+    <div style="font-size:13px;color:var(--muted);margin-top:12px"><strong>Regras:</strong> nunca na arte · nunca na primeira linha · teto de 2 por legenda · nunca dois seguidos · nunca substituindo palavra.</div>
+  </div>
+</div>
+
+<h1 style="margin-top:52px">Hashtag</h1>
+<p>Bloco separado, ao final, após linha em branco. <strong>Nunca dentro do texto. Teto de 5 por post</strong> — hoje há posts com 8.</p>
+<div class="scroll">
+<table>
+  <tr><th>Conjunto</th><th>Tags</th><th>Quantidade</th></tr>
+  <tr><td><strong>Marca</strong></td><td><code>#EMVidros</code></td><td>1, fixa</td></tr>
+  <tr><td><strong>Produto</strong></td><td><code>#VidroTemperado</code> <code>#VidroLaminado</code> <code>#VidroFumê</code> <code>#Espelho</code> <code>#PerfilDeAlumínio</code> <code>#Ferragens</code></td><td>1–2</td></tr>
+  <tr><td><strong>Setor</strong></td><td><code>#SetorVidreiro</code> <code>#MercadoVidreiro</code> <code>#Vidraçaria</code> <code>#Serralheria</code> <code>#Esquadrias</code></td><td>1–2</td></tr>
+  <tr><td><strong>Região</strong></td><td><code>#Maranhão</code> <code>#SãoLuís</code> <code>#Imperatriz</code> <code>#Teresina</code> <code>#Raposa</code></td><td>1</td></tr>
+</table>
+</div>
+<p style="font-size:13px;color:var(--atencao)"><strong>Proibidas:</strong> <s>#vidrosdequalidade</s> · <s>#vidros</s> · <s>#qualidade</s> · <s>#instagood</s> · <s>#amei</s> — e qualquer tag genérica sem público real.</p>
+</div>

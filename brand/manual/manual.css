@@ -1,0 +1,414 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Playfair+Display:wght@400;500;600&display=swap');
+
+/* ══════════════════════════════════════════════════════════════════════
+   EM Vidros — Manual de Identidade Visual
+   A4 paisagem, uma cena por pagina. Fonte da verdade: ../BRANDBOOK.md
+
+   Todo valor de cor, tipo, margem e textura deste arquivo vem do
+   brandbook. Se divergir, o brandbook manda.
+   ══════════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* Paleta — extraida do arquivo oficial do logotipo (cap. 4.1) */
+  --teal:    #2F646A;   /* primaria */
+  --accent:  #63B5AF;   /* accent — NUNCA carrega texto (2,1:1) */
+  --ink:     #414141;   /* texto corrido */
+  --white:   #FFFFFF;
+  --paper:   #F0EFEA;   /* fundo padrao do sistema */
+  --sand:    #E4E1D8;
+  --rule:    #D8D5CE;
+  --gray:    #8A8A8A;   /* so a partir de 18pt / 24px */
+  --alert:   #B4552E;
+  --ok:      #4A7C59;
+
+  --page-w: 297mm;
+  --page-h: 210mm;
+  --ribbon: 5mm;
+  --pad-x:  16mm;
+  --foot-h: 10mm;
+}
+
+* { box-sizing: border-box; }
+
+@page { size: A4 landscape; margin: 0; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: #2a2a2a;
+  font-family: Poppins, "Century Gothic", "Avenir Next", ui-sans-serif, system-ui, sans-serif;
+  color: var(--ink);
+  /* macOS renderiza Poppins pesada demais sem isto */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Numeros de medida aparecem em quase toda pagina; alinhados sempre. */
+  font-variant-numeric: tabular-nums;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ─────────────────────────────────────────────────────────── pagina ── */
+
+.page {
+  position: relative;
+  width: var(--page-w);
+  height: var(--page-h);
+  overflow: hidden;
+  background: var(--paper);
+  break-after: page;
+  page-break-after: always;
+}
+.page:last-child { break-after: auto; page-break-after: auto; }
+
+/* Preview em tela: folhas soltas sobre fundo escuro. Some na impressao. */
+@media screen {
+  body { padding: 28px 0; }
+  .page { margin: 0 auto 22px; box-shadow: 0 20px 50px -18px rgba(0,0,0,.6); }
+}
+
+/* Filete de marca na borda esquerda — a unica constante de toda pagina. */
+.page::before {
+  content: "";
+  position: absolute; left: 0; top: 0; bottom: 0;
+  width: var(--ribbon);
+  background: var(--accent);
+  z-index: 3;
+}
+
+/* SEM filme de grao sobre a pagina inteira. Duas medicoes decidiram isto:
+
+   1. O grao a 8,5% de Overlay sobre off-white rende desvio de 0,42 em 255 —
+      abaixo do que qualquer impressora resolve. Custava tudo e nao aparecia.
+   2. mix-blend-mode em UMA pagina que seja destroi a camada de texto do PDF
+      inteiro para o pdf-inspector: as palavras saem quebradas glifo a glifo
+      ("l o g o t i p o"). Medido — sem blend, 110 termos-chave extraidos;
+      com blend, zero. O pdftotext le nos dois casos, mas um manual que so
+      um extrator consegue ler nao esta pronto.
+
+   A textura continua no documento onde ela e VISIVEL e nao fica por cima de
+   texto: o painel da capa e as amostras do capitulo 12. Nenhuma delas usa
+   blend — a mistura e feita por opacidade. */
+.page > * { position: relative; z-index: 2; }
+
+.body {
+  height: calc(var(--page-h) - var(--foot-h));
+  padding: 13mm var(--pad-x) 6mm calc(var(--ribbon) + var(--pad-x) - 2mm);
+  display: flex;
+  flex-direction: column;
+}
+
+/* ────────────────────────────────────────────────────────── cabecalho ── */
+
+.eyebrow {
+  font-size: 7.6pt;
+  font-weight: 600;
+  letter-spacing: .22em;   /* rotulo = +8% no brandbook; em corpo pequeno
+                              impresso precisa de mais para nao fechar */
+  text-transform: uppercase;
+  color: var(--teal);
+  margin-bottom: 4.5mm;
+}
+
+h2 {
+  font-size: 29pt;
+  font-weight: 600;
+  letter-spacing: -.025em;
+  line-height: 1.04;
+  margin: 0;
+  color: var(--ink);
+  text-wrap: balance;      /* titulo nunca quebra deixando uma palavra sozinha */
+}
+
+/* Filete sob o titulo. Optico: alinhado a esquerda da haste, nao da caixa. */
+.bar {
+  width: 16mm; height: 2.6pt;
+  background: var(--accent);
+  margin: 4mm 0 4.5mm;
+}
+
+.lead {
+  font-size: 10pt;
+  font-weight: 300;
+  line-height: 1.62;
+  max-width: 150mm;
+  margin: 0;
+  color: var(--ink);
+  text-wrap: pretty;       /* sem viuva na ultima linha */
+}
+
+/* O bloco de conteudo centra no espaco que sobra abaixo do cabecalho.
+   Ancorado no topo, pagina curta fica com um rodape de vazio que le como
+   "faltou terminar"; centrado, o respiro se divide e le como intencao. */
+.content {
+  flex: 1; min-height: 0; margin-top: 6mm;
+  display: flex; flex-direction: column;
+  /* 'safe' e o que impede o bloco de transbordar PARA CIMA e cair por cima
+     do lead quando a pagina fica cheia: nesse caso ele volta a ancorar no
+     topo em vez de centrar. */
+  justify-content: safe center;
+}
+
+/* ────────────────────────────────────────────────────────────── rodape ── */
+
+.foot {
+  position: absolute;
+  left: var(--ribbon); right: 0; bottom: 0;
+  height: var(--foot-h);
+  background: var(--ink);
+  color: rgba(255,255,255,.62);
+  display: flex; align-items: center;
+  padding: 0 var(--pad-x) 0 calc(var(--pad-x) - 2mm);
+  font-size: 7pt; font-weight: 500;
+  letter-spacing: .2em; text-transform: uppercase;
+  z-index: 4;
+}
+.foot .sec { margin-left: auto; margin-right: auto; }
+.foot .num { color: var(--white); font-weight: 600; }
+
+/* ─────────────────────────────────────────────────────── pagina escura ── */
+
+/* Sobre teal, o Teal Claro chega a 2,75:1 — melhor que sobre off-white, ainda
+   abaixo do minimo. Em fundo escuro a hierarquia se faz por peso, tamanho e
+   tracking; a cor de texto e branco ou off-white. O accent fica no filete. */
+.dark { background: var(--teal); }
+.dark h2, .dark .lead { color: var(--white); }
+.dark .eyebrow { color: rgba(255,255,255,.8); }
+.dark .k { color: rgba(255,255,255,.72); }
+.dark .foot { background: rgba(0,0,0,.28); }
+.dark .k, .dark .cell { border-color: rgba(255,255,255,.2); }
+.dark .mono { color: rgba(255,255,255,.72); }
+
+/* ═══════════════════════════════════════════════════════════════ capa ══ */
+
+.capa { background: var(--teal); }
+.capa .body { padding: 0; display: block; }
+
+.capa .stack {
+  position: absolute;
+  left: calc(var(--ribbon) + var(--pad-x));
+  top: 30mm;
+  width: 165mm;
+}
+.capa .marca { width: 62mm; display: block; margin-bottom: 22mm; }
+.capa .kicker {
+  font-size: 7.6pt; font-weight: 600; letter-spacing: .26em;
+  text-transform: uppercase; color: rgba(255,255,255,.8); margin-bottom: 6mm;
+}
+.capa h1 {
+  font-family: 'Playfair Display', 'Iowan Old Style', Georgia, serif;
+  font-size: 46pt; font-weight: 500; line-height: 1.02;
+  letter-spacing: -.015em; color: var(--white);
+  margin: 0 0 7mm;
+}
+.capa .tag {
+  font-size: 12pt; font-weight: 300; color: rgba(255,255,255,.78);
+  letter-spacing: .01em;
+}
+.capa .meta {
+  position: absolute;
+  left: calc(var(--ribbon) + var(--pad-x));
+  bottom: 20mm;
+  font-size: 7.4pt; font-weight: 400; letter-spacing: .16em;
+  text-transform: uppercase; color: rgba(255,255,255,.5);
+  line-height: 2.1;
+  border-top: .5pt solid rgba(255,255,255,.22);
+  padding-top: 5mm;
+  width: 90mm;
+}
+
+/* Painel de vidro jateado na capa.
+
+   Substituiu um motivo de barras horizontais escalonadas: barra cheia, de
+   cantos vivos, empilhada e cortada na direita le como placeholder de
+   carregamento, nao como marca. O painel resolve por outro caminho — usa a
+   textura JATEADO, que o cap. 7.1 define como "a mais ligada ao produto",
+   entao o elemento grafico da capa e literalmente o material que a empresa
+   fabrica. */
+.capa .painel {
+  position: absolute;
+  right: 0; top: 0; bottom: 0;
+  width: 37%;
+  background: rgba(255,255,255,.055);
+  border-left: .75pt solid rgba(99,181,175,.45);
+}
+.capa .painel::after {
+  content: "";
+  position: absolute; inset: 0;
+  background-image: url("../assets/texturas/emv-textura-jateado.png");
+  /* Ladrilho pequeno de proposito: o JATEADO e ruido de baixa frequencia, e
+     esticado para 150 mm ele vira mancha larga que le como artefato de
+     compressao, nao como vidro fosco. */
+  background-size: 52mm 52mm;
+  opacity: .13;                 /* faixa do JATEADO: 12–18%, sem blend */
+}
+
+/* ══════════════════════════════════════════════════════════════ blocos ══ */
+
+/* Colunas. align-content:start e o que impede a linha de esticar ate o pe da
+   pagina — sem isso todo cartao vira uma caixa vazia de 12 cm. Os itens ainda
+   esticam DENTRO da linha, entao cartoes irmaos continuam com a mesma altura. */
+.cols   { display: grid; gap: 9mm; align-content: start; }
+.c2     { grid-template-columns: 1fr 1fr; }
+.c3     { grid-template-columns: repeat(3, 1fr); }
+.c4     { grid-template-columns: repeat(4, 1fr); }
+.c2-1   { grid-template-columns: 2fr 1fr; }
+.c1-2   { grid-template-columns: 1fr 1.35fr; }
+
+/* Cartao — raio 8mm fora nunca; brandbook trava em 4–8px. */
+.cell {
+  border: .5pt solid var(--rule);
+  border-radius: 2mm;
+  padding: 5mm;
+  background: rgba(255,255,255,.5);
+}
+.cell.plain { background: none; border: none; padding: 0; }
+
+/* Rotulo interno */
+.k {
+  font-size: 6.8pt; font-weight: 600; letter-spacing: .2em;
+  text-transform: uppercase; color: var(--teal);
+  padding-bottom: 2.5mm; margin-bottom: 3.5mm;
+  border-bottom: .5pt solid var(--rule);
+}
+.k.mut { color: var(--gray); }
+
+/* Numero de item.
+
+   Teal Profundo, nao Teal Claro. O accent sobre off-white da 2,1:1 e o
+   proprio capitulo 08 deste manual reprova essa combinacao para texto —
+   um documento que quebra a regra que enuncia nao e normativo, e sugestao. */
+.n {
+  font-size: 8pt; font-weight: 600; color: var(--teal);
+  letter-spacing: .1em;
+}
+
+p, li { font-size: 8.8pt; line-height: 1.6; margin: 0 0 3mm; text-wrap: pretty; }
+p:last-child, li:last-child { margin-bottom: 0; }
+ul { margin: 0; padding-left: 4.5mm; }
+li { margin-bottom: 2mm; }
+strong { font-weight: 600; }
+em { font-style: normal; color: var(--teal); font-weight: 500; }
+
+.sm  { font-size: 7.6pt; line-height: 1.55; color: var(--ink); }
+.mut { color: var(--gray); }
+.mono {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: .92em; letter-spacing: -.01em;
+}
+
+/* Tabela leve — sem grade fechada, so filete horizontal. */
+table { width: 100%; border-collapse: collapse; font-size: 8pt; }
+th {
+  text-align: left; font-weight: 600; font-size: 6.8pt;
+  letter-spacing: .16em; text-transform: uppercase; color: var(--teal);
+  padding: 0 3mm 2mm 0; border-bottom: .5pt solid var(--accent);
+}
+td {
+  padding: 2.2mm 3mm 2.2mm 0; border-bottom: .5pt solid var(--rule);
+  vertical-align: top; line-height: 1.45;
+}
+tr:last-child td { border-bottom: none; }
+td.no { color: var(--gray); text-decoration: line-through; }
+
+/* Sim / nao */
+.yes::before { content: "\2713"; color: var(--ok); font-weight: 700; margin-right: 2mm; }
+.nao::before { content: "\00D7"; color: var(--alert); font-weight: 700; margin-right: 2mm; }
+
+/* ════════════════════════════════════════════════════════ diagramas ══ */
+
+/* Anatomia do logotipo — as caixas de guia sao posicionadas em % do
+   viewBox 2272×1888 do arquivo oficial, medidas com getBBox. Nao sao
+   aproximacoes: batem no pixel com o desenho. */
+.anat { position: relative; width: 100%; aspect-ratio: 2272 / 1888; }
+.anat img { position: absolute; inset: 0; width: 100%; height: 100%; }
+.anat .g {
+  position: absolute;
+  border: .5pt dashed var(--accent);
+}
+.anat .g-sim  { left: 19.03%; top: 22.45%; width: 60.24%; height: 31.48%; }
+.anat .g-word { left: 18.89%; top: 61.56%; width: 60.78%; height: 12.61%; }
+.anat .g-gap  {
+  left: 19.03%; top: 53.93%; width: 60.24%; height: 7.63%;
+  border: none; background: rgba(99,181,175,.16);
+}
+.anat .lbl {
+  position: absolute; font-size: 6.4pt; font-weight: 600;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--teal);
+  white-space: nowrap;
+}
+
+/* Area de protecao */
+.prot { position: relative; padding: 12%; background: var(--sand); border-radius: 2mm; }
+.prot .zone {
+  position: absolute; inset: 0;
+  border: .5pt dashed var(--teal);
+  margin: 12%;
+}
+.prot img { display: block; width: 100%; position: relative; }
+
+/* Caixa de variante do logotipo.
+
+   Altura fixa e centro optico: sem isso a caixa do simbolo (que nao tem
+   wordmark) fica mais baixa que as tres outras e a linha de rotulos abaixo
+   sai desalinhada — o tipo de desencaixe que ninguem sabe nomear mas todo
+   mundo ve. */
+.varbox {
+  height: 44mm; border-radius: 2mm; padding: 4mm;
+  display: flex; align-items: center; justify-content: center;
+}
+.varbox img { max-width: 100%; max-height: 100%; }
+
+/* Swatch de cor */
+.sw { border-radius: 2mm; overflow: hidden; border: .5pt solid var(--rule); }
+.sw .chip { height: 26mm; }
+.sw .info { padding: 3.5mm; background: var(--white); }
+.sw .nm { font-size: 8.4pt; font-weight: 600; margin-bottom: 1mm; }
+.sw .hx {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 7.4pt; color: var(--gray); letter-spacing: .02em;
+}
+.sw .use { font-size: 7pt; line-height: 1.45; color: var(--ink); margin-top: 2.5mm; }
+
+/* Barra de proporcao 70/20/10 */
+.prop { display: flex; height: 14mm; border-radius: 2mm; overflow: hidden; }
+.prop span {
+  display: flex; align-items: flex-end; padding: 2.5mm;
+  font-size: 6.8pt; font-weight: 600; letter-spacing: .14em;
+}
+
+/* Gabarito de peca */
+.peca { position: relative; border: .5pt solid var(--rule); background: var(--paper); }
+.peca .safe { position: absolute; border: .5pt dashed var(--accent); }
+.peca .dim {
+  position: absolute; font-size: 6.2pt; font-weight: 600;
+  letter-spacing: .12em; color: var(--teal); text-transform: uppercase;
+}
+
+/* Amostra de textura */
+.tex { border-radius: 2mm; overflow: hidden; border: .5pt solid var(--rule); }
+.tex .img { height: 16mm; background-size: cover; background-position: center; }
+
+/* Especimen tipografico */
+/* 26pt, nao 40: a 40 o especimen do Playfair quebrava em duas linhas, a linha
+   do cartao crescia 14 mm e a pagina inteira transbordava por cima do lead. */
+.spec { line-height: 1.05; margin-bottom: 3.5mm; white-space: nowrap; }
+.spec-pop { font-family: Poppins, sans-serif; font-weight: 600; font-size: 26pt; letter-spacing: -.03em; }
+.spec-pla { font-family: 'Playfair Display', Georgia, serif; font-weight: 500; font-size: 26pt; letter-spacing: -.015em; }
+.glyphs { font-size: 8pt; letter-spacing: .06em; color: var(--gray); line-height: 1.5; word-spacing: .1em; }
+
+/* Checklist — 30 linhas em tres colunas. Sem apertar, o bloco estoura o
+   .content centrado e encosta no rodape. */
+.checklist li { margin-bottom: 1.4mm; line-height: 1.5; }
+.checklist .k { padding-bottom: 2mm; margin-bottom: 3mm; }
+
+/* Sumario */
+.toc { columns: 2; column-gap: 14mm; font-size: 9pt; }
+.toc .row {
+  display: flex; align-items: baseline; gap: 2mm;
+  padding: 2.4mm 0; border-bottom: .5pt solid var(--rule);
+  break-inside: avoid;
+}
+.toc .row .num { font-size: 7.4pt; font-weight: 600; color: var(--teal); width: 7mm; }
+.toc .row .t { font-weight: 500; }
+.toc .row .d { flex: 1; border-bottom: .5pt dotted var(--rule); margin: 0 2mm 1mm; }
+.toc .row .p { font-size: 7.6pt; color: var(--gray); font-weight: 500; }
