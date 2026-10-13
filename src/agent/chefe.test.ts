@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { simulateReadableStream, type LanguageModel } from "ai";
+import { APICallError, simulateReadableStream, type LanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { executar } from ".";
 import { pegarTarefa, tarefasDaConversa } from "./tarefas";
@@ -65,16 +65,16 @@ describe("delegação do Chefe", () => {
     expect(resultadoVistoPeloChefe(chefe)).toEqual({ type: "json", value: { tarefaId: tarefa?.id, status: "concluida", resumo } });
   });
 
-  test("erro do especialista marca a tarefa como falhou e volta para o Chefe", async () => {
+  test("erro do especialista marca a tarefa como falhou, em português, e volta para o Chefe", async () => {
     const chefe = chefeQueDelega();
     const quebrado = new MockLanguageModelV4({
       doStream: async () => {
-        throw new Error("cota do Gemini esgotada");
+        throw new APICallError({ message: "You exceeded your current quota", url: "https://gemini", requestBodyValues: {}, statusCode: 429, isRetryable: false });
       },
     });
     const { tarefa } = await conversar(chefe, quebrado);
 
-    expect(tarefa).toMatchObject({ status: "falhou", resumo: null, erro: expect.stringContaining("cota do Gemini esgotada") });
+    expect(tarefa).toMatchObject({ status: "falhou", resumo: null, erro: expect.stringContaining("limite de uso") });
     expect(resultadoVistoPeloChefe(chefe)).toEqual({ type: "json", value: { tarefaId: tarefa?.id, status: "falhou", erro: tarefa?.erro } });
   });
 

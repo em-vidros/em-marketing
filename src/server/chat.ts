@@ -12,6 +12,7 @@ import {
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
 import { BOTS, ehBotId } from "../agent/bots";
+import { explicarErro } from "../agent/erros";
 import { abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa } from "../agent/conversas";
 import type { Usuario } from "./auth";
 
@@ -52,12 +53,10 @@ function juntar(salvas: UIMessage[], ultima: UIMessage): UIMessage[] {
   return [...salvas.slice(0, i), { ...ultima, parts }];
 }
 
-const APROVACAO_NAO_EXECUTADA = "Esta aprovação não pôde ser conferida. Nada foi publicado nem agendado; peça de novo ao Chefe.";
-
 /**
  * Se o turno falha antes de executar uma tool aprovada (a assinatura não confere, por
  * exemplo), o AI SDK só emite o erro, e a parte ficaria salva em approval-responded, que o
- * card lê como "Aprovado. Agendando…". Antes do erro, cada aprovação sem resultado vira erro da tool.
+ * card lê como "Aprovado. Agendando…". Antes do erro, cada aprovação sem resultado vira erro da tool, com o mesmo erro.
  */
 function fecharAprovacoesNoErro(ultima: UIMessage) {
   const pendentes = new Map(
@@ -68,7 +67,7 @@ function fecharAprovacoesNoErro(ultima: UIMessage) {
       if (part.type === "tool-result" || part.type === "tool-error") pendentes.delete(part.toolCallId);
       if (part.type === "error") {
         for (const [toolCallId, p] of pendentes)
-          ctl.enqueue({ type: "tool-error", toolCallId, toolName: getToolName(p), input: p.input, error: APROVACAO_NAO_EXECUTADA });
+          ctl.enqueue({ type: "tool-error", toolCallId, toolName: getToolName(p), input: p.input, error: part.error });
         pendentes.clear();
       }
       ctl.enqueue(part);
@@ -100,7 +99,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
         stream: result.stream.pipeThrough(fecharAprovacoesNoErro(historico.at(-1)!)),
         originalMessages: historico,
         generateMessageId: () => crypto.randomUUID(),
-        onError: (e) => (e instanceof Error ? e.message : String(e)),
+        onError: explicarErro,
         // Um turno que falhou antes da primeira parte deixa uma mensagem do assistente vazia; ela não entra no histórico.
         onEnd: ({ messages }) => gravarMensagens(conversa.id, messages.filter((m) => m.parts.length > 0)),
       }),

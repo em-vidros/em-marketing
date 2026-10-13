@@ -1,6 +1,7 @@
 import { isToolUIPart, readUIMessageStream, toUIMessageStream, tool, type TextStreamPart, type ToolSet, type UIMessage } from "ai";
 import { z } from "zod";
 import { BOTS, type Especialista } from "../bots";
+import { explicarErro } from "../erros";
 import { avancarTarefa, criarTarefa, type Tarefa } from "../tarefas";
 import { toolsDePost } from "./post";
 
@@ -20,8 +21,6 @@ export type SaidaDelegacao =
   | { tarefaId: string; status: "trabalhando"; mensagem: UIMessage | null }
   | { tarefaId: string; status: "concluida"; resumo: string }
   | { tarefaId: string; status: "falhou"; erro: string };
-
-const mensagemDe = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 const ultimoTexto = (m: UIMessage | null) => m?.parts.findLast((p) => p.type === "text")?.text.trim() || "Terminei sem resumo.";
 
@@ -76,13 +75,15 @@ function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialis
       let tarefa: Tarefa = criarTarefa(conversaId, botId, pedido, [pergunta]);
       let resposta: UIMessage | null = null;
       const mensagens = () => (resposta ? [pergunta, resposta] : [pergunta]);
+      // O erro do stream chega ao catch já como texto; a explicação é feita aqui, com o erro original.
+      let explicado: string | null = null;
       yield { tarefaId: tarefa.id, status: "na_fila" };
       const sair = serializar ? await entrarNaFila(conversaId) : () => {};
       try {
         tarefa = avancarTarefa(tarefa, { status: "trabalhando" });
         yield { tarefaId: tarefa.id, status: "trabalhando", mensagem: null };
         const { stream } = rodar(botId, pedido, abortSignal);
-        for await (const m of readUIMessageStream({ stream: toUIMessageStream({ stream, onError: mensagemDe }), terminateOnError: true })) {
+        for await (const m of readUIMessageStream({ stream: toUIMessageStream({ stream, onError: (e) => (explicado = explicarErro(e)) }), terminateOnError: true })) {
           const avancou = marcos(m) !== marcos(resposta);
           resposta = m;
           if (avancou) tarefa = avancarTarefa(tarefa, { status: "trabalhando", mensagens: mensagens() });
@@ -92,7 +93,7 @@ function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialis
         tarefa = avancarTarefa(tarefa, { status: "concluida", resumo, mensagens: mensagens() });
         yield { tarefaId: tarefa.id, status: "concluida", resumo };
       } catch (e) {
-        const erro = mensagemDe(e);
+        const erro = explicado ?? explicarErro(e);
         tarefa = avancarTarefa(tarefa, { status: "falhou", erro, mensagens: mensagens() });
         yield { tarefaId: tarefa.id, status: "falhou", erro };
       } finally {

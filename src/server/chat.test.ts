@@ -1,5 +1,6 @@
-import { describe, expect, test } from "bun:test";
-import { isToolUIPart, simulateReadableStream, type UIMessage } from "ai";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { APICallError, isToolUIPart, simulateReadableStream, type LanguageModel, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { abrirConversaDoUsuario, mensagensDaConversa } from "../agent/conversas";
 import { criarPost, gravarPost, transicionar, type EtapaPost, type Evento } from "../agent/post";
@@ -92,7 +93,7 @@ describe("aprovação de tool", () => {
     const chunks = await postar(rotaDeChat({ resolverModelo: chefeQueAgenda, segredoAprovacao: "segredo-de-hoje" }), id, aprovar(id));
 
     expect(agendados(id)).toBe(0);
-    expect(parteSalva(id)).toMatchObject({ state: "output-error", errorText: expect.stringContaining("Nada foi publicado") });
+    expect(parteSalva(id)).toMatchObject({ state: "output-error", errorText: expect.stringContaining("nada foi publicado") });
     expect(chunks).toContainEqual(expect.objectContaining({ type: "tool-output-error", toolCallId: "agendar-1" }));
   });
 
@@ -108,5 +109,95 @@ describe("aprovação de tool", () => {
     expect(agendados(id)).toBe(1);
     expect(parteSalva(id)).toMatchObject({ state: "output-available", output: { ok: true } });
     expect(reenvio).not.toContainEqual(expect.objectContaining({ type: "tool-output-available", toolCallId: "agendar-1" }));
+  });
+});
+
+/** Um Gemini falso que responde o que o caso pedir. retry-after-ms: 0 faz as novas tentativas do SDK saírem na hora. */
+let resposta = { status: 200, corpo: {} as unknown };
+const gemini = Bun.serve({
+  port: 0,
+  fetch: () => Response.json(resposta.corpo, { status: resposta.status, headers: { "retry-after-ms": "0" } }),
+});
+afterAll(() => gemini.stop(true));
+
+const erroDoGoogle = (code: number, status: string, message: string, details: unknown[] = []) => ({ error: { code, message, status, details } });
+
+describe("erro do provedor", () => {
+  const casos: { nome: string; status?: number; corpo?: unknown; modelo?: () => LanguageModel; espera: string; original: string }[] = [
+    {
+      nome: "cota esgotada",
+      status: 429,
+      corpo: erroDoGoogle(429, "RESOURCE_EXHAUSTED", "You exceeded your current quota, please check your plan and billing details."),
+      espera: "limite de uso",
+      original: "You exceeded your current quota",
+    },
+    {
+      nome: "chave inválida",
+      status: 400,
+      corpo: erroDoGoogle(400, "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.", [
+        { "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "API_KEY_INVALID" },
+      ]),
+      espera: "chave do modelo",
+      original: "API key not valid",
+    },
+    {
+      nome: "modelo sobrecarregado",
+      status: 503,
+      corpo: erroDoGoogle(503, "UNAVAILABLE", "The model is overloaded. Please try again later."),
+      espera: "sobrecarregado",
+      original: "The model is overloaded",
+    },
+    {
+      // O que o @ai-sdk/google lança com a porta fechada, sem as novas tentativas com espera de 2 s e 4 s.
+      nome: "sem rede",
+      modelo: () =>
+        new MockLanguageModelV4({
+          doStream: async () => {
+            throw new APICallError({ message: "Cannot connect to API: ECONNREFUSED", url: "http://127.0.0.1:9", requestBodyValues: {}, isRetryable: false });
+          },
+        }),
+      espera: "falar com o modelo",
+      original: "Cannot connect to API",
+    },
+    {
+      nome: "sem chave",
+      modelo: () => {
+        delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+        return createGoogleGenerativeAI({ apiKey: undefined })("gemini-3.6-flash");
+      },
+      espera: "chave do modelo",
+      original: "API key is missing",
+    },
+    {
+      nome: "erro desconhecido",
+      modelo: () =>
+        new MockLanguageModelV4({
+          doStream: async () => {
+            throw new Error("Unexpected token in JSON at position 3");
+          },
+        }),
+      espera: "Algo deu errado",
+      original: "Unexpected token",
+    },
+  ];
+
+  test.each(casos)("$nome chega em português e o original fica no log", async ({ status, corpo, modelo, espera, original }) => {
+    resposta = { status: status ?? 200, corpo };
+    const doGemini = () => createGoogleGenerativeAI({ apiKey: "chave", baseURL: `${gemini.url}v1beta` })("gemini-3.6-flash");
+    const log = spyOn(console, "error").mockImplementation(() => {});
+    const id = `erro-${crypto.randomUUID()}`;
+
+    const chunks = await postar(rotaDeChat({ resolverModelo: modelo ?? doGemini }), id, {
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", text: "Oi" }],
+    });
+    const logado = log.mock.calls.flat().map((a) => (a instanceof Error ? `${a.message} ${String((a as { lastError?: Error }).lastError?.message)}` : String(a)));
+    log.mockRestore();
+
+    const erro = chunks.find((c) => c.type === "error");
+    expect(erro?.errorText).toContain(espera);
+    expect(erro?.errorText).not.toContain(original);
+    expect(logado.join("\n")).toContain(original);
   });
 });
