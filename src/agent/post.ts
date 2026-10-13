@@ -94,7 +94,7 @@ export function proximoPasso(p: EtapaPost): string {
     case "legenda":
       return precisaStory(p) ? "derivar_story" : "salvar_linear";
     case "registrado":
-      return "publicar_agora ou agendar_publicacao, com aprovação humana";
+      return "o Chefe publica com publicar_agora ou agenda com agendar_publicacao, com aprovação humana";
   }
 }
 

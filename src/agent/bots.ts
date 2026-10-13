@@ -2,7 +2,10 @@ import { CONVERSA, VOZ, capitulos, tokens } from "../domain/brand";
 import type { ModelId } from "./models";
 import type { ToolName } from "./tools";
 
-export type BotId = "post" | "legenda" | "agenda" | "fotos" | "reels";
+export type BotId = "chefe" | "post" | "legenda" | "agenda" | "fotos" | "reels";
+
+/** Os bots que o Chefe pode chamar. Cada um tem uma tool delegar_<id>. */
+export type Especialista = Exclude<BotId, "chefe">;
 
 export interface Bot {
   id: BotId;
@@ -28,20 +31,37 @@ const PROBLEMAS =
 const MARCA = () => `\n--- BRANDBOOK (capítulos de conteúdo) ---\n${CONVERSA()}\n\n--- TOKENS ---\n${JSON.stringify(tokens)}`;
 
 export const BOTS: Record<BotId, Bot> = {
-  post: {
-    id: "post",
-    nome: "Post",
-    descricao: "Do pedido ao agendamento: brief, formato, headline, 3 artes, legenda, Linear e publicação.",
+  chefe: {
+    id: "chefe",
+    nome: "Chefe",
+    descricao: "Recebe o pedido, delega aos especialistas, junta o resultado e pede aprovação para publicar.",
     modelo: "google:gemini-3.6-flash",
     instrucoes: () =>
       [
         TOM,
-        "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed), Linear, publicar ou agendar.",
+        "Você é o Chefe. Não gera arte, não escreve legenda nem roteiro: quebra o pedido, delega ao especialista certo e junta o que voltou.",
+        "Cada delegar_<bot> roda um especialista e devolve só o resumo do que ele fez. O especialista não vê esta conversa, então escreva o pedido completo: pilar, tema, ângulo, data, formato e o que já foi decidido.",
+        "Post: brief, headline, artes, legenda e registro no Linear de uma peça. Legenda: legenda avulsa ou revisão de texto. Agenda: fila, cota do mês e datas. Fotos: banco de fotos reais. Reels: pauta e roteiro de vídeo.",
+        "O Post trabalha no post desta conversa. Quando ele deixar o post registrado no Linear, publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário. Antes, confirme data, hora e tipo de mídia.",
+        "Se uma tarefa falhar, diga ao usuário o erro em português claro e proponha o próximo passo.",
+        PILARES,
+      ].join("\n\n"),
+    tools: ["delegar_post", "delegar_legenda", "delegar_agenda", "delegar_fotos", "delegar_reels", "publicar_agora", "agendar_publicacao", "listar_agenda"],
+    sugestoes: ["Post para o Dia do Vidraceiro, 18 de maio", "O que falta postar este mês?", "Publique o post de hoje às 18h"],
+  },
+  post: {
+    id: "post",
+    nome: "Post",
+    descricao: "Do pedido ao Linear: brief, formato, headline, 3 artes, legenda e registro.",
+    modelo: "google:gemini-3.6-flash",
+    instrucoes: () =>
+      [
+        TOM,
+        "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed), Linear. Publicar e agendar são do Chefe, com aprovação humana.",
         "Se o usuário já disse o formato, não pergunte de novo; só confirme no brief. Quando ele escolher, chame definir_formato. Quando ele escolher uma variação, chame escolher_arte.",
         PILARES,
         IMAGEM,
         "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário.",
-        "Publicar e agendar pedem aprovação humana; o sistema mostra o pedido ao usuário. Antes, confirme data, hora e tipo de mídia.",
         PROBLEMAS,
         MARCA(),
       ].join("\n\n"),
@@ -56,8 +76,6 @@ export const BOTS: Record<BotId, Bot> = {
       "escrever_legenda",
       "derivar_story",
       "salvar_linear",
-      "agendar_publicacao",
-      "publicar_agora",
       "listar_agenda",
       "status_do_mes",
       "cancelar_agendamento",

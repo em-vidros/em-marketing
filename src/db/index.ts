@@ -31,6 +31,23 @@ CREATE TABLE IF NOT EXISTS conversas (
   updated_at TEXT DEFAULT (datetime('now'))
 );
 
+-- Uma delegação do Chefe a um especialista (agent/tarefas.ts). conversa_id é a
+-- conversa do Chefe; mensagens é o UIMessage[] do especialista em JSON.
+CREATE TABLE IF NOT EXISTS tarefas (
+  id TEXT PRIMARY KEY,
+  conversa_id TEXT NOT NULL REFERENCES conversas(id),
+  bot_id TEXT NOT NULL,
+  pedido TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('na_fila','trabalhando','concluida','falhou')),
+  mensagens TEXT NOT NULL DEFAULT '[]',
+  resumo TEXT,
+  erro TEXT,
+  criada_em INTEGER NOT NULL,     -- epoch ms
+  atualizada_em INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tarefas_conversa ON tarefas(conversa_id, criada_em);
+CREATE INDEX IF NOT EXISTS tarefas_status ON tarefas(status);
+
 CREATE TABLE IF NOT EXISTS queue (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id INTEGER NOT NULL REFERENCES posts(id),
