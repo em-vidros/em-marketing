@@ -8,6 +8,7 @@ import { BotaoMenu } from "../componentes/BotaoMenu";
 import { CartaoAprovacao } from "../componentes/CartaoAprovacao";
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
+import { Markdown } from "../componentes/Markdown";
 import { PainelTarefa } from "../componentes/PainelTarefa";
 import { Passos } from "../componentes/Passos";
 import type { EstadoBot } from "../equipe";
@@ -307,12 +308,7 @@ function ParteDoChefe({
   responder: (id: string, aprovado: boolean) => void;
 }) {
   if (parte.type === "text")
-    return parte.text.trim() || digitando ? (
-      <p className="max-w-[68ch] whitespace-pre-line text-[#1a1a1a]">
-        {parte.text}
-        {digitando && <span aria-hidden="true" className="ml-0.5 inline-block h-4 w-0.5 translate-y-0.5 rounded-full bg-tinta" />}
-      </p>
-    ) : null;
+    return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-[#1a1a1a]" /> : null;
   if (ehDelegacao(parte)) return <CartaoTarefa parte={parte as ParteDelegacao} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
   if (ehAprovacao(parte)) return <CartaoAprovacao parte={parte} responder={responder} />;
   const [passo] = passosDe({ id: "", role: "assistant", parts: [parte] });

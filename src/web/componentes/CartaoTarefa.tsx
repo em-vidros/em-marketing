@@ -3,6 +3,7 @@ import { BOTS } from "../bots";
 import { passoAtual } from "../equipe";
 import { especialistaDa, passosDe, type ParteDelegacao } from "../tipos";
 import { Avatar } from "./Avatar";
+import { Markdown } from "./Markdown";
 import { Passos } from "./Passos";
 
 /** Segundos desde que `ativo` virou true, para o relógio da tarefa ao vivo. */
@@ -80,7 +81,9 @@ export function CartaoTarefa({
       {passos.length > 0 && <Passos passos={passos} className="px-3.5 pt-1 pb-3 pl-11" />}
       {situacao.tipo === "concluida" && (
         <div className="px-3.5 pb-3 pl-11">
-          <p className="line-clamp-4 whitespace-pre-line text-tinta-2">{situacao.resumo}</p>
+          <div className="line-clamp-4 text-tinta-2">
+            <Markdown texto={situacao.resumo} className="block [&>*+*]:mt-1.5" />
+          </div>
         </div>
       )}
       {situacao.tipo === "falhou" && <p className="px-3.5 pb-3 pl-11 text-erro">{situacao.erro}</p>}

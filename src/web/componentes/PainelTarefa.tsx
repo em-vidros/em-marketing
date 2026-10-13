@@ -4,6 +4,7 @@ import { useApi } from "../api";
 import { BOTS } from "../bots";
 import { especialistaDa, imagensEm, passosDe, type ParteDelegacao, type Tarefa } from "../tipos";
 import { Avatar } from "./Avatar";
+import { Markdown } from "./Markdown";
 import { Passos } from "./Passos";
 
 const hora = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -18,12 +19,7 @@ function Transcricao({ mensagens }: { mensagens: readonly UIMessage[] }) {
     ) : (
       <div key={m.id} className="flex flex-col gap-3.5">
         {m.parts.map((p, i) => {
-          if (p.type === "text")
-            return p.text.trim() ? (
-              <p key={i} className="text-[13px]/relaxed whitespace-pre-line">
-                {p.text}
-              </p>
-            ) : null;
+          if (p.type === "text") return p.text.trim() ? <Markdown key={i} texto={p.text} className="gap-2.5 text-[13px]/relaxed" /> : null;
           const [passo] = passosDe({ ...m, parts: [p] });
           if (!passo) return null;
           const imagens = passo.estado === "feito" ? imagensEm(passo.saida) : [];
