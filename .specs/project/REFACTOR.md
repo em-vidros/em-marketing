@@ -127,3 +127,17 @@ Cada fase termina com `bun run check` verde e um commit.
 4. **Design.** Canvas com as telas: login, conversa com o Chefe, tarefa de um especialista no painel lateral, atividade, biblioteca de peças, cartões de tool (brief, 3 artes, legenda, aprovação). apple-design ligado, porque o pedido é sentimento nativo de macOS.
 5. **Front.** Implementar o canvas aprovado. Motion pelo `animate` com as molas do apple-design.
 6. **Fechamento.** Scheduler e Instagram ligados ao novo estado, Dockerfile e compose atualizados, deploy em `mkt.emvidros.com.br`.
+
+## Visual do site (decisão de 2026-10-13)
+
+O Henrique pediu o site o mais parecido possível com o Grok. Os tokens vêm do CSS público do grok.com (tema escuro):
+
+- Fundo `#050505`, superfícies `#141414` e `#212121`, elevado `#363636`;
+- Texto `#fcfcfc`, secundário `#9e9e9e`, terciário `#858585`, apagado `#636363`;
+- Bordas em branco a 8%, 14% e 20%;
+- Botão principal branco com texto preto, botões secundários em pílula com branco a 8%;
+- Raios de 12px (itens), 16px (cartões), 24px a 28px (balão e composer), pílula nos botões.
+
+A fonte do Grok é a Universal Sans, proprietária. O substituto é Inter com `cv11` e `ss01`, que o próprio grok.com já carrega, e Geist Mono para horários e contadores. A marca da EM Vidros aparece só no conteúdo (as peças mantêm paleta, Poppins e Playfair do brandbook) e no ponto `#63B5AF` de bot trabalhando.
+
+Canvas: https://claude.ai/artifact/6CBibRNmi2bSvnqVEr9FdH
