@@ -21,7 +21,7 @@ type ItemCalendario =
 
 - Pauta é nova: a ideia do que postar num dia, antes de existir post. Tabela `pautas`, criada por quem está logado, visível para a equipe como a agenda e a Biblioteca;
 - "Criar com o Chefe" numa pauta abre uma conversa com o Chefe já com o pedido escrito e liga a pauta à conversa. Repetir devolve a mesma conversa. A pauta é da equipe e a conversa é de uma pessoa: se outra pessoa clica, ela ganha uma conversa dela e a pauta passa a apontar para a nova;
-- Arrastar um agendado muda o horário na fila, só enquanto está `pending` e só para um horário no futuro. Publicando, publicado ou falho não se arrasta;
+- Arrastar um agendado muda o horário na fila, só enquanto está `pending` e só para um horário no futuro. Publicando, publicado ou falho não se arrasta. Um falho pode ser dispensado, e o Desfazer devolve ele a falho sem tentar de novo;
 - Agendar um post pronto direto do calendário é uma ação humana na tela e vale como aprovação, mas sempre passa por uma confirmação com data, hora e mídia antes de gravar. A gravação usa a mesma função do `agendar_publicacao` do Chefe (`agendar` em `src/agent/fila.ts`): post registrado no Linear, peça da mídia pedida, horário no futuro e nenhum outro agendamento ativo nem publicação do mesmo post na mesma mídia;
 - Cancelar um agendado só vale para `pending`. Restaurar volta para `pending` enquanto o horário não passou, com as mesmas regras de agendar;
 - Publicado e datas do calendário editorial são só leitura;
@@ -42,7 +42,7 @@ Todas pedem sessão (401 `{erro}` sem ela). Recusas vêm como `{erro}` em portug
 | `GET /api/posts/prontos` | | `PostPronto[]`: `{postId, headline, pilar, capa, midias}`, com as mídias que ainda dá para agendar |
 | `POST /api/fila` | `{postId, midia, publicaEm}` | 201 `ItemAgendado` |
 | `PATCH /api/fila/:id` | `{publicaEm}` | `{item, anterior}`; desfazer é o mesmo PATCH com `anterior` |
-| `DELETE /api/fila/:id` | | 204, status `cancelled` |
+| `DELETE /api/fila/:id` | | 204, status `cancelled`; vale para pendente e para falho |
 | `POST /api/fila/:id/restaurar` | | `ItemAgendado` |
 
 `queue.publish_at` continua no formato do SQLite, `AAAA-MM-DD HH:MM:SS` em UTC, porque o tick do scheduler compara o texto com `datetime('now')`. A API recebe e devolve epoch ms e converte na borda.
