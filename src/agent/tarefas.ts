@@ -114,11 +114,15 @@ export function pegarTarefa(id: string): Tarefa | null {
   return r ? { ...resumoDaLinha(r), mensagens: JSON.parse(r.mensagens) as UIMessage[] } : null;
 }
 
-/** Tarefas na fila ou em andamento, de todas as conversas, mais recentes primeiro. */
-export function tarefasAtivas(): ResumoTarefa[] {
+/** Tarefas na fila ou em andamento nas conversas do usuário, mais recentes primeiro. */
+export function tarefasAtivas(userId: string): ResumoTarefa[] {
+  const colunas = COLUNAS_RESUMO.split(", ").map((c) => `t.${c}`).join(", ");
   return (
     db
-      .query(`SELECT ${COLUNAS_RESUMO} FROM tarefas WHERE status IN (${ATIVOS.map(() => "?").join(",")}) ORDER BY criada_em DESC`)
-      .all(...ATIVOS) as Omit<Linha, "mensagens">[]
+      .query(
+        `SELECT ${colunas} FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
+         WHERE c.user_id = ? AND t.status IN (${ATIVOS.map(() => "?").join(",")}) ORDER BY t.criada_em DESC`,
+      )
+      .all(userId, ...ATIVOS) as Omit<Linha, "mensagens">[]
   ).map(resumoDaLinha);
 }

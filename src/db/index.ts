@@ -23,10 +23,15 @@ CREATE TABLE IF NOT EXISTS posts (
 );
 
 -- Uma conversa com um bot. post_id é o post em andamento dela (agent/post.ts).
+-- user_id é o dono (tabela user do better-auth); NULL nas conversas do script de
+-- terminal, que nenhum usuário enxerga. mensagens é o UIMessage[] da conversa em JSON.
 CREATE TABLE IF NOT EXISTS conversas (
   id TEXT PRIMARY KEY,
   bot_id TEXT NOT NULL,
   post_id INTEGER REFERENCES posts(id),
+  user_id TEXT,
+  titulo TEXT,
+  mensagens TEXT NOT NULL DEFAULT '[]',
   created_at TEXT DEFAULT (datetime('now')),
   updated_at TEXT DEFAULT (datetime('now'))
 );
@@ -104,6 +109,10 @@ function addColumn(tabela: string, coluna: string, ddl: string) {
   if (!cols.some((c) => c.name === coluna)) db.run(`ALTER TABLE ${tabela} ADD COLUMN ${ddl}`);
 }
 addColumn("posts", "pilar", "pilar TEXT"); // §12.1, cota do mês
+addColumn("conversas", "user_id", "user_id TEXT");
+addColumn("conversas", "titulo", "titulo TEXT");
+addColumn("conversas", "mensagens", "mensagens TEXT NOT NULL DEFAULT '[]'");
+db.run("CREATE INDEX IF NOT EXISTS conversas_usuario ON conversas(user_id, updated_at)");
 
 function dropColumn(tabela: string, coluna: string) {
   const cols = db.query(`PRAGMA table_info(${tabela})`).all() as { name: string }[];

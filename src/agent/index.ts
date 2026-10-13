@@ -12,6 +12,8 @@ export interface Opcoes {
   abortSignal?: AbortSignal;
   /** O bot roda uma tarefa do Chefe, não uma conversa direta com o usuário. */
   delegada?: boolean;
+  /** Assina cada pedido de aprovação; uma aprovação forjada pelo cliente não executa a tool. */
+  segredoAprovacao?: string;
 }
 
 const doRegistry: ResolverModelo = (bot) => modelo(bot.modelo);
@@ -24,7 +26,7 @@ const DELEGADA =
  * O especialista de uma tarefa roda na conversa do Chefe, então lê e grava o mesmo post.
  */
 export function executar(botId: BotId, conversaId: string, messages: ModelMessage[], opcoes: Opcoes = {}) {
-  const { resolverModelo = doRegistry, abortSignal, delegada = false } = opcoes;
+  const { resolverModelo = doRegistry, abortSignal, delegada = false, segredoAprovacao } = opcoes;
   const bot = BOTS[botId];
   abrirConversa(conversaId, botId);
   const instrucoes = [bot.instrucoes(), ...(delegada ? [DELEGADA] : [])].join("\n\n");
@@ -37,6 +39,7 @@ export function executar(botId: BotId, conversaId: string, messages: ModelMessag
     tools: catalogo(conversaId, rodar),
     activeTools: [...bot.tools],
     toolApproval: APROVACAO,
+    experimental_toolApprovalSecret: segredoAprovacao,
     stopWhen: isStepCount(8),
     abortSignal,
   });

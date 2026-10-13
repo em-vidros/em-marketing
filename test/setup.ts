@@ -16,3 +16,7 @@ const dir = mkdtempSync(join(tmpdir(), "em-marketing-test-"));
 process.env.DB_PATH = join(dir, "test.db");
 
 process.on("exit", () => rmSync(dir, { recursive: true, force: true }));
+
+process.env.BETTER_AUTH_SECRET = "segredo-de-teste-com-mais-de-32-caracteres";
+process.env.BETTER_AUTH_URL = "http://localhost:3000";
+process.env.ALLOWED_EMAILS = "ana@emvidros.com.br, bia@emvidros.com.br";
