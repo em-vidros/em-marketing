@@ -204,6 +204,25 @@ describe("fila pelo calendário", () => {
     expect(depoisDeRestaurar).toEqual([item]);
     expect([tarde.status, await tarde.json()]).toEqual([400, { erro: "O horário deste agendamento já passou. Agende de novo com um horário no futuro." }]);
   });
+
+  test("dispensar uma falha tira do calendário e desfazer devolve a falha, sem reagendar", async () => {
+    const ana = await sessao("ana@emvidros.com.br");
+    const { postId } = postNaEtapa(...PRONTO);
+    const item = await json<ItemAgendado>(pedir("/api/fila", ana.cookie, "POST", { postId, midia: "IMAGE", publicaEm: AMANHA }));
+    db.query("UPDATE queue SET status = 'failed', error = 'Token expirado' WHERE id = ?").run(item.filaId);
+    const caminho = `/api/fila/${item.filaId}`;
+    const diaDoItem = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(AMANHA);
+    const naFila = async () => (await calendario(ana.cookie, diaDoItem, diaDoItem)).filter((i) => i.tipo === "agendado" && i.filaId === item.filaId);
+
+    const dispensar = await pedir(caminho, ana.cookie, "DELETE");
+    const depoisDeDispensar = await naFila();
+    const desfeito = await json<ItemAgendado>(pedir(`${caminho}/restaurar`, ana.cookie, "POST"));
+
+    expect(dispensar.status).toBe(204);
+    expect(depoisDeDispensar).toEqual([]);
+    expect(desfeito).toMatchObject({ filaId: item.filaId, status: "failed", erro: "Token expirado" });
+    expect(await naFila()).toEqual([desfeito]);
+  });
 });
 
 test("as rotas novas pedem sessão", async () => {

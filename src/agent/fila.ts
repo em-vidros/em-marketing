@@ -57,10 +57,12 @@ interface LinhaDaFila {
   media_type: TipoMidia;
   publish_at: string;
   status: StatusFila;
+  /** Só o tick grava, quando a publicação falha. */
+  error: string | null;
 }
 
 const linhaDaFila = (filaId: number) =>
-  db.query("SELECT post_id, media_type, publish_at, status FROM queue WHERE id = ?").get(filaId) as LinhaDaFila | null;
+  db.query("SELECT post_id, media_type, publish_at, status, error FROM queue WHERE id = ?").get(filaId) as LinhaDaFila | null;
 
 /** PATCH /api/fila/:id */
 export interface Reagendado {
@@ -79,18 +81,30 @@ export function reagendar(filaId: number, publicaEm: number, agora = Date.now())
   return { ok: true, item: agendadoPorId(filaId)!, anterior: Date.parse(isoDoSqlite(linha.publish_at)) };
 }
 
-/** Cancelar de novo não muda nada. Só o pendente cancela: o que já saiu ou falhou fica como está. */
+/**
+ * Cancelar de novo não muda nada. O pendente cancela e o que falhou é dispensado; o que está
+ * saindo ou já saiu fica como está.
+ */
 export function cancelar(filaId: number): { ok: true } | RecusaDaFila {
   const linha = linhaDaFila(filaId);
   if (!linha) return NAO_ENCONTRADO;
   if (linha.status === "cancelled" || cancelQueueItem(filaId)) return { ok: true };
-  return recusa(409, `Só dá para cancelar um agendamento pendente. Este está ${NOME_DO_STATUS[linha.status]}.`);
+  if (db.query("UPDATE queue SET status = 'cancelled' WHERE id = ? AND status = 'failed'").run(filaId).changes > 0) return { ok: true };
+  return recusa(409, `Só dá para cancelar um agendamento pendente ou com falha. Este está ${NOME_DO_STATUS[linha.status]}.`);
 }
 
-/** Desfaz o cancelar enquanto o horário não passou, com as mesmas regras de agendar. Restaurar um pendente não muda nada. */
+/**
+ * Desfaz o cancelar. Uma falha dispensada volta a ser falha, sem tentar de novo. Um pendente
+ * cancelado volta enquanto o horário não passou, com as mesmas regras de agendar. Restaurar um
+ * pendente não muda nada.
+ */
 export function restaurar(filaId: number, agora = Date.now()): { ok: true; item: ItemAgendado } | RecusaDaFila {
   const linha = linhaDaFila(filaId);
   if (!linha) return NAO_ENCONTRADO;
+  if (linha.status === "cancelled" && linha.error !== null) {
+    db.query("UPDATE queue SET status = 'failed' WHERE id = ? AND status = 'cancelled'").run(filaId);
+    return { ok: true, item: agendadoPorId(filaId)! };
+  }
   if (linha.status !== "pending") {
     if (linha.status !== "cancelled") return recusa(409, `Só dá para restaurar um agendamento cancelado. Este está ${NOME_DO_STATUS[linha.status]}.`);
     if (Date.parse(isoDoSqlite(linha.publish_at)) <= agora) return recusa(400, "O horário deste agendamento já passou. Agende de novo com um horário no futuro.");
