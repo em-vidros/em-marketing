@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { buscarFotos, catalogarFoto, contarFotos, type Foto } from "../../domain/fotos";
-import { urlDaMidia } from "../midia";
+import { urlDaMidia } from "../../db";
 
 /** A foto como o modelo e o painel a veem: o id para as tools, a URL para mostrar. O caminho local fica no servidor. */
 export const fotoPublica = ({ path, ...foto }: Foto) => ({ ...foto, url: urlDaMidia(path) });

@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { db } from "../../db";
+import { db, urlDaMidia } from "../../db";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief } from "../../domain/art/pipeline";
 import { temErro } from "../../domain/brand/validate";
@@ -8,7 +8,6 @@ import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
 import { attachJpeg, commentOnIssue, createIssue, moveIssueState } from "../../domain/linear";
 import { enqueue } from "../../domain/scheduler";
-import { urlDaMidia } from "../midia";
 import {
   criarPost,
   exigir,

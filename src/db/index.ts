@@ -1,5 +1,5 @@
 import { Database } from "bun:sqlite";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, statSync } from "node:fs";
 import type { UIMessage } from "ai";
 import type { BotId } from "../agent/bots";
 
@@ -67,7 +67,8 @@ CREATE TABLE IF NOT EXISTS queue (
 CREATE TABLE IF NOT EXISTS media (
   id TEXT PRIMARY KEY,            -- opaco (crypto random)
   path TEXT NOT NULL,
-  expired INTEGER DEFAULT 0
+  expired INTEGER DEFAULT 0,
+  mtime INTEGER                   -- mtime do arquivo quando a URL foi criada (urlDaMidia)
 );
 
 -- Uma linha por mídia efetivamente publicada. É a única chave que liga uma peça
@@ -114,6 +115,7 @@ addColumn("posts", "pilar", "pilar TEXT"); // §12.1, cota do mês
 addColumn("conversas", "user_id", "user_id TEXT");
 addColumn("conversas", "titulo", "titulo TEXT");
 addColumn("conversas", "mensagens", "mensagens TEXT NOT NULL DEFAULT '[]'");
+addColumn("media", "mtime", "mtime INTEGER");
 db.run("CREATE INDEX IF NOT EXISTS conversas_usuario ON conversas(user_id, updated_at)");
 
 function dropColumn(tabela: string, coluna: string) {
@@ -133,13 +135,21 @@ export function newMediaId(path: string): string {
   return id;
 }
 
-// Leituras das telas Atividade e Biblioteca (server/rotas.ts).
-
-/** Um id /media vivo para o arquivo. Reaproveita o que já existe para não criar uma linha por leitura. */
-export function midiaDoCaminho(path: string): string {
-  const existente = db.query("SELECT id FROM media WHERE path = ? AND expired = 0 LIMIT 1").get(path) as { id: string } | null;
-  return existente?.id ?? newMediaId(path);
+/**
+ * A URL /media/:id de um arquivo local, para a tela mostrar a imagem. Reaproveita a linha viva
+ * do mesmo arquivo enquanto ele não muda, para não criar uma linha por leitura. Uma arte refeita
+ * é gravada no mesmo caminho; o mtime novo dá um id novo, e o navegador não mostra a do cache.
+ */
+export function urlDaMidia(path: string): string {
+  const mtime = statSync(path, { throwIfNoEntry: false })?.mtimeMs ?? null;
+  const viva = db.query("SELECT id FROM media WHERE path = ? AND mtime IS ? AND expired = 0 LIMIT 1").get(path, mtime) as { id: string } | null;
+  if (viva) return `/media/${viva.id}`;
+  const id = crypto.randomUUID().replace(/-/g, "");
+  db.query("INSERT INTO media (id, path, mtime) VALUES (?, ?, ?)").run(id, path, mtime);
+  return `/media/${id}`;
 }
+
+// Leituras das telas Atividade e Biblioteca (server/rotas.ts).
 
 export type Pilar = "PROVA" | "AUTORIDADE" | "GENTE" | "MARCA";
 export type StatusPost = "draft" | "generated" | "chosen" | "archived" | "scheduled" | "published" | "failed";
@@ -155,7 +165,7 @@ interface ColunasDoPost {
 function artesDo({ arts, chosen }: ColunasDoPost): string[] {
   const artes = (arts ? JSON.parse(arts) : []) as { variant: number; path: string }[];
   const ordem = [...artes].sort((a, b) => Number(b.variant === chosen) - Number(a.variant === chosen));
-  return ordem.map((a) => `/media/${midiaDoCaminho(a.path)}`);
+  return ordem.map((a) => urlDaMidia(a.path));
 }
 
 const capaDo = (p: ColunasDoPost): string | null => artesDo(p)[0] ?? null;

@@ -1,10 +1,10 @@
 import { afterAll, expect, test } from "bun:test";
-import { rmSync } from "node:fs";
+import { rmSync, utimesSync } from "node:fs";
 import { simulateReadableStream } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import sharp from "sharp";
 import { executar } from ".";
-import { db } from "../db";
+import { urlDaMidia } from "../db";
 import { salvarFoto } from "../domain/fotos";
 import { rotas } from "../server/rotas";
 import { imagensEm } from "../web/tipos";
@@ -40,7 +40,7 @@ async function usarFoto(conversaId: string, fotoId: number) {
   throw new Error("usar_foto não devolveu resultado");
 }
 
-test("a foto que usar_foto prepara aparece no painel por uma URL /media que abre, a mesma a cada chamada", async () => {
+test("a foto que usar_foto prepara aparece no painel por uma URL /media que abre", async () => {
   const foto = await salvarFoto(await sharp({ create: { width: 800, height: 1000, channels: 3, background: "#2F646A" } }).jpeg().toBuffer());
   criados.push(foto.path);
   const conversaId = `midia-${crypto.randomUUID()}`;
@@ -49,11 +49,25 @@ test("a foto que usar_foto prepara aparece no painel por uma URL /media que abre
   criados.push(`data/arts/post${postId}-feed-foto${foto.id}.jpg`);
 
   const primeira = imagensEm(await usarFoto(conversaId, foto.id));
-  const segunda = imagensEm(await usarFoto(conversaId, foto.id));
 
   expect(primeira).toHaveLength(1);
-  expect(segunda).toEqual(primeira);
   const res = await fetch(new URL(primeira[0]!, server.url));
   expect([res.status, res.headers.get("content-type")]).toEqual([200, "image/jpeg"]);
   expect((await sharp(await res.bytes()).metadata()).width).toBe(1080);
+});
+
+test("uma arte refeita no mesmo caminho ganha outra URL /media, e a URL só muda quando o arquivo muda", async () => {
+  const path = `data/arts/teste-refeita-${crypto.randomUUID()}.jpg`;
+  criados.push(path);
+  await Bun.write(path, "primeira");
+  utimesSync(path, 1_700_000_000, 1_700_000_000);
+  const antes = urlDaMidia(path);
+
+  await Bun.write(path, "refeita");
+  utimesSync(path, 1_700_000_100, 1_700_000_100);
+  const depois = urlDaMidia(path);
+
+  expect(depois).not.toBe(antes);
+  expect(urlDaMidia(path)).toBe(depois);
+  expect(await (await fetch(new URL(depois, server.url))).text()).toBe("refeita");
 });
