@@ -143,3 +143,30 @@ O tema escuro do Grok (fundo `#050505`, superfícies `#141414` e `#212121`) fica
 A fonte do Grok é a Universal Sans, proprietária. O substituto é Inter com `cv11` e `ss01`, que o próprio grok.com já carrega, e Geist Mono para horários e contadores. A marca da EM Vidros aparece só no conteúdo (as peças mantêm paleta, Poppins e Playfair do brandbook) e no ponto `#63B5AF` de bot trabalhando.
 
 Canvas: https://claude.ai/artifact/6CBibRNmi2bSvnqVEr9FdH
+
+## Bots configuráveis e gestão de conversas (pedido de 2026-10-13)
+
+O Henrique pediu para editar cada bot (nome, descrição, prompt, modelo), apagar, renomear e arquivar conversas, abrir cada bot para ver o que ele faz, navegação pelo teclado sem perder o mouse, e a referência visual do Linear e do Grok.
+
+```ts
+// Uma versão por gravação. A versão atual é a mais nova; voltar é gravar de novo uma antiga.
+interface VersaoBot {
+  id: number;
+  botId: BotId;
+  nome: string;
+  descricao: string;
+  modelo: ModelId;          // validado contra MODELOS
+  prompt: string;           // só a parte editável; brandbook e tokens entram pelo código, sempre
+  criadaEm: number;
+  autor: string;            // e-mail de quem gravou
+}
+
+interface Modelo { id: ModelId; nome: string; disponivel: boolean }  // disponivel = a chave do provedor existe
+
+// conversas ganha arquivada_em e apagada_em (epoch ms, null = ativa).
+// Apagar marca apagada_em e o toast oferece desfazer; o boot remove de vez o que foi apagado há mais de 30 dias.
+```
+
+- O código continua dono das tools de cada bot e do contexto de marca. O usuário edita o papel, não o que o bot pode fazer;
+- Sem versão gravada, o bot usa o padrão do código. "Restaurar padrão" grava uma versão com o texto do código;
+- Apagar uma conversa não apaga o post nem as artes da Biblioteca.
