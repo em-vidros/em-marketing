@@ -90,12 +90,13 @@ const ARTES = JSON.stringify([
   { variant: 2, style: "b", path: "/tmp/arte-v2.jpg", interactionId: "i2" },
 ]);
 
+/** headline vai como agent/post.ts grava: o JSON {headline, apoio}. */
 function semearPost(headline: string, status = "chosen"): number {
   const r = db
     .query(
       `INSERT INTO posts (brief, pilar, formato, headline, legenda, arts, chosen, status) VALUES (?, 'PROVA', 'feed', ?, 'Legenda.', ?, 2, ?) RETURNING id`,
     )
-    .get(JSON.stringify({ tema: "box de banheiro" }), headline, ARTES, status) as { id: number };
+    .get(JSON.stringify({ tema: "box de banheiro" }), JSON.stringify({ headline, apoio: "" }), ARTES, status) as { id: number };
   return r.id;
 }
 

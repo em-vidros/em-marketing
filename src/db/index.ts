@@ -172,7 +172,7 @@ export type StatusPost = "draft" | "generated" | "chosen" | "archived" | "schedu
 export type Formato = "feed" | "stories" | "ambos";
 export type TipoMidia = "IMAGE" | "STORIES";
 
-interface ColunasDoPost {
+export interface ColunasDoPost {
   arts: string | null;
   chosen: number | null;
 }
@@ -184,10 +184,13 @@ function artesDo({ arts, chosen }: ColunasDoPost): string[] {
   return ordem.map((a) => urlDaMidia(a.path));
 }
 
-const capaDo = (p: ColunasDoPost): string | null => artesDo(p)[0] ?? null;
+export const capaDo = (p: ColunasDoPost): string | null => artesDo(p)[0] ?? null;
+
+/** posts.headline guarda o JSON {headline, apoio} que agent/post.ts grava; a tela mostra só o texto. */
+export const headlineDo = (coluna: string | null): string | null => (coluna ? (JSON.parse(coluna) as { headline: string }).headline : null);
 
 /** "2026-10-15 21:00:00" (UTC, sem fuso, como o SQLite grava) para ISO com Z. */
-const isoDoSqlite = (s: string) => `${s.replace(" ", "T")}Z`;
+export const isoDoSqlite = (s: string) => `${s.replace(" ", "T")}Z`;
 
 /** Uma peça da Biblioteca. `conversaId` é a conversa do usuário que trabalhou nela, se houver. */
 export interface Peca {
@@ -223,7 +226,7 @@ export function pecasDoUsuario(userId: string): Peca[] {
   })[];
   return linhas.map((r) => ({
     id: r.id,
-    headline: r.headline,
+    headline: headlineDo(r.headline),
     legenda: r.legenda,
     tema: r.brief ? ((JSON.parse(r.brief) as { tema?: string }).tema ?? null) : null,
     pilar: r.pilar,
@@ -270,7 +273,7 @@ export function agendamentos(): Agendamento[] {
   return linhas.map((r) => ({
     id: r.id,
     postId: r.post_id,
-    headline: r.headline,
+    headline: headlineDo(r.headline),
     pilar: r.pilar,
     tipo: r.media_type,
     publicarEm: isoDoSqlite(r.publish_at),
@@ -310,7 +313,7 @@ export function publicacoesRecentes(limite = 50): Publicacao[] {
   return linhas.map((r) => ({
     id: r.id,
     postId: r.post_id,
-    headline: r.headline,
+    headline: headlineDo(r.headline),
     pilar: r.pilar,
     tipo: r.media_type,
     permalink: r.permalink,
@@ -450,7 +453,7 @@ export function aprovacoesPendentes(userId: string): AprovacaoPendente[] {
         acao: p.type.slice(5) as AprovacaoPendente["acao"],
         tipo: p.input?.media_type ?? null,
         publicarEm: p.input?.publish_at ?? null,
-        headline: r.headline,
+        headline: headlineDo(r.headline),
         pilar: r.pilar,
         capa: capaDo(r),
       })),
