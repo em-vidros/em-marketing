@@ -10,6 +10,7 @@ const segredoAprovacao = new Bun.CryptoHasher("sha256", segredo).update("aprovac
 
 const server = Bun.serve({
   port: Number(process.env.PORT ?? 3000),
+  hostname: process.env.HOST,
   // O site é uma SPA: toda rota que não é da API devolve o index.html.
   routes: { ...rotas({ segredoAprovacao }), "/*": site },
   development: process.env.NODE_ENV !== "production" && { hmr: true, console: true },
