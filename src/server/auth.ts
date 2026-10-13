@@ -13,7 +13,7 @@ const permitidos: ReadonlySet<string> = new Set(
 
 const opcoes = {
   database: db,
-  emailAndPassword: { enabled: true },
+  emailAndPassword: { enabled: true, minPasswordLength: 6 },
   databaseHooks: {
     user: {
       create: {
