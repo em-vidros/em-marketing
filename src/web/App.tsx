@@ -22,6 +22,7 @@ import { atalhoDeConversa, atalhoDoBot } from "./teclado/atalhos";
 import { useAtalho, useTeclado } from "./teclado/motor";
 import { Atividade } from "./telas/Atividade";
 import { Biblioteca } from "./telas/Biblioteca";
+import { Calendario } from "./telas/Calendario";
 import Bot from "./telas/Bot";
 import { TelaConversa, type Vivo } from "./telas/Conversa";
 import { Entrar } from "./telas/Entrar";
@@ -51,6 +52,7 @@ const NOME_DA_TELA: Record<Exclude<Rota["tela"], "entrar">, string> = {
   conversa: "esta conversa",
   atividade: "a atividade",
   biblioteca: "a biblioteca",
+  calendario: "o calendário",
   bot: "a página do bot",
   "nao-encontrada": "esta página",
 };
@@ -206,6 +208,7 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   for (const id of BOT_IDS) useAtalho(atalhoDeConversa(id), () => novoPedido(id));
   useAtalho("ir-atividade", () => navegar("/atividade"));
   useAtalho("ir-biblioteca", () => navegar("/biblioteca"));
+  useAtalho("ir-calendario", () => navegar("/calendario"));
   for (const id of BOT_IDS) useAtalho(atalhoDoBot(id), () => navegar(`/bots/${id}`));
   useAtalho("lista-proxima", andar(1));
   useAtalho("lista-anterior", andar(-1));
@@ -281,6 +284,8 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
             <Atividade abrirMenu={abrirMenu} />
           ) : rota.tela === "biblioteca" ? (
             <Biblioteca abrirMenu={abrirMenu} />
+          ) : rota.tela === "calendario" ? (
+            <Calendario abrirMenu={abrirMenu} />
           ) : rota.tela === "bot" ? (
             <Bot key={rota.id} id={rota.id} aba={rota.aba} abrirMenu={abrirMenu} conversar={() => novoPedido(rota.id)} />
           ) : (

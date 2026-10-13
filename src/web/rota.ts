@@ -7,6 +7,7 @@ export type Rota =
   | { tela: "conversa"; id: string }
   | { tela: "atividade" }
   | { tela: "biblioteca" }
+  | { tela: "calendario" }
   | { tela: "bot"; id: BotId; aba: "trabalho" | "config" }
   | { tela: "nao-encontrada" };
 
@@ -15,6 +16,7 @@ export function lerRota(caminho: string): Rota {
   if (caminho === "/entrar") return { tela: "entrar" };
   if (caminho === "/atividade") return { tela: "atividade" };
   if (caminho === "/biblioteca") return { tela: "biblioteca" };
+  if (caminho === "/calendario") return { tela: "calendario" };
   const bot = /^\/bots\/([^/]+)(\/config)?$/.exec(caminho);
   const botId = BOT_IDS.find((id) => id === bot?.[1]);
   if (botId) return { tela: "bot", id: botId, aba: bot?.[2] ? "config" : "trabalho" };

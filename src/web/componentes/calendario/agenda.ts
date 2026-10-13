@@ -210,7 +210,8 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
       return reagendar(i, noLugar(i, lugar).publicaEm);
     },
 
-    async agendar(post: PostPronto, midia: TipoMidia, publicaEm: number): Promise<ItemAgendado | null> {
+    /** Devolve o motivo quando o servidor recusa; a confirmação mostra ao lado dos campos. */
+    async agendar(post: PostPronto, midia: TipoMidia, publicaEm: number): Promise<string | null> {
       try {
         const a = await api.agendar(post.postId, midia, publicaEm);
         base.set(chaveDe(a), a);
@@ -220,10 +221,9 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
           await aplicar(chaveDe(a), null, () => api.cancelar(a.filaId), () => null);
           await lerProntos();
         });
-        return a;
-      } catch (e) {
-        erroDe("Não deu para agendar.", e);
         return null;
+      } catch (e) {
+        return mensagem(e);
       }
     },
 

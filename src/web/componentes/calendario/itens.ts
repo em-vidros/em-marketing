@@ -40,7 +40,8 @@ export function lugarDe(i: ItemCalendario): Lugar {
 }
 
 /** O que pode mudar de lugar: pauta sempre, agendado só enquanto pendente. */
-export type Movel = ItemPauta | (ItemAgendado & { status: "pending" });
+export type AgendadoPendente = ItemAgendado & { status: "pending" };
+export type Movel = ItemPauta | AgendadoPendente;
 
 export const ehMovel = (i: ItemCalendario): i is Movel => i.tipo === "pauta" || (i.tipo === "agendado" && i.status === "pending");
 
@@ -66,7 +67,8 @@ export function ordem(a: ItemCalendario, b: ItemCalendario): number {
   return (la.minutos ?? 0) - (lb.minutos ?? 0) || PESO[a.tipo] - PESO[b.tipo] || tituloDe(a).localeCompare(tituloDe(b), "pt-BR");
 }
 
-const SEM_TITULO = "Post sem headline";
+/** Peça de foto real não tem headline: o número do post a identifica. */
+export const tituloDoPost = (headline: string | null, postId: number) => headline ?? `Post sem headline (${postId})`;
 
 export function tituloDe(i: ItemCalendario): string {
   switch (i.tipo) {
@@ -74,7 +76,7 @@ export function tituloDe(i: ItemCalendario): string {
       return i.titulo;
     case "agendado":
     case "publicado":
-      return i.headline ?? `${SEM_TITULO} (${i.postId})`;
+      return tituloDoPost(i.headline, i.postId);
     case "data":
       return i.nome;
   }
@@ -103,6 +105,8 @@ export const MAX_FAIXAS = 4;
 export interface Faixa {
   faixa: number;
   faixas: number;
+  /** O grupo de itens que se cruzam, para juntar os que passam de MAX_FAIXAS num "+N". */
+  grupo: number;
 }
 
 /**
@@ -114,8 +118,10 @@ export function faixas(itens: readonly { chave: string; minutos: number }[]): Ma
   let grupo: { chave: string; faixa: number }[] = [];
   let fins: number[] = [];
   let fimDoGrupo = -1;
+  let n = 0;
   const fechar = () => {
-    for (const g of grupo) saida.set(g.chave, { faixa: g.faixa, faixas: fins.length });
+    for (const g of grupo) saida.set(g.chave, { faixa: g.faixa, faixas: fins.length, grupo: n });
+    if (grupo.length) n++;
     grupo = [];
     fins = [];
   };

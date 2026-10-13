@@ -58,10 +58,10 @@ describe("faixas da grade de horas", () => {
       { chave: "d", minutos: 700 },
     ]);
     expect(Object.fromEntries(f)).toEqual({
-      a: { faixa: 0, faixas: 2 },
-      b: { faixa: 1, faixas: 2 },
-      c: { faixa: 0, faixas: 2 },
-      d: { faixa: 0, faixas: 1 },
+      a: { faixa: 0, faixas: 2, grupo: 0 },
+      b: { faixa: 1, faixas: 2, grupo: 0 },
+      c: { faixa: 0, faixas: 2, grupo: 0 },
+      d: { faixa: 0, faixas: 1, grupo: 1 },
     });
   });
 });

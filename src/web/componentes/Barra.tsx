@@ -280,6 +280,15 @@ export function Barra({
             Biblioteca
           </a>
         </Dica>
+        <Dica rotulo="Calendário" atalho="ir-calendario">
+          <a
+            href="/calendario"
+            aria-current={telaAtual === "/calendario" ? "page" : undefined}
+            onClick={(e) => (aoClicarLink(e), aoNavegar())}
+            className={linkDe(telaAtual === "/calendario")}>
+            Calendário
+          </a>
+        </Dica>
         <button type="button" onClick={abrirAtalhos} aria-keyshortcuts={ariaDe("atalhos", ehMac)} className={`${linkDe(false)} cursor-pointer justify-between`}>
           Atalhos de teclado
           <Teclas atalho="atalhos" />
