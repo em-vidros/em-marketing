@@ -149,7 +149,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
               <select
                 value={status ?? ""}
                 onChange={(e) => setStatus((e.target.value || null) as StatusPost | null)}
-                className="cursor-pointer rounded-full border border-borda-campo bg-transparent py-[5px] pr-2 pl-3 text-[13px] text-tinta-2 hover:bg-hover"
+                className="cursor-pointer rounded-full border border-borda-campo bg-transparent py-[5px] pr-2 pl-3 text-base text-tinta-2 hover:bg-hover sm:text-[13px]"
               >
                 <option value="">Todos os status</option>
                 {statusPresentes.map((s) => (

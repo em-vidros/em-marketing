@@ -5,6 +5,7 @@ import type { Modelo } from "../../../agent/models";
 import { recarregarBots, useApi, useNomesDosBots, type Carga } from "../../api";
 import { BOTS } from "../../bots";
 import { MOLA, MOLA_REDUZIDA } from "../../movimento";
+import { ehCampo } from "../../teclado/motor";
 import type { BotId } from "../../tipos";
 import { Falha } from "../Falha";
 import { fecharAviso, mostrarAviso } from "../menu/Avisos";
@@ -239,7 +240,7 @@ function Prompt({
         spellCheck
         aria-invalid={problema ? true : undefined}
         aria-describedby={`${id}-conta ${problema ? `${id}-erro` : ""}`}
-        className={`${estiloCampo} max-h-[60vh] min-h-64 resize-none overflow-y-auto overscroll-contain font-mono text-[13px]/relaxed sm:text-[13px]/relaxed`}
+        className={`${estiloCampo} max-h-[60vh] min-h-64 resize-none overflow-y-auto overscroll-contain font-mono text-base/relaxed sm:text-[13px]/relaxed`}
       />
       <div className="flex items-start justify-between gap-3">
         <Problema id={`${id}-erro`} texto={problema} />
@@ -596,7 +597,8 @@ export function Configuracao({
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         void atalhos.current.salvar();
-      } else if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("[aria-modal='true']")) {
+      } else if (e.key === "Escape" && !e.defaultPrevented && !ehCampo(document.activeElement) && !document.querySelector("[aria-modal='true']")) {
+        // Num campo, o Esc só tira o foco (motor do teclado); um segundo Esc, já fora, descarta.
         atalhos.current.descartar();
       }
     };
