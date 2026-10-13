@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { auth } from "../auth";
 import { navegar } from "../rota";
 
@@ -14,6 +14,10 @@ export function Entrar() {
   const [erro, setErro] = useState<string | null>(null);
   const [enviando, setEnviando] = useState(false);
   const email = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    document.title = "Entrar · EM Marketing";
+  }, []);
 
   async function enviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
