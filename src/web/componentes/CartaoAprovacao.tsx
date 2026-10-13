@@ -16,8 +16,9 @@ const quando = new Intl.DateTimeFormat("pt-BR", {
 function pergunta(p: ParteAprovacao) {
   const midia = p.input?.media_type ? MIDIA[p.input.media_type] : "";
   if (p.type === "tool-publicar_agora") return { titulo: "Publicar agora no Instagram?", detalhe: `${midia}. Sai na hora, sem volta.` };
-  const data = p.input && "publish_at" in p.input && p.input.publish_at ? quando.format(new Date(p.input.publish_at)) : "";
-  return { titulo: "Agendar a publicação?", detalhe: `${midia}, ${data}.` };
+  // Enquanto a entrada chega pelo stream, a data ainda está pela metade e não vira Date válida.
+  const data = new Date(p.input && "publish_at" in p.input ? (p.input.publish_at ?? "") : "");
+  return { titulo: "Agendar a publicação?", detalhe: Number.isNaN(data.getTime()) ? `${midia}.` : `${midia}, ${quando.format(data)}.` };
 }
 
 function desfecho(p: ParteAprovacao): { texto: string; erro?: boolean } | null {
