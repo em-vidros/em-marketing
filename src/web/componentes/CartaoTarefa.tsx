@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { BOTS } from "../bots";
-import { passoAtual } from "../equipe";
-import { especialistaDa, passosDe, type ParteDelegacao } from "../tipos";
+import { especialistaDa, passosDe, type ParteDelegacao, type Passo } from "../tipos";
 import { Avatar } from "./Avatar";
+import { atividadeDe, textoDa } from "./ia/atividade";
+import { LinhasDeTarefa, type LinhaDeTarefa } from "./ia/LinhasDeTarefa";
 import { Markdown } from "./Markdown";
-import { Passos } from "./Passos";
+
+const relogio = (segundos: number) =>
+  segundos < 60 ? `${segundos}s` : `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`;
 
 /** Segundos desde que `ativo` virou true, para o relógio da tarefa ao vivo. */
 function useCronometro(ativo: boolean) {
@@ -15,21 +18,40 @@ function useCronometro(ativo: boolean) {
     const t = setInterval(() => setSegundos(Math.floor((Date.now() - inicio) / 1000)), 1000);
     return () => clearInterval(t);
   }, [ativo]);
-  return `${Math.floor(segundos / 60)}:${String(segundos % 60).padStart(2, "0")}`;
+  return relogio(segundos);
+}
+
+/**
+ * Quanto cada passo levou, medido aqui enquanto a tarefa roda. Um passo que já chegou pronto
+ * (recarga da página) não tem tempo.
+ */
+function useTempos() {
+  const marcas = useRef(new Map<string, { inicio: number; fim: number | null }>());
+  return (id: string, ativo: boolean): string | null => {
+    const agora = Date.now();
+    let m = marcas.current.get(id);
+    if (!m) {
+      if (!ativo) return null;
+      m = { inicio: agora, fim: null };
+      marcas.current.set(id, m);
+    }
+    if (!ativo) m.fim ??= agora;
+    return relogio(Math.floor(((m.fim ?? agora) - m.inicio) / 1000));
+  };
 }
 
 type Situacao =
-  { tipo: "fila" } | { tipo: "trabalhando"; passo: string } | { tipo: "concluida"; resumo: string } | { tipo: "falhou"; erro: string };
+  | { tipo: "fila" }
+  | { tipo: "trabalhando"; linhas: LinhaDeTarefa[] }
+  | { tipo: "concluida"; resumo: string }
+  | { tipo: "falhou"; erro: string };
 
-function situacaoDa(p: ParteDelegacao): Situacao {
-  if (p.state === "output-error") return { tipo: "falhou", erro: p.errorText };
-  if (p.state !== "output-available") return { tipo: "fila" };
-  const s = p.output;
-  if (s.status === "concluida") return { tipo: "concluida", resumo: s.resumo };
-  if (s.status === "falhou") return { tipo: "falhou", erro: s.erro };
-  if (s.status === "na_fila") return { tipo: "fila" };
-  return { tipo: "trabalhando", passo: passoAtual(p) ?? "Pensando" };
-}
+const ROTULO: Record<Situacao["tipo"], { texto: string; cor: string }> = {
+  fila: { texto: "Na fila", cor: "text-tinta-3" },
+  trabalhando: { texto: "Trabalhando", cor: "text-tinta-3" },
+  concluida: { texto: "Terminou", cor: "text-tinta-2" },
+  falhou: { texto: "Falhou", cor: "text-erro" },
+};
 
 export const tarefaIdDa = (p: ParteDelegacao) => (p.state === "output-available" ? p.output.tarefaId : null);
 
@@ -44,27 +66,48 @@ export function CartaoTarefa({
 }) {
   const bot = especialistaDa(parte);
   const { nome } = BOTS[bot];
+  const tempoDe = useTempos();
+  const vistas = useRef<LinhaDeTarefa[]>([]);
+
+  const linhaDe = (p: Passo): LinhaDeTarefa => ({ id: p.id, rotulo: p.rotulo, estado: p.estado, tempo: tempoDe(p.id, p.estado === "fazendo") });
+
+  function situacaoDa(p: ParteDelegacao): Situacao {
+    if (p.state === "output-error") return { tipo: "falhou", erro: p.errorText };
+    if (p.state !== "output-available") return { tipo: "fila" };
+    const s = p.output;
+    if (s.status === "concluida") return { tipo: "concluida", resumo: s.resumo };
+    if (s.status === "falhou") return { tipo: "falhou", erro: s.erro };
+    if (s.status === "na_fila") return { tipo: "fila" };
+    const atividade = atividadeDe(s.mensagem, true);
+    const linhas = passosDe(s.mensagem).map(linhaDe);
+    // Fora de uma tool o especialista está pensando ou escrevendo; isso vira a linha ativa.
+    if (atividade.tipo !== "usando")
+      linhas.push({ id: `agora-${linhas.length}`, rotulo: textoDa(atividade), estado: "fazendo", tempo: tempoDe(`agora-${linhas.length}`, true) });
+    return { tipo: "trabalhando", linhas };
+  }
+
   const situacao = situacaoDa(parte);
   const tempo = useCronometro(situacao.tipo === "trabalhando");
   const tarefaId = tarefaIdDa(parte);
-  const passos =
-    parte.state === "output-available" && parte.output.status === "trabalhando" ? passosDe(parte.output.mensagem).slice(-4) : [];
+
+  // O resultado final da tool não traz a mensagem; os passos vistos ao vivo ficam, assentados.
+  if (situacao.tipo === "trabalhando") vistas.current = situacao.linhas;
+  const linhas: LinhaDeTarefa[] =
+    situacao.tipo === "trabalhando"
+      ? situacao.linhas
+      : situacao.tipo === "fila"
+        ? []
+        : vistas.current
+            .filter((l) => !l.id.startsWith("agora-"))
+            .map((l) => (l.estado === "fazendo" ? { ...l, estado: situacao.tipo === "falhou" ? "falhou" : "feito", tempo: tempoDe(l.id, false) } : l));
 
   return (
     <section aria-label={`Tarefa do ${nome}`} className="overflow-hidden rounded-cartao border border-linha bg-superficie text-sm/normal">
       <div className="flex items-center gap-2.5 px-3.5 py-2.5">
         <Avatar bot={bot} tamanho={22} estado={situacao.tipo === "trabalhando" ? "trabalhando" : "parado"} />
         <span className="font-medium">{nome}</span>
-        <span aria-live="polite" className="min-w-0 truncate">
-          {situacao.tipo === "trabalhando" ? (
-            <span className="brilho">{situacao.passo}</span>
-          ) : situacao.tipo === "fila" ? (
-            <span className="text-tinta-3">Na fila</span>
-          ) : situacao.tipo === "concluida" ? (
-            <span className="text-tinta-2">Terminou</span>
-          ) : (
-            <span className="text-erro">Falhou</span>
-          )}
+        <span aria-live="polite" className={`min-w-0 truncate ${ROTULO[situacao.tipo].cor}`}>
+          {ROTULO[situacao.tipo].texto}
         </span>
         {situacao.tipo === "trabalhando" && <span className="tabular font-mono text-xs text-tinta-4">{tempo}</span>}
         {tarefaId && (
@@ -78,15 +121,15 @@ export function CartaoTarefa({
           </button>
         )}
       </div>
-      {passos.length > 0 && <Passos passos={passos} className="px-3.5 pt-1 pb-3 pl-11" />}
+      <LinhasDeTarefa linhas={linhas} className="border-t border-linha" />
       {situacao.tipo === "concluida" && (
-        <div className="px-3.5 pb-3 pl-11">
+        <div className="border-t border-linha px-3.5 py-3">
           <div className="line-clamp-4 text-tinta-2">
             <Markdown texto={situacao.resumo} className="block [&>*+*]:mt-1.5" />
           </div>
         </div>
       )}
-      {situacao.tipo === "falhou" && <p className="px-3.5 pb-3 pl-11 text-erro">{situacao.erro}</p>}
+      {situacao.tipo === "falhou" && <p className="border-t border-linha px-3.5 py-3 text-erro">{situacao.erro}</p>}
     </section>
   );
 }
