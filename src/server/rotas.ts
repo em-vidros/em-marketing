@@ -3,7 +3,18 @@ import type { BunRequest } from "bun";
 import { BOTS } from "../agent/bots";
 import { conversaDoUsuario, conversasDoUsuario, mensagensDaConversa } from "../agent/conversas";
 import { pegarTarefa, tarefasAtivas, tarefasDaConversa } from "../agent/tarefas";
-import { db } from "../db";
+import {
+  agendamentos,
+  aprovacoesPendentes,
+  db,
+  inicioDoDia,
+  pecasDoUsuario,
+  publicacoesRecentes,
+  tarefasEmCurso,
+  tarefasFeitas,
+  type Agora,
+  type Historico,
+} from "../db";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
 
@@ -55,6 +66,25 @@ export function rotas(opcoes: OpcoesChat = {}) {
       }),
     },
     "/api/atividade": { GET: comSessao((_, u) => Response.json(tarefasAtivas(u.id))) },
+    "/api/atividade/agora": {
+      GET: comSessao((_, u) => {
+        const hoje = inicioDoDia();
+        const agora: Agora = {
+          trabalhando: tarefasEmCurso(u.id),
+          esperando: aprovacoesPendentes(u.id),
+          concluidas: tarefasFeitas(u.id, hoje, Number.MAX_SAFE_INTEGER),
+        };
+        return Response.json(agora);
+      }),
+    },
+    "/api/atividade/agendado": { GET: comSessao(() => Response.json(agendamentos())) },
+    "/api/atividade/historico": {
+      GET: comSessao((_, u) => {
+        const historico: Historico = { tarefas: tarefasFeitas(u.id, 0, inicioDoDia()), publicacoes: publicacoesRecentes() };
+        return Response.json(historico);
+      }),
+    },
+    "/api/pecas": { GET: comSessao((_, u) => Response.json(pecasDoUsuario(u.id))) },
     "/api/*": naoEncontrado,
 
     // Público de propósito: a Meta baixa a imagem por esta URL na hora de publicar, sem sessão.

@@ -1,5 +1,7 @@
 import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
+import type { UIMessage } from "ai";
+import type { BotId } from "../agent/bots";
 
 mkdirSync("data", { recursive: true });
 export const db = new Database(process.env.DB_PATH ?? "data/em-marketing.db");
@@ -129,4 +131,315 @@ export function newMediaId(path: string): string {
   const id = crypto.randomUUID().replace(/-/g, "");
   db.query("INSERT INTO media (id, path) VALUES (?, ?)").run(id, path);
   return id;
+}
+
+// Leituras das telas Atividade e Biblioteca (server/rotas.ts).
+
+/** Um id /media vivo para o arquivo. Reaproveita o que já existe para não criar uma linha por leitura. */
+export function midiaDoCaminho(path: string): string {
+  const existente = db.query("SELECT id FROM media WHERE path = ? AND expired = 0 LIMIT 1").get(path) as { id: string } | null;
+  return existente?.id ?? newMediaId(path);
+}
+
+export type Pilar = "PROVA" | "AUTORIDADE" | "GENTE" | "MARCA";
+export type StatusPost = "draft" | "generated" | "chosen" | "archived" | "scheduled" | "published" | "failed";
+export type Formato = "feed" | "stories" | "ambos";
+export type TipoMidia = "IMAGE" | "STORIES";
+
+interface ColunasDoPost {
+  arts: string | null;
+  chosen: number | null;
+}
+
+/** URLs /media das artes, com a escolhida primeiro. */
+function artesDo({ arts, chosen }: ColunasDoPost): string[] {
+  const artes = (arts ? JSON.parse(arts) : []) as { variant: number; path: string }[];
+  const ordem = [...artes].sort((a, b) => Number(b.variant === chosen) - Number(a.variant === chosen));
+  return ordem.map((a) => `/media/${midiaDoCaminho(a.path)}`);
+}
+
+const capaDo = (p: ColunasDoPost): string | null => artesDo(p)[0] ?? null;
+
+/** "2026-10-15 21:00:00" (UTC, sem fuso, como o SQLite grava) para ISO com Z. */
+const isoDoSqlite = (s: string) => `${s.replace(" ", "T")}Z`;
+
+/** Uma peça da Biblioteca. `conversaId` é a conversa do usuário que trabalhou nela, se houver. */
+export interface Peca {
+  id: number;
+  headline: string | null;
+  legenda: string | null;
+  tema: string | null;
+  pilar: Pilar | null;
+  formato: Formato | null;
+  status: StatusPost;
+  criadaEm: string;
+  artes: string[];
+  conversaId: string | null;
+}
+
+export function pecasDoUsuario(userId: string): Peca[] {
+  const linhas = db
+    .query(
+      `SELECT p.id, p.headline, p.legenda, p.brief, p.pilar, p.formato, p.status, p.created_at, p.arts, p.chosen,
+         (SELECT c.id FROM conversas c WHERE c.post_id = p.id AND c.user_id = ? ORDER BY c.updated_at DESC LIMIT 1) AS conversa_id
+       FROM posts p ORDER BY p.created_at DESC, p.id DESC`,
+    )
+    .all(userId) as (ColunasDoPost & {
+    id: number;
+    headline: string | null;
+    legenda: string | null;
+    brief: string | null;
+    pilar: Pilar | null;
+    formato: Formato | null;
+    status: StatusPost;
+    created_at: string;
+    conversa_id: string | null;
+  })[];
+  return linhas.map((r) => ({
+    id: r.id,
+    headline: r.headline,
+    legenda: r.legenda,
+    tema: r.brief ? ((JSON.parse(r.brief) as { tema?: string }).tema ?? null) : null,
+    pilar: r.pilar,
+    formato: r.formato,
+    status: r.status ?? "draft",
+    criadaEm: isoDoSqlite(r.created_at),
+    artes: artesDo(r),
+    conversaId: r.conversa_id,
+  }));
+}
+
+export type StatusFila = "pending" | "publishing" | "done" | "failed" | "cancelled";
+
+/** Uma linha da fila de publicação que ainda não saiu. */
+export interface Agendamento {
+  id: number;
+  postId: number;
+  headline: string | null;
+  pilar: Pilar | null;
+  tipo: TipoMidia;
+  publicarEm: string;
+  status: Exclude<StatusFila, "done" | "cancelled">;
+  erro: string | null;
+  capa: string | null;
+}
+
+export function agendamentos(): Agendamento[] {
+  const linhas = db
+    .query(
+      `SELECT q.id, q.post_id, q.media_type, q.publish_at, q.status, q.error, p.headline, p.pilar, p.arts, p.chosen
+       FROM queue q JOIN posts p ON p.id = q.post_id
+       WHERE q.status IN ('pending', 'publishing', 'failed') ORDER BY q.publish_at`,
+    )
+    .all() as (ColunasDoPost & {
+    id: number;
+    post_id: number;
+    media_type: TipoMidia;
+    publish_at: string;
+    status: Agendamento["status"];
+    error: string | null;
+    headline: string | null;
+    pilar: Pilar | null;
+  })[];
+  return linhas.map((r) => ({
+    id: r.id,
+    postId: r.post_id,
+    headline: r.headline,
+    pilar: r.pilar,
+    tipo: r.media_type,
+    publicarEm: isoDoSqlite(r.publish_at),
+    status: r.status,
+    erro: r.error,
+    capa: capaDo(r),
+  }));
+}
+
+/** Uma mídia que saiu no Instagram. */
+export interface Publicacao {
+  id: number;
+  postId: number;
+  headline: string | null;
+  pilar: Pilar | null;
+  tipo: TipoMidia;
+  permalink: string | null;
+  publicadaEm: string;
+  capa: string | null;
+}
+
+export function publicacoesRecentes(limite = 50): Publicacao[] {
+  const linhas = db
+    .query(
+      `SELECT u.id, u.post_id, u.media_type, u.permalink, u.published_at, p.headline, p.pilar, p.arts, p.chosen
+       FROM publicacoes u JOIN posts p ON p.id = u.post_id ORDER BY u.published_at DESC LIMIT ?`,
+    )
+    .all(limite) as (ColunasDoPost & {
+    id: number;
+    post_id: number;
+    media_type: TipoMidia;
+    permalink: string | null;
+    published_at: string;
+    headline: string | null;
+    pilar: Pilar | null;
+  })[];
+  return linhas.map((r) => ({
+    id: r.id,
+    postId: r.post_id,
+    headline: r.headline,
+    pilar: r.pilar,
+    tipo: r.media_type,
+    permalink: r.permalink,
+    publicadaEm: isoDoSqlite(r.published_at),
+    capa: capaDo(r),
+  }));
+}
+
+/**
+ * Meia-noite de hoje em São Paulo, em epoch ms. O Brasil não tem horário de verão
+ * desde 2019, então o fuso é sempre -03:00.
+ */
+export function inicioDoDia(agora = Date.now()): number {
+  const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(agora);
+  return Date.parse(`${dia}T00:00:00-03:00`);
+}
+
+/** Uma tarefa que terminou, bem ou mal. */
+export interface TarefaFeita {
+  id: string;
+  conversaId: string;
+  botId: BotId;
+  pedido: string;
+  status: "concluida" | "falhou";
+  resumo: string | null;
+  erro: string | null;
+  terminadaEm: number;
+}
+
+/** Tarefas terminadas nas conversas do usuário, no intervalo [desde, ate), mais recentes primeiro. */
+export function tarefasFeitas(userId: string, desde: number, ate: number, limite = 100): TarefaFeita[] {
+  const linhas = db
+    .query(
+      `SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.resumo, t.erro, t.atualizada_em
+       FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
+       WHERE c.user_id = ? AND t.status IN ('concluida', 'falhou') AND t.atualizada_em >= ? AND t.atualizada_em < ?
+       ORDER BY t.atualizada_em DESC LIMIT ?`,
+    )
+    .all(userId, desde, ate, limite) as {
+    id: string;
+    conversa_id: string;
+    bot_id: BotId;
+    pedido: string;
+    status: TarefaFeita["status"];
+    resumo: string | null;
+    erro: string | null;
+    atualizada_em: number;
+  }[];
+  return linhas.map((r) => ({
+    id: r.id,
+    conversaId: r.conversa_id,
+    botId: r.bot_id,
+    pedido: r.pedido,
+    status: r.status,
+    resumo: r.resumo,
+    erro: r.erro,
+    terminadaEm: r.atualizada_em,
+  }));
+}
+
+/** Tarefa na fila ou em andamento, com a última mensagem do especialista para mostrar o passo atual. */
+export interface TarefaEmCurso {
+  id: string;
+  conversaId: string;
+  botId: BotId;
+  pedido: string;
+  status: "na_fila" | "trabalhando";
+  criadaEm: number;
+  ultima: UIMessage | null;
+}
+
+export function tarefasEmCurso(userId: string): TarefaEmCurso[] {
+  const linhas = db
+    .query(
+      `SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.criada_em, t.mensagens
+       FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
+       WHERE c.user_id = ? AND t.status IN ('na_fila', 'trabalhando') ORDER BY t.criada_em DESC`,
+    )
+    .all(userId) as {
+    id: string;
+    conversa_id: string;
+    bot_id: BotId;
+    pedido: string;
+    status: TarefaEmCurso["status"];
+    criada_em: number;
+    mensagens: string;
+  }[];
+  return linhas.map((r) => {
+    const mensagens = JSON.parse(r.mensagens) as UIMessage[];
+    return {
+      id: r.id,
+      conversaId: r.conversa_id,
+      botId: r.bot_id,
+      pedido: r.pedido,
+      status: r.status,
+      criadaEm: r.criada_em,
+      ultima: mensagens.findLast((m) => m.role === "assistant") ?? null,
+    };
+  });
+}
+
+/** Um publicar_agora ou agendar_publicacao parado em approval-requested numa conversa do usuário. */
+export interface AprovacaoPendente {
+  conversaId: string;
+  titulo: string;
+  acao: "publicar_agora" | "agendar_publicacao";
+  tipo: TipoMidia | null;
+  publicarEm: string | null;
+  headline: string | null;
+  pilar: Pilar | null;
+  capa: string | null;
+}
+
+export function aprovacoesPendentes(userId: string): AprovacaoPendente[] {
+  // O LIKE só poupa o JSON.parse das conversas sem nenhum pedido em aberto; o filtro de verdade é o das partes.
+  const linhas = db
+    .query(
+      `SELECT c.id, c.titulo, c.mensagens, p.headline, p.pilar, p.arts, p.chosen
+       FROM conversas c LEFT JOIN posts p ON p.id = c.post_id
+       WHERE c.user_id = ? AND c.mensagens LIKE '%approval-requested%' ORDER BY c.updated_at DESC`,
+    )
+    .all(userId) as (ColunasDoPost & {
+    id: string;
+    titulo: string | null;
+    mensagens: string;
+    headline: string | null;
+    pilar: Pilar | null;
+  })[];
+  type ParteLida = { type: string; state?: string; input?: { media_type?: TipoMidia; publish_at?: string } };
+  return linhas.flatMap((r) =>
+    (JSON.parse(r.mensagens) as { parts: ParteLida[] }[])
+      .flatMap((m) => m.parts)
+      .filter((p) => (p.type === "tool-publicar_agora" || p.type === "tool-agendar_publicacao") && p.state === "approval-requested")
+      .map((p) => ({
+        conversaId: r.id,
+        titulo: r.titulo ?? "Conversa nova",
+        acao: p.type.slice(5) as AprovacaoPendente["acao"],
+        tipo: p.input?.media_type ?? null,
+        publicarEm: p.input?.publish_at ?? null,
+        headline: r.headline,
+        pilar: r.pilar,
+        capa: capaDo(r),
+      })),
+  );
+}
+
+/** GET /api/atividade/agora */
+export interface Agora {
+  trabalhando: TarefaEmCurso[];
+  esperando: AprovacaoPendente[];
+  concluidas: TarefaFeita[];
+}
+
+/** GET /api/atividade/historico */
+export interface Historico {
+  tarefas: TarefaFeita[];
+  publicacoes: Publicacao[];
 }
