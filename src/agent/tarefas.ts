@@ -26,13 +26,16 @@ export interface Tarefa {
 export type ResumoTarefa = Omit<Tarefa, "mensagens">;
 
 export type MudancaTarefa =
-  | { status: "trabalhando" }
+  | { status: "trabalhando"; mensagens?: UIMessage[] }
   | { status: "concluida"; resumo: string; mensagens: UIMessage[] }
   | { status: "falhou"; erro: string; mensagens: UIMessage[] };
 
-/** De quais status cada mudança pode partir. concluida e falhou são finais. */
+/**
+ * De quais status cada mudança pode partir. concluida e falhou são finais.
+ * trabalhando para trabalhando grava o progresso do especialista a cada passo.
+ */
 const ORIGEM = {
-  trabalhando: ["na_fila"],
+  trabalhando: ["na_fila", "trabalhando"],
   concluida: ["trabalhando"],
   falhou: ["na_fila", "trabalhando"],
 } as const satisfies Record<MudancaTarefa["status"], readonly StatusTarefa[]>;

@@ -28,8 +28,11 @@ const chefeQueDelega = () =>
     ],
   });
 
+let conversaAtual = "";
+
 async function conversar(chefe: LanguageModel, especialista: LanguageModel) {
   const conversaId = `teste-${crypto.randomUUID()}`;
+  conversaAtual = conversaId;
   const result = executar("chefe", conversaId, [{ role: "user", content: "Preciso de uma legenda." }], {
     resolverModelo: (bot) => (bot.id === "chefe" ? chefe : especialista),
   });
@@ -73,5 +76,49 @@ describe("delegação do Chefe", () => {
 
     expect(tarefa).toMatchObject({ status: "falhou", resumo: null, erro: expect.stringContaining("cota do Gemini esgotada") });
     expect(resultadoVistoPeloChefe(chefe)).toEqual({ type: "json", value: { tarefaId: tarefa?.id, status: "falhou", erro: tarefa?.erro } });
+  });
+
+  test("duas delegar_post no mesmo passo rodam uma depois da outra", async () => {
+    const chamada = (id: string) => ({ type: "tool-call" as const, toolCallId: id, toolName: "delegar_post", input: JSON.stringify({ pedido: id }) });
+    const chefe = new MockLanguageModelV4({ doStream: [turno([chamada("p1"), chamada("p2")], "tool-calls"), texto("Pronto.")] });
+    const ordem: string[] = [];
+    let n = 0;
+    const post = new MockLanguageModelV4({
+      doStream: async () => {
+        const eu = ++n;
+        ordem.push(`inicio ${eu}`);
+        await Bun.sleep(20);
+        ordem.push(`fim ${eu}`);
+        return texto(`post ${eu}`);
+      },
+    });
+
+    await conversar(chefe, post);
+
+    expect(ordem).toEqual(["inicio 1", "fim 1", "inicio 2", "fim 2"]);
+  });
+
+  test("a tarefa fica gravada no banco enquanto o especialista ainda trabalha", async () => {
+    const chefe = chefeQueDelega();
+    let gravadaNoMeio: unknown;
+    let chamadas = 0;
+    const legenda = new MockLanguageModelV4({
+      doStream: async () => {
+        if (chamadas++ === 0) {
+          const input = JSON.stringify({ tipo: "legenda", texto: "Box temperado entregue em Imperatriz." });
+          return turno([{ type: "tool-call", toolCallId: "v1", toolName: "validar_texto", input }], "tool-calls");
+        }
+        const [t] = tarefasDaConversa(conversaAtual);
+        gravadaNoMeio = t && pegarTarefa(t.id);
+        return texto("Revisei.");
+      },
+    });
+
+    await conversar(chefe, legenda);
+
+    expect(gravadaNoMeio).toMatchObject({
+      status: "trabalhando",
+      mensagens: [{ role: "user" }, { role: "assistant", parts: expect.arrayContaining([expect.objectContaining({ type: "tool-validar_texto", state: "output-available" })]) }],
+    });
   });
 });
