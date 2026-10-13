@@ -58,23 +58,68 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
 
 const ehTool = (nome: string): nome is ToolName => Object.hasOwn(PASSOS, nome);
 
+/** Em que pé está uma chamada de tool, do jeito que a interface mostra. */
+export type Fase = "fazendo" | "feito" | "falhou" | "esperando" | "recusado";
+
+type ParteDeTool = Extract<UIMessage["parts"][number], { toolCallId: string }>;
+
+/** Cada estado de tool do AI SDK vira uma fase. Prévia (preliminary) ainda é trabalho em andamento. */
+const FASE_DA_TOOL: { [E in ParteDeTool["state"]]: (p: Extract<ParteDeTool, { state: E }>) => Fase } = {
+  "input-streaming": () => "fazendo",
+  "input-available": () => "fazendo",
+  "approval-requested": () => "esperando",
+  "approval-responded": (p) => (p.approval.approved ? "fazendo" : "recusado"),
+  "output-available": (p) => (p.preliminary ? "fazendo" : "feito"),
+  "output-error": () => "falhou",
+  "output-denied": () => "recusado",
+};
+
+export const faseDa = (p: ParteDeTool): Fase => (FASE_DA_TOOL[p.state] as (p: ParteDeTool) => Fase)(p);
+
+const ROTULO_DA_FASE: Record<Fase, (r: { fazendo: string; feito: string }) => string> = {
+  fazendo: (r) => r.fazendo,
+  feito: (r) => r.feito,
+  falhou: (r) => `${r.fazendo}: falhou`,
+  esperando: (r) => `${r.fazendo}: esperando você`,
+  recusado: (r) => `${r.fazendo}: recusado`,
+};
+
+/** O rótulo em português de uma tool, pelo nome da parte (`tool-<nome>`). */
+export function rotuloDa(tipo: string, fase: Fase): string {
+  const nome = tipo.slice("tool-".length);
+  return ROTULO_DA_FASE[fase](ehTool(nome) ? PASSOS[nome] : { fazendo: nome, feito: nome });
+}
+
 /** Um passo de tool numa mensagem de especialista, já com o rótulo em português. */
 export interface Passo {
   id: string;
   rotulo: string;
-  estado: "fazendo" | "feito" | "falhou";
+  estado: Fase;
+  /** Um valor curto da entrada, para o chip ao lado do rótulo. */
+  detalhe: string | null;
   saida: unknown;
+}
+
+/** O primeiro texto curto da entrada de uma tool ("feed", "2026-10"), ou null. */
+function detalheDe(entrada: unknown): string | null {
+  if (!entrada || typeof entrada !== "object") return null;
+  const curto = Object.values(entrada).find((v): v is string | number => (typeof v === "string" && v.length <= 60) || typeof v === "number");
+  return curto === undefined ? null : String(curto);
 }
 
 /** Os passos de uma mensagem. Mensagem de especialista não é tipada pelo catálogo, então lê pelo nome da parte. */
 export function passosDe(m: UIMessage | null | undefined): Passo[] {
   return (m?.parts ?? []).flatMap((p): Passo[] => {
-    if (!p.type.startsWith("tool-") || !("toolCallId" in p) || !("state" in p)) return [];
-    const nome = p.type.slice(5);
-    const rotulo = ehTool(nome) ? PASSOS[nome] : { fazendo: nome, feito: nome };
-    const estado = p.state === "output-error" ? "falhou" : p.state === "output-available" && !p.preliminary ? "feito" : "fazendo";
+    if (!p.type.startsWith("tool-") || !("toolCallId" in p)) return [];
+    const estado = faseDa(p);
     return [
-      { id: p.toolCallId, rotulo: estado === "feito" ? rotulo.feito : rotulo.fazendo, estado, saida: "output" in p ? p.output : undefined },
+      {
+        id: p.toolCallId,
+        rotulo: rotuloDa(p.type, estado),
+        estado,
+        detalhe: "input" in p ? detalheDe(p.input) : null,
+        saida: "output" in p ? p.output : undefined,
+      },
     ];
   });
 }

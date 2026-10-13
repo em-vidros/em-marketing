@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
-import type { ParteAprovacao } from "../tipos";
-import { Check } from "./Passos";
+import { faseDa, type ParteAprovacao } from "../tipos";
+import { COR_DO_ROTULO, IconeDaFase } from "./ia/LinhaFerramenta";
 
 const MIDIA = { IMAGE: "Feed", STORIES: "Stories" } as const;
 
@@ -25,7 +25,7 @@ function desfecho(p: ParteAprovacao): { texto: string; erro?: boolean } | null {
   switch (p.state) {
     case "approval-responded":
       return p.approval.approved
-        ? { texto: p.type === "tool-publicar_agora" ? "Aprovado. Publicando…" : "Aprovado. Agendando…" }
+        ? { texto: p.type === "tool-publicar_agora" ? "Aprovado. Publicando" : "Aprovado. Agendando" }
         : { texto: "Recusado." };
     case "output-denied":
       return { texto: "Recusado." };
@@ -80,9 +80,9 @@ export function CartaoAprovacao({ parte, responder }: { parte: ParteAprovacao; r
         </div>
       ) : (
         fim && (
-          <p role="status" className={`mt-2 flex items-center gap-2 ${fim.erro ? "text-erro" : "text-tinta-2"}`}>
-            {!fim.erro && <Check cor="var(--color-tinta-3)" />}
-            {fim.texto}
+          <p role="status" className="mt-2 flex items-center gap-2">
+            <IconeDaFase fase={fim.erro ? "falhou" : faseDa(parte)} />
+            <span className={fim.erro ? "text-erro" : COR_DO_ROTULO[faseDa(parte)]}>{fim.texto}</span>
           </p>
         )
       )}

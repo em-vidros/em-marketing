@@ -1,5 +1,6 @@
 import { BOT_IDS, BOTS, type BotId } from "./bots";
-import { ehAprovacao, ehDelegacao, especialistaDa, passosDe, type Mensagem, type ParteDelegacao, type ResumoTarefa } from "./tipos";
+import { atividadeDe, textoDa } from "./componentes/ia/atividade";
+import { ehAprovacao, ehDelegacao, especialistaDa, type Mensagem, type ParteDelegacao, type ResumoTarefa } from "./tipos";
 
 export type EstadoBot =
   | { tipo: "parado"; texto: string }
@@ -11,13 +12,13 @@ export type EstadoBot =
 
 export type EstadosDaEquipe = Record<BotId, EstadoBot>;
 
-/** O passo em andamento de uma delegação, a partir da prévia da mensagem do especialista. */
+/** O que o especialista de uma delegação faz agora, a partir da prévia da mensagem dele. */
 export function passoAtual(p: ParteDelegacao): string | null {
   if (p.state !== "output-available") return p.state === "input-streaming" || p.state === "input-available" ? "Na fila" : null;
   const s = p.output;
   if (s.status === "na_fila") return "Na fila";
   if (s.status !== "trabalhando") return null;
-  return passosDe(s.mensagem).findLast((x) => x.estado === "fazendo")?.rotulo ?? "Pensando";
+  return textoDa(atividadeDe(s.mensagem, true));
 }
 
 /**
@@ -32,7 +33,8 @@ export function estadosDaEquipe(atividade: readonly ResumoTarefa[], mensagens: r
     else if (estados[t.botId].tipo === "parado") estados[t.botId] = { tipo: "parado", texto: "Na fila" };
   }
 
-  const ultima = mensagens.findLast((m) => m.role === "assistant");
+  // Só a resposta do turno corrente: logo depois do envio, a última mensagem é a do usuário.
+  const ultima = mensagens.at(-1)?.role === "assistant" ? mensagens.at(-1) : undefined;
   for (const p of ultima?.parts ?? []) {
     if (!ehDelegacao(p)) continue;
     const passo = passoAtual(p);
@@ -43,7 +45,7 @@ export function estadosDaEquipe(atividade: readonly ResumoTarefa[], mensagens: r
   if (ultima?.parts.some((p) => ehAprovacao(p) && p.state === "approval-requested"))
     estados.chefe = { tipo: "esperando", texto: "Esperando você" };
   else if (trabalhando) estados.chefe = { tipo: "delegando", texto: `Esperando o ${BOTS[trabalhando].nome}` };
-  else if (respondendo) estados.chefe = { tipo: "trabalhando", texto: "Respondendo" };
+  else if (respondendo) estados.chefe = { tipo: "trabalhando", texto: textoDa(atividadeDe(ultima, true)) };
 
   return estados;
 }

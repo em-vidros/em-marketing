@@ -30,3 +30,34 @@ test.each([
 
   expect({ ponto: chefe.tipo === "esperando", texto: chefe.texto }).toEqual({ ponto, texto });
 });
+
+const doUsuario: Mensagem = { id: "u1", role: "user", parts: [{ type: "text", text: "O que está agendado?" }] };
+const respostaAnterior: Mensagem = { id: "m0", role: "assistant", parts: [{ type: "text", text: "Pronto.", state: "done" }] };
+
+/** O texto do Chefe acompanha o stream: pensando antes da primeira parte, escrevendo, usando uma tool. */
+test.each([
+  { caso: "logo depois do envio, com uma resposta anterior na conversa", mensagens: [respostaAnterior, doUsuario], texto: "Pensando" },
+  {
+    caso: "raciocinando",
+    mensagens: [doUsuario, ...doChefe({ type: "reasoning", text: "A agenda", state: "streaming" } as Parte)],
+    texto: "Pensando",
+  },
+  { caso: "escrevendo", mensagens: [doUsuario, ...doChefe({ type: "text", text: "Tem", state: "streaming" } as Parte)], texto: "Escrevendo" },
+  {
+    caso: "usando uma tool",
+    mensagens: [doUsuario, ...doChefe({ type: "tool-listar_agenda", toolCallId: "l1", state: "input-available", input: {} } as Parte)],
+    texto: "Lendo a agenda",
+  },
+  {
+    caso: "entre um passo e outro",
+    mensagens: [
+      doUsuario,
+      ...doChefe({ type: "tool-listar_agenda", toolCallId: "l1", state: "output-available", input: {}, output: { fila: [] } } as Parte),
+    ],
+    texto: "Pensando",
+  },
+])("o Chefe no ar, $caso", ({ mensagens, texto }) => {
+  const { chefe } = estadosDaEquipe([], mensagens, true);
+
+  expect(chefe).toEqual({ tipo: "trabalhando", texto });
+});
