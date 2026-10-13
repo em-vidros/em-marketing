@@ -130,7 +130,7 @@ export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoT
           aria-expanded={aberta}
           aria-controls={painel}
           onClick={() => setAberta((a) => !a)}
-          className="grid min-w-0 flex-1 cursor-pointer grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-x-3 rounded-[12px] px-3 py-2.5 text-left transition-colors duration-150 hover:bg-fundo"
+          className="grid min-w-0 flex-1 cursor-pointer grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-x-3 rounded-[12px] px-3 py-2.5 text-left realce hover:bg-fundo"
         >
           <span className="grid h-5 place-items-center">
             {mostrarBot ? <Avatar bot={t.botId} tamanho={20} estado={t.status === "trabalhando" ? "trabalhando" : "parado"} anel="var(--color-superficie)" /> : <IconeDaFase fase={fase} />}
@@ -153,7 +153,7 @@ export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoT
           onClick={aoClicarLink}
           aria-label={`Abrir a conversa deste pedido`}
           title="Abrir a conversa"
-          className="pressiona grid size-10 flex-none place-items-center rounded-[12px] text-tinta-3 transition-colors duration-150 hover:bg-fundo hover:text-tinta"
+          className="pressiona grid size-10 flex-none place-items-center rounded-[12px] text-tinta-3 hover:bg-fundo hover:text-tinta"
         >
           <svg aria-hidden="true" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z" />
@@ -233,7 +233,7 @@ function LinhaConversa({ conversa: c }: { conversa: Conversa }) {
       <a
         href={linkDaConversa(c.id)}
         onClick={aoClicarLink}
-        className="flex min-w-0 items-center gap-3 rounded-[12px] px-3 py-2.5 transition-colors duration-150 hover:bg-hover"
+        className="flex min-w-0 items-center gap-3 rounded-[12px] px-3 py-2.5 realce hover:bg-hover"
       >
         <span className="min-w-0 flex-1 truncate font-medium">{c.titulo}</span>
         {c.arquivadaEm !== null && <span className="flex-none rounded-full bg-ativo px-2 py-0.5 text-xs text-tinta-2">Arquivada</span>}
@@ -276,7 +276,7 @@ function Historico({ id, releitura }: { id: BotId; releitura: string }) {
           type="button"
           onClick={mais}
           disabled={p.maisCarregando}
-          className="pressiona self-start rounded-full bg-tinta/[0.06] px-4 py-2 font-medium transition-colors duration-150 hover:bg-tinta/10 disabled:cursor-progress disabled:text-tinta-3"
+          className="pressiona self-start rounded-full bg-tinta/[0.06] px-4 py-2 font-medium hover:bg-tinta/10 disabled:cursor-progress disabled:text-tinta-3"
         >
           {p.maisCarregando ? "Carregando…" : "Mostrar mais"}
         </button>

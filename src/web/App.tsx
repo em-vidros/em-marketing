@@ -78,8 +78,11 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   const [folha, setFolha] = useState(false);
   const [editando, setEditando] = useState<string | null>(null);
   const [barraOculta, setBarraOculta] = useState(lerBarraOculta);
+  // O ⌘\ esconde e mostra na hora; a mola fica para o clique, e não refaz o texto que está chegando a cada quadro.
+  const [barraPorTeclado, setBarraPorTeclado] = useState(false);
   const reduzir = useReducedMotion();
-  const mostrarBarra = useCallback((mostrar: boolean) => {
+  const mostrarBarra = useCallback((mostrar: boolean, teclado = false) => {
+    setBarraPorTeclado(teclado);
     setBarraOculta(!mostrar);
     try {
       localStorage.setItem(CHAVE_BARRA, mostrar ? "0" : "1");
@@ -178,7 +181,7 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
     },
     temDesfazer,
   );
-  useAtalho("barra-lateral", () => (matchMedia(DESKTOP).matches ? mostrarBarra(barraOculta) : setMenu((m) => !m)));
+  useAtalho("barra-lateral", () => (matchMedia(DESKTOP).matches ? mostrarBarra(barraOculta, true) : setMenu((m) => !m)));
   useAtalho("config-bot", () => navegar(`/bots/${rota.tela === "bot" ? rota.id : "chefe"}/config`));
   useAtalho("nova-conversa", novoPedido);
   useAtalho("ir-atividade", () => navegar("/atividade"));
@@ -233,7 +236,7 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
         <motion.div
           initial={false}
           animate={{ width: barraOculta ? 0 : "auto" }}
-          transition={reduzir ? { duration: 0 } : MOLA}
+          transition={reduzir || barraPorTeclado ? { duration: 0 } : MOLA}
           inert={barraOculta}
           className={`hidden flex-none overflow-hidden border-r md:block ${barraOculta ? "border-transparent" : "border-linha"}`}
         >

@@ -83,7 +83,7 @@ export function Entrar() {
         <button
           type="submit"
           aria-busy={enviando}
-          className="pressiona mt-1 cursor-pointer rounded-full bg-tinta px-[18px] py-3 text-[15px] font-medium text-sobre-tinta transition-opacity duration-150 aria-busy:opacity-60"
+          className="pressiona mt-1 cursor-pointer rounded-full bg-tinta px-[18px] py-3 text-[15px] font-medium text-sobre-tinta aria-busy:opacity-60"
         >
           {enviando ? "Entrando…" : "Entrar"}
         </button>

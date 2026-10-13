@@ -82,7 +82,7 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
           type="button"
           onClick={fechar}
           aria-label="Fechar tarefa"
-          className="pressiona ml-auto grid size-10 flex-none cursor-pointer place-items-center rounded-full text-tinta-2 transition-colors duration-150 hover:bg-hover"
+          className="pressiona ml-auto grid size-10 flex-none cursor-pointer place-items-center rounded-full text-tinta-2 hover:bg-hover"
         >
           <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
             <path d="M2 2l8 8M10 2l-8 8" />

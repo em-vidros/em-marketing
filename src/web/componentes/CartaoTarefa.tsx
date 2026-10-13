@@ -116,7 +116,7 @@ export function CartaoTarefa({
             aria-expanded={aberta}
             data-abre-tarefa={tarefaId}
             onClick={(e) => abrir(tarefaId, e.currentTarget)}
-            className="pressiona relative ml-auto flex-none cursor-pointer rounded-full bg-linha px-3 py-1.5 text-[13px] font-medium transition-colors duration-150 after:absolute after:-inset-1.5 hover:bg-linha-forte"
+            className="pressiona relative ml-auto flex-none cursor-pointer rounded-full bg-linha px-3 py-1.5 text-[13px] font-medium after:absolute after:-inset-1.5 hover:bg-linha-forte"
           >
             Ver trabalho
           </button>

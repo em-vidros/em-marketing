@@ -7,6 +7,7 @@ import { aoClicarLink } from "../rota";
 import { ariaDe, atalhoDoBot, ehMac } from "../teclado/atalhos";
 import type { Conversa } from "../tipos";
 import { Avatar } from "./Avatar";
+import { Expansivel } from "./Expansivel";
 import { type AcoesConversa, BotaoAcoes, MenuDeContexto } from "./menu/MenuConversa";
 import { Dica, Teclas } from "./menu/Teclas";
 
@@ -167,7 +168,7 @@ export function Barra({
             type="button"
             onClick={() => (novoPedido(), aoNavegar())}
             aria-keyshortcuts={ariaDe("nova-conversa", ehMac)}
-            className="pressiona flex h-10 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-full border border-linha-forte px-3 font-medium transition-colors duration-150 hover:bg-hover"
+            className="pressiona flex h-10 min-w-0 flex-1 cursor-pointer items-center gap-2.5 rounded-full border border-linha-forte px-3 font-medium hover:bg-hover"
           >
             <svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
               <path d="M11.5 2.5l2 2L7 11l-2.7.7L5 9z" />
@@ -184,7 +185,7 @@ export function Barra({
               onClick={abrirPaleta}
               aria-label="Buscar e comandos"
               aria-keyshortcuts={ariaDe("paleta", ehMac)}
-              className="pressiona grid size-10 flex-none cursor-pointer place-items-center rounded-full text-tinta-2 transition-colors duration-150 hover:bg-hover hover:text-tinta"
+              className="pressiona grid size-10 flex-none cursor-pointer place-items-center rounded-full text-tinta-2 hover:bg-hover hover:text-tinta"
             >
               <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6">
                 <circle cx="7" cy="7" r="4.75" />
@@ -247,7 +248,11 @@ export function Barra({
                   <path d="M3.5 2l3 3-3 3" />
                 </svg>
               </button>
-              {mostrarArquivadas && arquivadas.map((c) => <Linha key={c.id} c={c} tabulavel={c.id === alvoTab} {...lista} />)}
+              <Expansivel aberto={mostrarArquivadas} className="flex flex-col gap-px">
+                {arquivadas.map((c) => (
+                  <Linha key={c.id} c={c} tabulavel={c.id === alvoTab} {...lista} />
+                ))}
+              </Expansivel>
             </section>
           )}
         </div>

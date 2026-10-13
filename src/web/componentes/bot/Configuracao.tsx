@@ -394,7 +394,7 @@ function Versoes({
               type="button"
               onClick={() => pedir("padrao", padrao, "")}
               disabled={noPadrao && !temRascunho}
-              className="pressiona rounded-full bg-tinta/[0.06] px-3.5 py-1.5 font-medium transition-colors duration-150 hover:bg-tinta/10 disabled:cursor-not-allowed disabled:text-tinta-4 disabled:hover:bg-tinta/[0.06]"
+              className="pressiona rounded-full bg-tinta/[0.06] px-3.5 py-1.5 font-medium hover:bg-tinta/10 disabled:cursor-not-allowed disabled:text-tinta-4 disabled:hover:bg-tinta/[0.06]"
             >
               Restaurar padrão
             </button>
@@ -438,7 +438,7 @@ function Versoes({
                       type="button"
                       onClick={() => pedir(v.id, caminho, texto)}
                       aria-label={`Restaurar a versão de ${dataCurta.format(v.criadaEm)}`}
-                      className="pressiona rounded-full px-3 py-1.5 font-medium text-tinta-2 transition-colors duration-150 hover:bg-hover hover:text-tinta"
+                      className="pressiona rounded-full px-3 py-1.5 font-medium text-tinta-2 hover:bg-hover hover:text-tinta"
                     >
                       Restaurar
                     </button>
@@ -502,7 +502,7 @@ function Barra({ f, salvar, descartar }: { f: Pronto; salvar: () => void; descar
               type="button"
               onClick={descartar}
               aria-keyshortcuts="Escape"
-              className="pressiona flex flex-none items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-sobre-tinta/80 transition-colors duration-150 hover:bg-white/10 hover:text-sobre-tinta"
+              className="pressiona flex flex-none items-center gap-1.5 rounded-full px-3 py-1.5 font-medium text-sobre-tinta/80 hover:bg-white/10 hover:text-sobre-tinta"
             >
               Descartar <kbd className="hidden font-sans text-xs text-sobre-tinta/50 sm:inline">Esc</kbd>
             </button>

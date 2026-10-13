@@ -62,11 +62,41 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Resposta no toque, não no clique (apple-design). */
+/*
+ * Resposta no toque, não no clique (apple-design). A transição já inclui as cores: um
+ * transition-colors no mesmo elemento sobrescreveria esta e o aperto deixaria de animar.
+ */
 @utility pressiona {
-  transition: transform 100ms var(--ease-saida);
+  transition-property: scale, color, background-color, border-color, opacity;
+  transition-duration: 100ms, 150ms, 150ms, 150ms, 150ms;
+  transition-timing-function: var(--ease-saida), ease, ease, ease, ease;
   &:active:not(:disabled) {
-    transform: scale(0.97);
+    scale: 0.97;
+  }
+}
+
+/* Linhas e cartões grandes: o aperto quase não aparece, e o realce do hover entra na hora (como .linha). */
+@utility pressiona-leve {
+  transition-property: scale, color, background-color, border-color, opacity;
+  transition-duration: 100ms, 150ms, 150ms, 150ms, 150ms;
+  transition-timing-function: var(--ease-saida), ease, ease, ease, ease;
+  &:active:not(:disabled) {
+    scale: 0.99;
+  }
+  @media (hover: hover) {
+    &:hover {
+      transition-duration: 100ms, 0s, 0s, 0s, 150ms;
+    }
+  }
+}
+
+/* Linha sem aperto: o realce entra na hora e sai em 150 ms. */
+@utility realce {
+  transition: color 150ms ease, background-color 150ms ease;
+  @media (hover: hover) {
+    &:hover {
+      transition-duration: 0s;
+    }
   }
 }
 
@@ -107,10 +137,12 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .flutua,
-  .pressiona:active {
+  .flutua {
     animation: none;
-    transform: none;
+  }
+  .pressiona:active,
+  .pressiona-leve:active {
+    scale: none;
   }
   .brilho {
     animation: none;
@@ -161,10 +193,10 @@
   }
 }
 @utility surge {
-  animation: surge 300ms var(--ease-saida) both;
+  animation: surge 250ms var(--ease-saida) both;
 }
 @utility sobe {
-  animation: sobe 320ms var(--ease-saida) both;
+  animation: sobe 250ms var(--ease-saida) both;
 }
 
 /* Palavra nova do stream: sai do desfoque, como o rastro do StreamText. O Streamdown põe o nome em --sd-animation. */
@@ -175,7 +207,7 @@
   }
 }
 [data-sd-animate] {
-  animation: var(--sd-animation, sd-rastro) var(--sd-duration, 260ms) var(--sd-easing, ease-out) var(--sd-delay, 0ms) both;
+  animation: var(--sd-animation, sd-rastro) var(--sd-duration, 260ms) var(--sd-easing, ease-out) var(--sd-delay, 0ms) backwards;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -188,6 +220,10 @@
   }
   [data-sd-animate] {
     animation-name: aparece;
+  }
+  /* O Sonner corta toda a transição com movimento reduzido; o aviso ainda entra e sai num fade. */
+  [data-sonner-toaster] [data-sonner-toast] {
+    transition: opacity 200ms ease !important;
   }
 }
 

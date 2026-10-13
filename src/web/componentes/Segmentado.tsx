@@ -33,6 +33,8 @@ export function Segmentado<V extends string>({
   const reduzir = useReducedMotion();
   const pilula = useId();
   const botoes = useRef<(HTMLButtonElement | null)[]>([]);
+  // A pílula desliza no clique; pelas setas, troca na hora.
+  const porTeclado = useRef(false);
   const abas = tipo === "abas";
 
   function aoTeclar(e: KeyboardEvent) {
@@ -41,6 +43,7 @@ export function Segmentado<V extends string>({
     const destino = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: opcoes.length - 1 }[e.key];
     if (destino === undefined) return;
     e.preventDefault();
+    porTeclado.current = true;
     const j = (destino + opcoes.length) % opcoes.length;
     aoMudar(opcoes[j]!.valor);
     botoes.current[j]?.focus();
@@ -68,8 +71,11 @@ export function Segmentado<V extends string>({
             aria-pressed={abas ? undefined : ativa}
             aria-label={o.icone ? o.rotulo : undefined}
             tabIndex={abas && !ativa ? -1 : 0}
-            onClick={() => aoMudar(o.valor)}
-            className={`pressiona relative grid cursor-pointer place-items-center rounded-full transition-colors duration-150 ${
+            onClick={() => {
+              porTeclado.current = false;
+              aoMudar(o.valor);
+            }}
+            className={`pressiona relative grid cursor-pointer place-items-center rounded-full ${
               o.icone ? "h-7 w-8" : "px-3.5 py-[5px]"
             } ${ativa ? "font-medium text-sobre-tinta" : "text-tinta-2 hover:text-tinta"}`}
           >
@@ -77,7 +83,7 @@ export function Segmentado<V extends string>({
               <motion.span
                 layoutId={pilula}
                 aria-hidden="true"
-                transition={reduzir ? { duration: 0 } : MOLA}
+                transition={reduzir || porTeclado.current ? { duration: 0 } : MOLA}
                 className="absolute inset-0 rounded-full bg-tinta"
               />
             )}

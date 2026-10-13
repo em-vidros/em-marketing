@@ -98,7 +98,7 @@ function Sugestoes({ enviar }: { enviar: (t: string) => void }) {
             <button
               type="button"
               onClick={() => enviar(s)}
-              className="pressiona cursor-pointer rounded-full border border-linha-forte px-4 py-2 text-[13px] text-tinta-2 transition-colors duration-150 hover:bg-hover hover:text-tinta"
+              className="pressiona cursor-pointer rounded-full border border-linha-forte px-4 py-2 text-[13px] text-tinta-2 hover:bg-hover hover:text-tinta"
             >
               {s}
             </button>
@@ -172,11 +172,14 @@ function Chat({
 
   useEffect(() => aoMudar({ mensagens: chat.messages, respondendo }), [chat.messages, respondendo, aoMudar]);
 
-  function abrir(tarefaId: string, de: HTMLElement) {
+  const [porTeclado, setPorTeclado] = useState(false);
+  function abrir(tarefaId: string, de: HTMLElement, teclado = false) {
     origem.current = de;
+    setPorTeclado(teclado);
     setPainel((atual) => (atual === tarefaId ? null : tarefaId));
   }
-  const fechar = useCallback(() => {
+  const fechar = useCallback((teclado = false) => {
+    setPorTeclado(teclado);
     setPainel(null);
     origem.current?.focus();
   }, []);
@@ -226,10 +229,10 @@ function Chat({
   };
 
   useAtalho("painel-tarefas", () => {
-    if (painel) return fechar();
+    if (painel) return fechar(true);
     const ultima = [...delegacoes.keys()].at(-1);
     if (!ultima) return false;
-    abrir(ultima, document.querySelector<HTMLElement>(`[data-abre-tarefa="${CSS.escape(ultima)}"]`) ?? (document.activeElement as HTMLElement));
+    abrir(ultima, document.querySelector<HTMLElement>(`[data-abre-tarefa="${CSS.escape(ultima)}"]`) ?? (document.activeElement as HTMLElement), true);
   });
   useAtalho("focar-composer", () => document.getElementById("mensagem")?.focus());
 
@@ -304,8 +307,8 @@ function Chat({
           parar={() => chat.stop()}
         />
       </main>
-      <PainelLateral aberto={!!painel} rotulo="Tarefa" fechar={fechar}>
-        {painel && <PainelTarefa tarefaId={painel} parte={delegacoes.get(painel)} fechar={fechar} />}
+      <PainelLateral aberto={!!painel} rotulo="Tarefa" fechar={fechar} instantaneo={porTeclado}>
+        {painel && <PainelTarefa tarefaId={painel} parte={delegacoes.get(painel)} fechar={() => fechar()} />}
       </PainelLateral>
     </div>
   );

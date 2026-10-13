@@ -5,6 +5,8 @@ import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
 import { PainelLateral } from "../componentes/PainelLateral";
+import { Check } from "../componentes/Passos";
+import { Troca } from "../componentes/Troca";
 import { dia, FORMATO, PILARES, STATUS_POST } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
 import { aoClicarLink } from "../rota";
@@ -136,7 +138,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
                   type="button"
                   aria-pressed={pilar === p}
                   onClick={() => setPilar(p)}
-                  className="pressiona cursor-pointer rounded-full border border-linha-forte px-3.5 py-[5px] text-[13px] text-tinta-2 transition-colors duration-150 hover:bg-hover aria-pressed:border-tinta aria-pressed:bg-tinta aria-pressed:text-sobre-tinta"
+                  className="pressiona cursor-pointer rounded-full border border-linha-forte px-3.5 py-[5px] text-[13px] text-tinta-2 hover:bg-hover aria-pressed:border-tinta aria-pressed:bg-tinta aria-pressed:text-sobre-tinta"
                 >
                   {p ?? "Todas"}
                 </button>
@@ -188,7 +190,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
                     type="button"
                     aria-expanded={p.id === aberta}
                     onClick={(e) => abrir(p.id, e.currentTarget)}
-                    className="pressiona group flex w-full cursor-pointer flex-col gap-2 text-left"
+                    className="pressiona-leve group flex w-full cursor-pointer flex-col gap-2 text-left"
                   >
                     <Capa
                       url={p.artes[0] ?? null}
@@ -212,7 +214,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
                     type="button"
                     aria-expanded={p.id === aberta}
                     onClick={(e) => abrir(p.id, e.currentTarget)}
-                    className="pressiona grid w-full cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] px-3 py-2.5 text-left transition-colors duration-150 hover:bg-hover aria-expanded:bg-ativo"
+                    className="pressiona-leve grid w-full cursor-pointer grid-cols-[44px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] px-3 py-2.5 text-left hover:bg-hover aria-expanded:bg-ativo"
                   >
                     <Capa url={p.artes[0] ?? null} headline={null} className="w-11 rounded-md" />
                     <span className="flex min-w-0 flex-col">
@@ -315,13 +317,22 @@ function Legenda({ texto }: { texto: string | null }) {
         <button
           type="button"
           onClick={copiar}
-          className="pressiona -my-1 cursor-pointer rounded-full bg-linha px-3 py-1.5 text-[13px] font-medium hover:bg-linha-forte"
+          className="pressiona -my-1 flex cursor-pointer items-center rounded-full bg-linha px-3 py-1.5 text-[13px] font-medium hover:bg-linha-forte"
         >
-          Copiar
+          <Troca chave={copiada === "sim" ? "copiada" : "copiar"} className="flex items-center gap-1.5">
+            {copiada === "sim" ? (
+              <>
+                <Check />
+                Copiada
+              </>
+            ) : (
+              "Copiar"
+            )}
+          </Troca>
         </button>
       </div>
-      <p className="whitespace-pre-line text-pretty">{texto}</p>
-      <p role="status" className={`text-xs ${copiada === "erro" ? "text-erro" : "text-tinta-3"}`}>
+      <p className="whitespace-pre-line text-pretty [overflow-wrap:anywhere]">{texto}</p>
+      <p role="status" className={copiada === "erro" ? "text-xs text-erro" : "sr-only"}>
         {copiada === "sim" ? "Legenda copiada." : copiada === "erro" ? "Não deu para copiar. Selecione o texto e copie à mão." : ""}
       </p>
     </section>

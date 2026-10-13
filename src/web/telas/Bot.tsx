@@ -12,7 +12,6 @@ import { formulario, sujo, type DetalheBot } from "../componentes/bot/formulario
 import { Trabalho } from "../componentes/bot/Trabalho";
 import { Segmentado } from "../componentes/Segmentado";
 import type { EstadoBot } from "../equipe";
-import { MOLA_REDUZIDA } from "../movimento";
 import { aoClicarLink, navegar } from "../rota";
 import type { BotId, ResumoTarefa } from "../tipos";
 
@@ -122,7 +121,7 @@ function PaginaDoBot({ id, aba, abrirMenu }: { id: BotId; aba: Aba; abrirMenu: (
           aria-label={ABAS.find((a) => a.valor === aba)!.rotulo}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={MOLA_REDUZIDA}
+          transition={{ duration: 0.12, ease: "easeOut" }}
           className={aba === "config" ? "grid gap-8 lg:grid-cols-[176px_minmax(0,1fr)]" : "pb-12"}
         >
           {aba === "trabalho" ? (

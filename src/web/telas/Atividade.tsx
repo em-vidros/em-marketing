@@ -8,7 +8,6 @@ import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
 import { dataCurta, dataEHora, dia, hora, MIDIA } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
-import { MOLA_REDUZIDA } from "../movimento";
 import { aoClicarLink } from "../rota";
 import { passosDe } from "../tipos";
 
@@ -42,7 +41,7 @@ export function Atividade({ abrirMenu }: { abrirMenu: () => void }) {
           aria-label={ABAS.find((a) => a.valor === aba)!.rotulo}
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={MOLA_REDUZIDA}
+          transition={{ duration: 0.12, ease: "easeOut" }}
           className="flex flex-col gap-8"
         >
           {aba === "agora" ? <PainelAgora /> : aba === "agendado" ? <PainelAgendado /> : <PainelHistorico />}
@@ -126,7 +125,7 @@ function LinhaTrabalhando({ tarefa: t, agora }: { tarefa: TarefaEmCurso; agora: 
     <a
       href={linkDaConversa(t.conversaId)}
       onClick={aoClicarLink}
-      className="pressiona grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] bg-hover p-3 transition-colors duration-150 hover:bg-ativo"
+      className="pressiona-leve grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] bg-hover p-3 hover:bg-ativo"
     >
       <Avatar bot={t.botId} tamanho={28} estado={t.status === "trabalhando" ? "trabalhando" : "parado"} anel="var(--color-hover)" />
       <span className="flex min-w-0 flex-col">
@@ -156,7 +155,7 @@ function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
     <a
       href={linkDaConversa(a.conversaId)}
       onClick={aoClicarLink}
-      className="pressiona flex flex-wrap items-center gap-3.5 rounded-[18px] border border-linha-forte bg-superficie px-4 py-3.5 transition-colors duration-150 hover:bg-fundo"
+      className="pressiona-leve flex flex-wrap items-center gap-3.5 rounded-[18px] border border-linha-forte bg-superficie px-4 py-3.5 hover:bg-fundo"
     >
       <Capa url={a.capa} headline={null} className="w-[52px] rounded-lg" />
       <span className="flex min-w-0 flex-[1_1_240px] flex-col">
@@ -175,7 +174,7 @@ function LinhaFeita({ tarefa: t, quando }: { tarefa: TarefaFeita; quando: string
     <a
       href={linkDaConversa(t.conversaId)}
       onClick={aoClicarLink}
-      className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] px-3 py-2.5 text-tinta-2 transition-colors duration-150 hover:bg-hover"
+      className="grid grid-cols-[28px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] px-3 py-2.5 text-tinta-2 realce hover:bg-hover"
     >
       <Avatar bot={t.botId} tamanho={28} />
       <span className="truncate">
@@ -252,7 +251,7 @@ function LinhaDePeca({
   );
   const classe = "grid grid-cols-[40px_minmax(0,1fr)_auto] items-center gap-3 rounded-[14px] px-3 py-2.5";
   return href ? (
-    <a href={href} target="_blank" rel="noreferrer" className={`${classe} transition-colors duration-150 hover:bg-hover`}>
+    <a href={href} target="_blank" rel="noreferrer" className={`${classe} realce hover:bg-hover`}>
       {corpo}
     </a>
   ) : (

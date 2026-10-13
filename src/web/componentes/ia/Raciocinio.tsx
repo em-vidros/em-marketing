@@ -3,9 +3,8 @@
  * Variante Reasoning: cabeçalho com brilho enquanto pensa, "Pensou por Ns" ao terminar, e o
  * raciocínio num trilho que abre sozinho durante o stream e fecha quando assenta.
  */
-import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
-import { MOLA, MOLA_REDUZIDA } from "../../movimento";
+import { Expansivel } from "../Expansivel";
 import { Markdown } from "../Markdown";
 
 /** Quanto durou o stream, medido aqui. Um raciocínio que já chegou pronto (recarga) não tem duração. */
@@ -54,11 +53,9 @@ export function Chevron({ aberto, className = "" }: { aberto: boolean; className
 }
 
 export function Raciocinio({ texto, ativo }: { texto: string; ativo: boolean }) {
-  const reduzir = useReducedMotion();
   const duracao = useDuracao(ativo);
   const [escolha, setEscolha] = useState<boolean | null>(null);
   const aberto = escolha ?? ativo;
-  const fechado = reduzir ? { opacity: 0 } : { opacity: 0, clipPath: "inset(0 0 100% 0)" };
 
   return (
     <div className="flex flex-col text-sm">
@@ -80,21 +77,10 @@ export function Raciocinio({ texto, ativo }: { texto: string; ativo: boolean }) 
         </span>
         <Chevron aberto={aberto} />
       </button>
-      <AnimatePresence initial={false}>
-        {aberto && texto.trim() && (
-          <motion.div
-            key="trilho"
-            initial={fechado}
-            animate={reduzir ? { opacity: 1 } : { opacity: 1, clipPath: "inset(0 0 0% 0)" }}
-            exit={fechado}
-            transition={reduzir ? MOLA_REDUZIDA : MOLA}
-            className="relative mt-1 ml-[5px] pl-4"
-          >
-            <span aria-hidden="true" className="absolute top-0 bottom-1 left-[3px] w-px bg-linha-forte" />
-            <Markdown texto={texto} className="gap-2 py-1 text-[13px]/relaxed text-tinta-2" />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Expansivel aberto={aberto && !!texto.trim()} className="relative ml-[5px] pt-1 pl-4">
+        <span aria-hidden="true" className="absolute top-1 bottom-1 left-[3px] w-px bg-linha-forte" />
+        <Markdown texto={texto} className="gap-2 py-1 text-[13px]/relaxed text-tinta-2" />
+      </Expansivel>
     </div>
   );
 }

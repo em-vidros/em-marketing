@@ -85,7 +85,7 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
             disabled={respondida}
             onClick={() => responder(parte.approval.id, false)}
             aria-keyshortcuts={ariaDe("recusar", ehMac)}
-            className="pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full bg-linha px-4 text-[13px] font-medium transition-colors duration-150 hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
+            className="pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full bg-linha px-4 text-[13px] font-medium hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
           >
             Recusar
             <span className="hidden group-focus-within/aprovacao:inline-flex">
