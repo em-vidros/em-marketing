@@ -4,48 +4,69 @@ import { useApi } from "../api";
 import { BOTS } from "../bots";
 import { especialistaDa, imagensEm, passosDe, type ParteDelegacao, type Tarefa } from "../tipos";
 import { Avatar } from "./Avatar";
+import { atividadeDe } from "./ia/atividade";
+import { Pensando } from "./ia/Pensando";
+import { Raciocinio } from "./ia/Raciocinio";
 import { Markdown } from "./Markdown";
 import { Passos } from "./Passos";
 
 const hora = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
-/** Uma mensagem do especialista: texto, passos e as artes que as tools devolveram. */
-function Transcricao({ mensagens }: { mensagens: readonly UIMessage[] }) {
-  return mensagens.map((m) =>
-    m.role === "user" ? (
-      <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line text-[#3a3836]">
-        {m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}
-      </div>
-    ) : (
-      <div key={m.id} className="flex flex-col gap-3.5">
-        {m.parts.map((p, i) => {
-          if (p.type === "text") return p.text.trim() ? <Markdown key={i} texto={p.text} className="gap-2.5 text-[13px]/relaxed" /> : null;
-          const [passo] = passosDe({ ...m, parts: [p] });
-          if (!passo) return null;
-          const imagens = passo.estado === "feito" ? imagensEm(passo.saida) : [];
-          return (
-            <div key={i} className="flex flex-col gap-2 text-[13px]">
-              <Passos passos={[passo]} />
-              {imagens.length > 0 && (
-                <div className="grid grid-cols-3 gap-2">
-                  {imagens.map((src, n) => (
-                    <a
-                      key={src}
-                      href={src}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="block overflow-hidden rounded-item outline-1 -outline-offset-1 outline-linha"
-                    >
-                      <img src={src} alt={`Arte ${n + 1}`} loading="lazy" className="aspect-[4/5] w-full bg-ativo object-cover" />
-                    </a>
-                  ))}
+/**
+ * A conversa do especialista: texto, raciocínio, passos e as artes que as tools devolveram.
+ * `aoVivo` é a mensagem que ainda está chegando; ela ganha o cursor. `noAr`: o especialista está rodando.
+ */
+function Transcricao({ mensagens, aoVivo, noAr }: { mensagens: readonly UIMessage[]; aoVivo: UIMessage | null; noAr: boolean }) {
+  const pensando = noAr && atividadeDe(aoVivo, true).tipo === "pensando";
+  return (
+    <>
+      {mensagens.map((m) =>
+        m.role === "user" ? (
+          <div key={m.id} className="max-w-[88%] self-end rounded-[18px] bg-ativo px-3.5 py-2 text-[13px] whitespace-pre-line text-[#3a3836]">
+            {m.parts.map((p) => (p.type === "text" ? p.text : "")).join("")}
+          </div>
+        ) : (
+          <div key={m.id} className="flex flex-col gap-3.5">
+            {m.parts.map((p, i) => {
+              if (p.type === "reasoning") return <Raciocinio key={i} texto={p.text} ativo={m === aoVivo && p.state === "streaming"} />;
+              if (p.type === "text")
+                return p.text.trim() ? (
+                  <Markdown
+                    key={i}
+                    texto={p.text}
+                    digitando={m === aoVivo && p.state === "streaming"}
+                    className="gap-2.5 text-[13px]/relaxed"
+                  />
+                ) : null;
+              const [passo] = passosDe({ ...m, parts: [p] });
+              if (!passo) return null;
+              const imagens = passo.estado === "feito" ? imagensEm(passo.saida) : [];
+              return (
+                <div key={i} className="flex flex-col gap-2">
+                  <Passos passos={[passo]} />
+                  {imagens.length > 0 && (
+                    <div className="grid grid-cols-3 gap-2">
+                      {imagens.map((src, n) => (
+                        <a
+                          key={src}
+                          href={src}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block overflow-hidden rounded-item outline-1 -outline-offset-1 outline-black/10"
+                        >
+                          <img src={src} alt={`Arte ${n + 1}`} loading="lazy" className="aspect-[4/5] w-full bg-ativo object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    ),
+              );
+            })}
+          </div>
+        ),
+      )}
+      {pensando && <Pensando />}
+    </>
   );
 }
 
@@ -96,7 +117,7 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
         {carga.estado === "erro" && !aoVivo ? (
           <p className="text-[13px] text-tinta-2">Não deu para abrir esta tarefa. {carga.erro.message}</p>
         ) : (
-          <Transcricao mensagens={mensagens} />
+          <Transcricao mensagens={mensagens} aoVivo={aoVivo} noAr={status === "trabalhando"} />
         )}
         {tarefa?.status === "falhou" && tarefa.erro && <p className="text-[13px] text-erro">{tarefa.erro}</p>}
       </div>

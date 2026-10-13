@@ -8,6 +8,9 @@ import { BotaoMenu } from "../componentes/BotaoMenu";
 import { CartaoAprovacao } from "../componentes/CartaoAprovacao";
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
+import { atividadeDe } from "../componentes/ia/atividade";
+import { Pensando } from "../componentes/ia/Pensando";
+import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
 import { PainelTarefa } from "../componentes/PainelTarefa";
 import { Passos } from "../componentes/Passos";
@@ -68,7 +71,7 @@ function Cabecalho({ abrirMenu, estadoDoChefe, titulo }: Pick<Props, "abrirMenu"
       <Avatar bot="chefe" tamanho={34} estado={estadoDoChefe.tipo} anel="var(--color-fundo)" />
       <span className="flex min-w-0 flex-col">
         <span className="leading-tight font-semibold">Chefe</span>
-        <span aria-live="polite" className="truncate text-xs text-tinta-3">
+        <span aria-live="polite" className={`truncate text-xs ${estadoDoChefe.tipo === "trabalhando" ? "brilho" : "text-tinta-3"}`}>
           {estadoDoChefe.tipo === "parado" ? (titulo ?? "Recebe o pedido e divide o trabalho") : estadoDoChefe.texto}
         </span>
       </span>
@@ -188,7 +191,8 @@ function Chat({
 
   const erro = chat.error ? lerErro(chat.error) : null;
   const ultima = chat.messages.at(-1);
-  const pensando = chat.status === "submitted" && ultima?.role === "user";
+  const turno = ultima?.role === "assistant" ? ultima : null;
+  const pensando = respondendo && atividadeDe(turno, true).tipo === "pensando";
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -215,7 +219,7 @@ function Chat({
                     <ParteDoChefe
                       key={i}
                       parte={p}
-                      digitando={respondendo && m === ultima && i === m.parts.length - 1}
+                      noAr={respondendo && m === ultima}
                       painel={painel}
                       abrir={abrir}
                       responder={responder}
@@ -224,11 +228,7 @@ function Chat({
                 )}
               </motion.div>
             ))}
-            {pensando && (
-              <p className="brilho self-start text-sm" role="status">
-                Pensando
-              </p>
-            )}
+            {pensando && <Pensando />}
             {erro && (
               <div
                 role="alert"
@@ -296,19 +296,23 @@ function Painel({ children, reduzir, fechar }: { children: React.ReactNode; redu
 
 function ParteDoChefe({
   parte,
-  digitando,
+  noAr,
   painel,
   abrir,
   responder,
 }: {
   parte: Parte;
-  digitando: boolean;
+  /** A mensagem desta parte ainda está chegando. */
+  noAr: boolean;
   painel: string | null;
   abrir: (tarefaId: string, origem: HTMLElement) => void;
   responder: (id: string, aprovado: boolean) => void;
 }) {
-  if (parte.type === "text")
+  if (parte.type === "reasoning") return <Raciocinio texto={parte.text} ativo={noAr && parte.state === "streaming"} />;
+  if (parte.type === "text") {
+    const digitando = noAr && parte.state === "streaming";
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-[#1a1a1a]" /> : null;
+  }
   if (ehDelegacao(parte)) return <CartaoTarefa parte={parte as ParteDelegacao} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
   if (ehAprovacao(parte)) return <CartaoAprovacao parte={parte} responder={responder} />;
   const [passo] = passosDe({ id: "", role: "assistant", parts: [parte] });

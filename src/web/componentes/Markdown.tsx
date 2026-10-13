@@ -52,17 +52,20 @@ const COMPONENTES: Components = {
   img: () => null,
 };
 
-/** O cursor de digitação no fim do último bloco; numa lista, no fim do último item. */
+/** O cursor do StreamText do Beautiful UI (MIT, Shane Levine): 2px, 1.05em, firme enquanto o texto chega. No fim do último bloco; numa lista, no fim do último item. */
 const CURSOR = [
-  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:ml-0.5",
+  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:ml-[1.5px]",
   "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:inline-block",
-  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:h-[1em]",
+  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:h-[1.05em]",
   "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:w-0.5",
-  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:translate-y-[0.15em]",
-  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:rounded-full",
+  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:align-text-bottom",
+  "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:rounded-[1px]",
   "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:bg-tinta",
   "[&>:last-child:not(ol,ul),&>:last-child>li:last-child]:after:content-['']",
 ].join(" ");
+
+/** Cada palavra nova sai do desfoque (sd-rastro, em estilo.css), como o rastro do StreamText. */
+const RASTRO = { animation: "rastro", sep: "word", duration: 260, easing: "cubic-bezier(0.23, 1, 0.32, 1)" } as const;
 
 /** Texto de um bot em Markdown. Aguenta o texto pela metade do streaming: negrito e código abertos já saem formatados. */
 export function Markdown({ texto, digitando = false, className = "" }: { texto: string; digitando?: boolean; className?: string }) {
@@ -72,6 +75,7 @@ export function Markdown({ texto, digitando = false, className = "" }: { texto: 
       components={COMPONENTES}
       rehypePlugins={REHYPE}
       controls={false}
+      animated={RASTRO}
       isAnimating={digitando}
     >
       {texto}

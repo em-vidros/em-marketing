@@ -8,5 +8,7 @@ test("HTML do modelo sai como texto, e o negrito ainda aberto no streaming já s
   expect(html).not.toContain("<img");
   expect(html).not.toContain('href="javascript:');
   expect(html).toContain("&lt;img");
-  expect(html).toMatch(/<strong[^>]*>headline em curso<\/strong>/);
+  // No stream, cada palavra vem num span próprio para o rastro; o que importa é o texto dentro do negrito.
+  const negrito = html.match(/<strong[^>]*>(.*?)<\/strong>/)?.[1]?.replace(/<[^>]+>/g, "");
+  expect(negrito).toBe("headline em curso");
 });
