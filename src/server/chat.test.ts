@@ -18,7 +18,7 @@ const turnoDoModelo = (chunks: Chunk[], unified: "stop" | "tool-calls") => ({
 });
 
 const usuario = { id: "usuario-do-chat", email: "ana@emvidros.com.br", nome: "Ana" };
-const AGENDAR = { publish_at: "2026-10-15T18:00:00-03:00", media_type: "IMAGE" };
+const AGENDAR = { publish_at: "2099-10-15T18:00:00-03:00", media_type: "IMAGE" };
 
 /** O Chefe pede para agendar no primeiro passo; depois só responde. */
 const chefeQueAgenda = () => {

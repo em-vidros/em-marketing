@@ -60,7 +60,9 @@ export function cancelQueueItem(id: number): boolean {
   return r.changes > 0;
 }
 
-export function enqueue(postId: number, mediaType: "IMAGE" | "STORIES", publishAtIso: string) {
-  db.query("INSERT INTO queue (post_id, media_type, publish_at) VALUES (?, ?, ?)").run(postId, mediaType, publishAtIso);
+/** publishAt no formato do SQLite, "AAAA-MM-DD HH:MM:SS" em UTC (db.sqliteDe), que o tick compara com datetime('now'). Devolve o id da fila. */
+export function enqueue(postId: number, mediaType: "IMAGE" | "STORIES", publishAt: string): number {
+  const { id } = db.query("INSERT INTO queue (post_id, media_type, publish_at) VALUES (?, ?, ?) RETURNING id").get(postId, mediaType, publishAt) as { id: number };
   db.query("UPDATE posts SET status = 'scheduled' WHERE id = ?").run(postId);
+  return id;
 }

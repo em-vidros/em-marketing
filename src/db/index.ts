@@ -117,6 +117,24 @@ CREATE TABLE IF NOT EXISTS fotos (
   usos INTEGER DEFAULT 0,
   created_at TEXT DEFAULT (datetime('now'))
 );
+
+-- A ideia do que postar num dia, antes de existir post (.specs/project/CALENDARIO.md).
+-- Da equipe, como a fila: todo usuário vê e edita. conversa_id é a conversa com o Chefe
+-- aberta por "Criar com o Chefe"; sem REFERENCES porque a lixeira remove conversas de vez.
+CREATE TABLE IF NOT EXISTS pautas (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  dia TEXT NOT NULL,              -- AAAA-MM-DD em America/Sao_Paulo
+  hora TEXT,                      -- HH:MM; NULL = o dia inteiro
+  titulo TEXT NOT NULL,
+  pilar TEXT CHECK (pilar IN ('PROVA','AUTORIDADE','GENTE','MARCA')),
+  nota TEXT NOT NULL DEFAULT '',
+  conversa_id TEXT,
+  criada_por TEXT NOT NULL,       -- id do usuário (better-auth)
+  criada_em INTEGER NOT NULL,     -- epoch ms
+  atualizada_em INTEGER NOT NULL,
+  apagada_em INTEGER              -- epoch ms; NULL = viva
+);
+CREATE INDEX IF NOT EXISTS pautas_dia ON pautas(dia);
 `);
 
 // Migrações para bancos criados antes destas colunas.
@@ -191,6 +209,12 @@ export const headlineDo = (coluna: string | null): string | null => (coluna ? (J
 
 /** "2026-10-15 21:00:00" (UTC, sem fuso, como o SQLite grava) para ISO com Z. */
 export const isoDoSqlite = (s: string) => `${s.replace(" ", "T")}Z`;
+
+/**
+ * Epoch ms para o formato de queue.publish_at e publicacoes.published_at. O scheduler compara
+ * publish_at como texto com datetime('now'), então outro formato (o ISO com T e Z) quebraria a comparação.
+ */
+export const sqliteDe = (ms: number) => new Date(ms).toISOString().replace("T", " ").slice(0, 19);
 
 /** Uma peça da Biblioteca. `conversaId` é a conversa do usuário que trabalhou nela, se houver. */
 export interface Peca {

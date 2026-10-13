@@ -284,6 +284,12 @@ export function postDaConversa(conversaId: string): EtapaPost | null {
   return row ? lerLinha(row) : null;
 }
 
+/** O post pelo id, lido como a conversa lê o dela. É por onde a tela de calendário agenda. */
+export function postPorId(postId: number): EtapaPost | null {
+  const row = db.query("SELECT * FROM posts WHERE id = ?").get(postId) as PostRow | null;
+  return row ? lerLinha(row) : null;
+}
+
 export function abrirConversa(conversaId: string, botId: string): void {
   db.query("INSERT INTO conversas (id, bot_id) VALUES (?, ?) ON CONFLICT(id) DO NOTHING").run(conversaId, botId);
 }

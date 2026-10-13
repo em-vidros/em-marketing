@@ -96,3 +96,15 @@ export function proximasDatas(dias = 45): { emDias: number; ocasiao: string; por
   }
   return achados;
 }
+
+/** Datas do §12.4 entre dois dias AAAA-MM-DD, inclusive, em ordem. Para o calendário da tela. */
+export function datasEntre(de: string, ate: string): { dia: string; ocasiao: string }[] {
+  const porDia = [...SEEDS].sort((a, b) => a.mmdd.localeCompare(b.mmdd));
+  const achadas: { dia: string; ocasiao: string }[] = [];
+  for (let ano = Number(de.slice(0, 4)); ano <= Number(ate.slice(0, 4)); ano++)
+    for (const s of porDia) {
+      const dia = `${ano}-${s.mmdd}`;
+      if (dia >= de && dia <= ate) achadas.push({ dia, ocasiao: s.ocasiao });
+    }
+  return achadas;
+}

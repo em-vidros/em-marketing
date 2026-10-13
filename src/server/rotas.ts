@@ -3,6 +3,19 @@ import { safeValidateUIMessages } from "ai";
 import type { BunRequest } from "bun";
 import { z } from "zod";
 import { BOTS, ehBotId, type BotId } from "../agent/bots";
+import {
+  apagarPauta,
+  agendadoPorId,
+  conversaDaPauta,
+  criarPauta,
+  diasNaJanela,
+  ehDia,
+  itensDoCalendario,
+  JANELA_MAXIMA,
+  mudarPauta,
+  restaurarPauta,
+  type Dia,
+} from "../agent/calendario";
 import { configDoBot, detalheDoBot, gravarVersao, restaurarPadrao, restaurarVersao, versaoDoBot, versoesDoBot } from "../agent/config";
 import {
   apagarConversa,
@@ -15,7 +28,9 @@ import {
   restaurarMensagens,
   type Recusa,
 } from "../agent/conversas";
+import { agendar, cancelar, postsProntos, reagendar, restaurar, type RecusaDaFila } from "../agent/fila";
 import { ehModelId, modelos, problemaDoModelo, type ModelId } from "../agent/models";
+import { postPorId } from "../agent/post";
 import { pegarTarefa, tarefasAtivas, tarefasDaConversa, trabalhoDoBot } from "../agent/tarefas";
 import {
   agendamentos,
@@ -29,6 +44,7 @@ import {
   type Agora,
   type Historico,
 } from "../db";
+import { PILARES } from "../domain/art/pipeline";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
 
@@ -66,6 +82,10 @@ async function lerCorpo<S extends z.ZodType>(req: Request, schema: S): Promise<{
 }
 
 const recusar = ({ status, erro }: Recusa) => Response.json({ erro }, { status });
+const recusarNaFila = ({ status, motivo }: RecusaDaFila) => Response.json({ erro: motivo }, { status });
+
+/** O :id numérico da rota; qualquer outra coisa é um id que não existe. */
+const idDa = (s: string) => (/^[1-9]\d{0,15}$/.test(s) ? Number(s) : null);
 
 const algumCampo = (o: object) => Object.values(o).some((v) => v !== undefined);
 
@@ -113,6 +133,65 @@ const Pagina = z.object({
   offset: z.coerce.number({ error: "offset precisa ser um número." }).int("offset precisa ser inteiro.").min(0, "offset não pode ser negativo.").default(0),
   limite: z.coerce.number({ error: "limite precisa ser um número." }).int("limite precisa ser inteiro.").min(1, "limite mínimo é 1.").max(100, "limite máximo é 100.").default(30),
 });
+
+const dia = (campo: string) =>
+  z.string({ error: `${campo} precisa ser uma data AAAA-MM-DD.` }).transform((s, ctx): Dia => {
+    if (ehDia(s)) return s;
+    ctx.addIssue({ code: "custom", message: `${campo} não é uma data válida (AAAA-MM-DD).` });
+    return z.NEVER;
+  });
+
+/** GET /api/calendario?de=AAAA-MM-DD&ate=AAAA-MM-DD */
+const Janela = z
+  .object({ de: dia("de"), ate: dia("ate") })
+  .refine(({ de, ate }) => de <= ate, "de precisa vir antes de ate.")
+  .refine(({ de, ate }) => diasNaJanela(de, ate) <= JANELA_MAXIMA, `A janela passa de ${JANELA_MAXIMA} dias.`);
+
+const CamposPauta = {
+  dia: dia("A data"),
+  hora: z
+    .string({ error: "A hora precisa ser texto HH:MM ou null." })
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Hora inválida. Use HH:MM, de 00:00 a 23:59.")
+    .nullable(),
+  titulo: texto("O título", 200),
+  pilar: z.enum(PILARES, { error: "Pilar inválido. Use PROVA, AUTORIDADE, GENTE, MARCA ou null." }).nullable(),
+  nota: z.string({ error: "A nota precisa ser texto." }).trim().max(5000, "A nota passa de 5.000 caracteres."),
+};
+
+/** POST /api/pautas */
+const NovaPauta = z.object(
+  { ...CamposPauta, hora: CamposPauta.hora.default(null), pilar: CamposPauta.pilar.default(null), nota: CamposPauta.nota.default("") },
+  { error: "Mande um objeto JSON." },
+);
+
+/** PATCH /api/pautas/:id. Só os campos mandados mudam. */
+const EdicaoPauta = z
+  .object(
+    {
+      dia: CamposPauta.dia.optional(),
+      hora: CamposPauta.hora.optional(),
+      titulo: CamposPauta.titulo.optional(),
+      pilar: CamposPauta.pilar.optional(),
+      nota: CamposPauta.nota.optional(),
+    },
+    { error: "Mande um objeto JSON." },
+  )
+  .refine(algumCampo, "Mande ao menos um campo para mudar.");
+
+const PublicaEm = z.number({ error: "publicaEm precisa ser um número em epoch ms." }).int("publicaEm precisa ser inteiro, em epoch ms.");
+
+/** POST /api/fila */
+const NovoAgendamento = z.object(
+  {
+    postId: z.number({ error: "postId precisa ser um número." }).int("postId precisa ser inteiro."),
+    midia: z.enum(["IMAGE", "STORIES"], { error: "midia precisa ser IMAGE ou STORIES." }),
+    publicaEm: PublicaEm,
+  },
+  { error: "Mande um objeto JSON." },
+);
+
+/** PATCH /api/fila/:id */
+const Reagendamento = z.object({ publicaEm: PublicaEm }, { error: "Mande um objeto JSON." });
 
 const BOT_IDS = Object.keys(BOTS) as BotId[];
 
@@ -219,6 +298,83 @@ export function rotas(opcoes: OpcoesChat = {}) {
       }),
     },
     "/api/pecas": { GET: comSessao((_, u) => Response.json(pecasDoUsuario(u.id))) },
+    "/api/calendario": {
+      GET: comSessao((req, u) => {
+        const janela = Janela.safeParse(Object.fromEntries(new URL(req.url).searchParams));
+        if (!janela.success) return invalido(janela.error.issues[0]?.message ?? "Janela inválida.");
+        return Response.json(itensDoCalendario(u.id, janela.data.de, janela.data.ate));
+      }),
+    },
+    "/api/pautas": {
+      POST: comSessao(async (req, u) => {
+        const corpo = await lerCorpo(req, NovaPauta);
+        return "resposta" in corpo ? corpo.resposta : Response.json(criarPauta(u.id, corpo.dados), { status: 201 });
+      }),
+    },
+    "/api/pautas/:id": {
+      PATCH: comSessao<"/api/pautas/:id">(async (req, u) => {
+        const id = idDa(req.params.id);
+        if (id === null) return naoEncontrado();
+        const corpo = await lerCorpo(req, EdicaoPauta);
+        if ("resposta" in corpo) return corpo.resposta;
+        const pauta = mudarPauta(u.id, id, corpo.dados);
+        return pauta ? Response.json(pauta) : naoEncontrado();
+      }),
+      DELETE: comSessao<"/api/pautas/:id">((req) => {
+        const id = idDa(req.params.id);
+        return id !== null && apagarPauta(id) ? new Response(null, { status: 204 }) : naoEncontrado();
+      }),
+    },
+    "/api/pautas/:id/restaurar": {
+      POST: comSessao<"/api/pautas/:id/restaurar">((req, u) => {
+        const id = idDa(req.params.id);
+        const pauta = id === null ? null : restaurarPauta(u.id, id);
+        return pauta ? Response.json(pauta) : naoEncontrado();
+      }),
+    },
+    "/api/pautas/:id/conversa": {
+      POST: comSessao<"/api/pautas/:id/conversa">((req, u) => {
+        const id = idDa(req.params.id);
+        const conversa = id === null ? null : conversaDaPauta(u.id, id);
+        return conversa ? Response.json(conversa) : naoEncontrado();
+      }),
+    },
+    "/api/posts/prontos": { GET: comSessao(() => Response.json(postsProntos())) },
+    "/api/fila": {
+      POST: comSessao(async (req) => {
+        const corpo = await lerCorpo(req, NovoAgendamento);
+        if ("resposta" in corpo) return corpo.resposta;
+        const { postId, midia, publicaEm } = corpo.dados;
+        const post = postPorId(postId);
+        if (!post) return Response.json({ erro: "Post não encontrado." }, { status: 404 });
+        const r = agendar(post, midia, publicaEm);
+        return r.ok ? Response.json(agendadoPorId(r.filaId), { status: 201 }) : recusarNaFila(r);
+      }),
+    },
+    "/api/fila/:id": {
+      PATCH: comSessao<"/api/fila/:id">(async (req) => {
+        const id = idDa(req.params.id);
+        if (id === null) return naoEncontrado();
+        const corpo = await lerCorpo(req, Reagendamento);
+        if ("resposta" in corpo) return corpo.resposta;
+        const r = reagendar(id, corpo.dados.publicaEm);
+        return r.ok ? Response.json({ item: r.item, anterior: r.anterior }) : recusarNaFila(r);
+      }),
+      DELETE: comSessao<"/api/fila/:id">((req) => {
+        const id = idDa(req.params.id);
+        if (id === null) return naoEncontrado();
+        const r = cancelar(id);
+        return r.ok ? new Response(null, { status: 204 }) : recusarNaFila(r);
+      }),
+    },
+    "/api/fila/:id/restaurar": {
+      POST: comSessao<"/api/fila/:id/restaurar">((req) => {
+        const id = idDa(req.params.id);
+        if (id === null) return naoEncontrado();
+        const r = restaurar(id);
+        return r.ok ? Response.json(r.item) : recusarNaFila(r);
+      }),
+    },
     "/api/*": naoEncontrado,
 
     // Público de propósito: a Meta baixa a imagem por esta URL na hora de publicar, sem sessão.

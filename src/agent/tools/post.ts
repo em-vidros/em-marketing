@@ -7,7 +7,6 @@ import { temErro } from "../../domain/brand/validate";
 import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
 import { attachJpeg, commentOnIssue, createIssue, moveIssueState } from "../../domain/linear";
-import { enqueue } from "../../domain/scheduler";
 import {
   criarPost,
   exigir,
@@ -20,6 +19,7 @@ import {
   type Evento,
   type EtapaPost,
 } from "../post";
+import { agendar } from "../fila";
 import { fotoPublica } from "./fotos";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
@@ -196,10 +196,9 @@ export function toolsDePost(conversaId: string) {
         media_type: mediaType,
       }),
       execute: async ({ publish_at, media_type }) => {
-        const r = midiaParaPublicar(atual(), media_type);
-        if (!r.ok) return r;
-        enqueue(r.post.postId, media_type, new Date(publish_at).toISOString().replace("T", " ").slice(0, 19));
-        return { ok: true as const, postId: r.post.postId, mediaType: media_type, publishAt: publish_at };
+        const r = agendar(atual(), media_type, Date.parse(publish_at));
+        if (!r.ok) return { ok: false as const, motivo: r.motivo };
+        return { ok: true as const, postId: r.postId, mediaType: media_type, publishAt: publish_at };
       },
     }),
 
