@@ -6,9 +6,9 @@
 // Usa buildPrompt/stylesFor do próprio pipeline em vez de reimplementá-los: um
 // gate que testa uma cópia do código não testa o código.
 import { mkdirSync, writeFileSync } from "node:fs";
-import { generateArt, type Formato } from "../src/art/generate";
-import { buildPrompt, stylesFor, type Brief } from "../src/art/pipeline";
-import { validarTextoDaArte, formatarProblemas } from "../src/brand/validate";
+import { generateArt, type Formato } from "../src/domain/art/generate";
+import { buildPrompt, stylesFor, type Brief } from "../src/domain/art/pipeline";
+import { validarTextoDaArte, formatarProblemas } from "../src/domain/brand/validate";
 
 // Exemplar do banco de legendas do §10.4, pilar MARCA.
 const HEADLINE = "18 de maio. Dia do Vidraceiro.";

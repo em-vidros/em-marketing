@@ -24,7 +24,6 @@
     "spike": "bun scripts/spike-arte.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
-    "check": "bun run typecheck && bun test",
-    "chat": "bun scripts/chat-local.ts"
+    "check": "bun run typecheck && bun test"
   }
 }

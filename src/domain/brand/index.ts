@@ -1,5 +1,5 @@
 import { readFileSync } from "node:fs";
-import tokens from "../../brand/tokens.json";
+import tokens from "../../../brand/tokens.json";
 
 export { tokens };
 

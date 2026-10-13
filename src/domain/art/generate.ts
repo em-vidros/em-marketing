@@ -22,7 +22,7 @@ function ai() {
 const LOGO_FILE = { cor: "emvidros-oficial.png", branco: "emvidros-branca.png" } as const;
 
 function logoBase64(variant: "cor" | "branco"): { data: string; mime: string } {
-  const path = new URL(`../../brand/assets/logo/${LOGO_FILE[variant]}`, import.meta.url).pathname;
+  const path = new URL(`../../../brand/assets/logo/${LOGO_FILE[variant]}`, import.meta.url).pathname;
   return { data: readFileSync(path).toString("base64"), mime: "image/png" };
 }
 

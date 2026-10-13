@@ -1,7 +1,7 @@
 import { expect, test, describe } from "bun:test";
 import { existsSync } from "node:fs";
 import { buildPrompt, stylesFor, PILARES, type Brief } from "./pipeline";
-import styleMap from "../../styles/map.json";
+import styleMap from "../../../styles/map.json";
 import { tokens } from "../brand";
 
 const brief: Brief = { pilar: "AUTORIDADE", tema: "espessura certa por aplicação", angulo: "box e guarda-corpo", precisaFotoReal: false };

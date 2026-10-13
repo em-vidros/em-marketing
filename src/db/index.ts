@@ -7,16 +7,8 @@ export const db = new Database(process.env.DB_PATH ?? "data/em-marketing.db");
 db.run(`
 PRAGMA journal_mode = WAL;
 
-CREATE TABLE IF NOT EXISTS conversations (
-  chat_id INTEGER PRIMARY KEY,
-  interaction_id TEXT,            -- último interaction do cérebro (memória da conversa)
-  post_id INTEGER,                -- post em andamento
-  updated_at TEXT DEFAULT (datetime('now'))
-);
-
 CREATE TABLE IF NOT EXISTS posts (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  chat_id INTEGER NOT NULL,
   brief TEXT,                     -- JSON {pilar, tema, angulo, data, precisaFotoReal}
   pilar TEXT,                     -- §12.1: PROVA|AUTORIDADE|GENTE|MARCA (cota do mês)
   formato TEXT CHECK (formato IN ('feed','stories','ambos')),
@@ -66,9 +58,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS publicacoes_ig_media_id ON publicacoes(ig_medi
 -- o caminho de menor resistência volta a ser gerar por IA.
 CREATE TABLE IF NOT EXISTS fotos (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  chat_id INTEGER NOT NULL,
   path TEXT NOT NULL,
-  file_id TEXT,                   -- file_id do Telegram (reenvio barato)
   descricao TEXT,                 -- o que a foto mostra, em português
   produto TEXT,                   -- box, guarda-corpo, espelho, fachada, ACM...
   unidade TEXT,                   -- Raposa, Imperatriz, Teresina...
@@ -88,6 +78,17 @@ function addColumn(tabela: string, coluna: string, ddl: string) {
   if (!cols.some((c) => c.name === coluna)) db.run(`ALTER TABLE ${tabela} ADD COLUMN ${ddl}`);
 }
 addColumn("posts", "pilar", "pilar TEXT"); // §12.1, cota do mês
+
+function dropColumn(tabela: string, coluna: string) {
+  const cols = db.query(`PRAGMA table_info(${tabela})`).all() as { name: string }[];
+  if (cols.some((c) => c.name === coluna)) db.run(`ALTER TABLE ${tabela} DROP COLUMN ${coluna}`);
+}
+// O Telegram saiu: chat_id e file_id não têm mais origem, e conversations era a
+// memória do bot por chat_id.
+dropColumn("posts", "chat_id");
+dropColumn("fotos", "chat_id");
+dropColumn("fotos", "file_id");
+db.run("DROP TABLE IF EXISTS conversations");
 
 export function newMediaId(path: string): string {
   const id = crypto.randomUUID().replace(/-/g, "");

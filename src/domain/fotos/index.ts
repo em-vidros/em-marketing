@@ -1,7 +1,7 @@
 import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { GoogleGenAI } from "@google/genai";
-import { db } from "../db";
+import { db } from "../../db";
 import { TEXT_MODEL } from "../caption";
 import { tokens } from "../brand";
 import type { Formato } from "../art/generate";
@@ -13,7 +13,7 @@ import type { Formato } from "../art/generate";
  * — e a F4 passou a recusar essas peças em código. Recusa sem alternativa vira
  * paralisia: o caminho de menor resistência volta a ser gerar por IA e mentir no
  * brief. Este módulo é a alternativa — a foto que a equipe já tem no celular
- * entra pelo Telegram, é catalogada e vira a arte do post.
+ * entra no banco, é catalogada e vira a arte do post.
  *
  * A catalogação é automática de propósito: banco que depende de alguém preencher
  * campo na hora do upload fica sem tags em duas semanas e deixa de ser buscável.
@@ -37,19 +37,15 @@ export interface Foto {
 
 const CONTEXTOS = ["obra", "fabrica", "loja", "equipe", "produto", "outro"] as const;
 
-export async function salvarFoto(opts: {
-  chatId: number;
-  buffer: Buffer;
-  fileId?: string;
-}): Promise<{ id: number; path: string; largura: number; altura: number }> {
+export async function salvarFoto(buffer: Buffer): Promise<{ id: number; path: string; largura: number; altura: number }> {
   mkdirSync("data/fotos", { recursive: true });
   // Normaliza para JPEG sRGB sem metadado (o EXIF de celular carrega GPS).
-  const jpeg = await sharp(opts.buffer).rotate().toColorspace("srgb").jpeg({ quality: 92 }).toBuffer();
+  const jpeg = await sharp(buffer).rotate().toColorspace("srgb").jpeg({ quality: 92 }).toBuffer();
   const { width = 0, height = 0 } = await sharp(jpeg).metadata();
 
   const row = db
-    .query("INSERT INTO fotos (chat_id, path, file_id, largura, altura) VALUES (?, ?, ?, ?, ?) RETURNING id")
-    .get(opts.chatId, "", opts.fileId ?? null, width, height) as { id: number };
+    .query("INSERT INTO fotos (path, largura, altura) VALUES (?, ?, ?) RETURNING id")
+    .get("", width, height) as { id: number };
 
   const path = `data/fotos/${row.id}.jpg`;
   writeFileSync(path, jpeg);

@@ -10,7 +10,7 @@ Abertas em **2026-08-11**, no commit que reconciliou o `brand/` do repo com o br
 
 A peça de Dia das Mães é o **benchmark estético do brandbook inteiro** (§0.3: *"o registro que já funciona — e que este brandbook adota — é o serifado sobre off-white texturizado, visto no post de Dia das Mães"*) e está no banco de legendas do §10.4.
 
-Mas a data não passa em nenhum dos três testes do §12.4: não é do setor, não é de cidade com unidade, não é da empresa. A regra, como escrita, a exclui — e por isso ela saiu de `src/scheduler/calendar.ts`.
+Mas a data não passa em nenhum dos três testes do §12.4: não é do setor, não é de cidade com unidade, não é da empresa. A regra, como escrita, a exclui — e por isso ela saiu de `src/domain/scheduler/calendar.ts`.
 
 **Decisão:** abrir exceção nominal no §12.4, ou aceitar a saída.
 
@@ -22,7 +22,7 @@ O §10.1 crava *"1 linha · máx. 8 palavras"*. Mas os exemplos marcados como **
 - *"Box pronto para levar hoje, em 6 lojas."* — 9
 - *"Chegou na prateleira: box em temperado 8 mm, tamanhos padronizados."* — 10
 
-Por isso o validador trata isso como **aviso**, não erro (`src/brand/validate.ts`). Se fosse erro, ele reprovaria os próprios exemplares da norma.
+Por isso o validador trata isso como **aviso**, não erro (`src/domain/brand/validate.ts`). Se fosse erro, ele reprovaria os próprios exemplares da norma.
 
 **Decisão:** afrouxar o §10.1 para "aproximadamente 8 palavras / uma linha", ou reescrever os exemplos.
 
@@ -38,7 +38,7 @@ Páscoa e Sexta-feira Santa passam pelo §12.2 e reprovam no §12.4. Foram remov
 
 Raposa-MA, Santa Inês-MA, Bacabal-MA e Ananindeua-PA têm unidade e portanto passam no teste (b) do §12.4. As datas **não foram confirmadas** e por isso não foram semeadas — inventar seria pior que faltar.
 
-**Decisão:** confirmar as quatro datas e adicionar em `src/scheduler/calendar.ts`.
+**Decisão:** confirmar as quatro datas e adicionar em `src/domain/scheduler/calendar.ts`.
 
 ## 5. O ano de fundação não fecha
 
@@ -78,7 +78,7 @@ Herdadas do §17 do brandbook, itens 8 e 9: o peso de display do Poppins (600 ou
 
 ## 9. Limiares do gate visual não foram calibrados
 
-`src/art/validate.ts` reprova arte por medição de cor. Os limiares em `LIMIARES`
+`src/domain/art/validate.ts` reprova arte por medição de cor. Os limiares em `LIMIARES`
 — 3% de matiz fora da paleta vira erro, 25% de teal vira aviso, desvio de
 luminância 18 acusa zona segura ocupada — foram deduzidos da paleta e testados
 contra imagens sintéticas.

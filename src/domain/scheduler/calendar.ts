@@ -1,9 +1,5 @@
-import { db } from "../db";
-import { sendMessage } from "../telegram/api";
-
 /**
- * US-7: calendário editorial — 3 dias antes de cada data recorrente, manda um
- * brief pronto para os chats da allowlist.
+ * Calendário editorial: as datas recorrentes que podem virar post.
  *
  * §12.4 é uma trava, não uma sugestão: uma data só vira post se passar em um de
  * três testes — (a) é do setor, (b) é da região onde há unidade, (c) é da
@@ -99,32 +95,4 @@ export function proximasDatas(dias = 45): { emDias: number; ocasiao: string; por
     if (hit) achados.push({ emDias: d, ocasiao: hit.ocasiao, porque: hit.porque });
   }
   return achados;
-}
-
-db.run(`CREATE TABLE IF NOT EXISTS calendar_sent (year INTEGER, mmdd TEXT, PRIMARY KEY (year, mmdd))`);
-
-async function checkCalendar() {
-  const { year, mmdd } = dataSP(new Date(Date.now() + 3 * 86400_000)); // 3 dias antes
-  const hit = SEEDS.find((s) => s.mmdd === mmdd);
-  if (!hit) return;
-
-  const seen = db.query("SELECT 1 FROM calendar_sent WHERE year = ? AND mmdd = ?").get(year, mmdd);
-  if (seen) return;
-  db.query("INSERT INTO calendar_sent (year, mmdd) VALUES (?, ?)").run(year, mmdd);
-
-  const chats = (process.env.TELEGRAM_ALLOWED_CHAT_IDS ?? "").split(",").map(Number).filter(Boolean);
-  for (const chatId of chats) {
-    await sendMessage(
-      chatId,
-      `📅 Daqui a 3 dias: *${hit.ocasiao}*.\n` +
-        `Pilar MARCA — passa no teste "${hit.teste}" do §12.4 (${hit.porque}).\n` +
-        `Lembrando: peça de MARCA não leva CTA.\n\n` +
-        `Quer que eu prepare? Responda _"cria o post de ${hit.ocasiao}"_ — ou ignore.`,
-    ).catch(() => {});
-  }
-}
-
-export function startCalendar() {
-  checkCalendar().catch(console.error);
-  setInterval(() => checkCalendar().catch(console.error), 6 * 3600_000);
 }

@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, rmSync } from "node:fs";
 import sharp from "sharp";
-import { db } from "../db";
+import { db } from "../../db";
 import { buscarFotos, contarFotos, pegarFoto, prepararFoto, resumir, salvarFoto } from "./index";
 
 // O banco de teste vem do preload (test/setup.ts). Os arquivos, não: salvarFoto e
@@ -15,7 +15,7 @@ const fixture = (w: number, h: number, hex = "#8A8A8A") =>
   sharp({ create: { width: w, height: h, channels: 3, background: hex } }).jpeg().toBuffer();
 
 async function semear(campos: Partial<Record<"descricao" | "produto" | "unidade" | "contexto" | "tags", string>>) {
-  const { id, path } = await salvarFoto({ chatId: 1, buffer: await fixture(800, 600) });
+  const { id, path } = await salvarFoto(await fixture(800, 600));
   criados.push(path);
   db.query("UPDATE fotos SET descricao = ?, produto = ?, unidade = ?, contexto = ?, tags = ? WHERE id = ?").run(
     campos.descricao ?? null,
@@ -30,7 +30,7 @@ async function semear(campos: Partial<Record<"descricao" | "produto" | "unidade"
 
 describe("salvarFoto", () => {
   test("grava o arquivo e as dimensões reais", async () => {
-    const { id, path, largura, altura } = await salvarFoto({ chatId: 42, buffer: await fixture(1600, 1200) });
+    const { id, path, largura, altura } = await salvarFoto(await fixture(1600, 1200));
     criados.push(path);
     expect(existsSync(path)).toBe(true);
     expect([largura, altura]).toEqual([1600, 1200]);
@@ -42,7 +42,7 @@ describe("salvarFoto", () => {
       .withExif({ IFD0: { Copyright: "teste", Software: "camera" } })
       .jpeg()
       .toBuffer();
-    const { path } = await salvarFoto({ chatId: 1, buffer: comExif });
+    const { path } = await salvarFoto(comExif);
     criados.push(path);
     const meta = await sharp(path).metadata();
     expect(meta.exif).toBeUndefined();

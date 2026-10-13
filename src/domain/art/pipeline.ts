@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { generateArt, type Formato } from "./generate";
 import { validarArte } from "./validate";
 import type { Problema } from "../brand/validate";
-import styleMap from "../../styles/map.json";
+import styleMap from "../../../styles/map.json";
 
 export const PILARES = ["PROVA", "AUTORIDADE", "GENTE", "MARCA"] as const;
 export type Pilar = (typeof PILARES)[number];

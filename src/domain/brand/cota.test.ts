@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { cotaDePilares } from "./index";
+import { cotaDePilares } from "./cota";
 
 const doPilar = (r: ReturnType<typeof cotaDePilares>, p: string) => r.itens.find((i) => i.pilar === p)!;
 

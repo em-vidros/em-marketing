@@ -1,4 +1,4 @@
-import { db, newMediaId } from "../db";
+import { db, newMediaId } from "../../db";
 
 const GRAPH = "https://graph.facebook.com/v23.0";
 const IG_USER = () => process.env.IG_USER_ID!;

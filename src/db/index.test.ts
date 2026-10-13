@@ -54,7 +54,11 @@ describe("migração a partir do schema anterior", () => {
 
   test("preserva os posts que já existiam", () => {
     expect((db.query("SELECT COUNT(*) n FROM posts").get() as { n: number }).n).toBe(1);
-    expect((db.query("SELECT chat_id FROM posts").get() as { chat_id: number }).chat_id).toBe(7);
+    expect((db.query("SELECT brief FROM posts").get() as { brief: string }).brief).toBe('{"tema":"legado"}');
+  });
+
+  test("remove chat_id, que só existia por causa do Telegram", () => {
+    expect(colunas(db, "posts")).not.toContain("chat_id");
   });
 
   test("adiciona pilar sem recriar a tabela", () => {
@@ -81,7 +85,7 @@ describe("publicacoes — a chave que liga a peça ao Instagram", () => {
   const db = new Database(path);
 
   test("guarda o id da mídia e o tipo", () => {
-    db.run("INSERT INTO posts (id, chat_id) VALUES (1, 5)");
+    db.run("INSERT INTO posts (id) VALUES (1)");
     db.run("INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (1, 'IMAGE', 'ig_abc')");
     const row = db.query("SELECT * FROM publicacoes WHERE ig_media_id = 'ig_abc'").get() as any;
     expect(row.post_id).toBe(1);

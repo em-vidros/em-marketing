@@ -2,7 +2,7 @@
 
 Seeds do scheduler (US-7): o bot manda um brief pronto **3 dias antes** de cada data. Aceitar entra no fluxo normal a partir da escolha de formato; ignorar não faz nada.
 
-A fonte de verdade executável é `src/scheduler/calendar.ts`. Esta tabela espelha o que está lá.
+A fonte de verdade executável é `src/domain/scheduler/calendar.ts`. Esta tabela espelha o que está lá.
 
 ## A trava (§12.4)
 

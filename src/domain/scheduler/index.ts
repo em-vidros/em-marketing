@@ -1,6 +1,5 @@
-import { db } from "../db";
+import { db } from "../../db";
 import { publishImage } from "../instagram";
-import { sendMessage } from "../telegram/api";
 
 /**
  * Scheduler próprio (a Meta não tem agendamento nativo — PRD §4.3b).
@@ -13,7 +12,7 @@ export function startScheduler() {
 async function tick() {
   const due = db
     .query(
-      `SELECT q.*, p.chat_id, p.legenda, p.arts, p.chosen, p.story_path
+      `SELECT q.*, p.legenda, p.arts, p.chosen, p.story_path
        FROM queue q JOIN posts p ON p.id = q.post_id
        WHERE q.status = 'pending' AND q.publish_at <= datetime('now')`,
     )
@@ -36,24 +35,24 @@ async function tick() {
       });
       db.query("UPDATE queue SET status = 'done' WHERE id = ?").run(item.id);
       db.query("UPDATE posts SET status = 'published' WHERE id = ?").run(item.post_id);
-      await sendMessage(item.chat_id, `✅ Publicado no Instagram (${item.media_type}) — id ${igId}`);
+      console.log(`publicado no Instagram (${item.media_type}), post ${item.post_id}, id ${igId}`);
     } catch (err: any) {
       // Nunca falha em silêncio (US-6)
       db.query("UPDATE queue SET status = 'failed', error = ? WHERE id = ?").run(String(err), item.id);
       db.query("UPDATE posts SET status = 'failed' WHERE id = ?").run(item.post_id);
-      await sendMessage(item.chat_id, `❌ Falha ao publicar (${item.media_type}): ${err.message ?? err}`).catch(() => {});
+      console.error(`falha ao publicar (${item.media_type}), post ${item.post_id}:`, err);
     }
   }
 }
 
-export function listQueue(chatId: number) {
+export function listQueue() {
   return db
     .query(
       `SELECT q.id, q.media_type, q.publish_at, p.brief
        FROM queue q JOIN posts p ON p.id = q.post_id
-       WHERE q.status = 'pending' AND p.chat_id = ? ORDER BY q.publish_at`,
+       WHERE q.status = 'pending' ORDER BY q.publish_at`,
     )
-    .all(chatId) as any[];
+    .all() as any[];
 }
 
 export function cancelQueueItem(id: number): boolean {
