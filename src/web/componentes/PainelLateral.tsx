@@ -1,4 +1,4 @@
-import { AnimatePresence, motion, useReducedMotion, type Variants } from "motion/react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion, type Variants } from "motion/react";
 import { useEffect, useRef, type ReactNode } from "react";
 import { ESTREITO, inertizarFora, useMedia } from "../media";
 import { MOLA, MOLA_REDUZIDA } from "../movimento";
@@ -12,6 +12,9 @@ interface Jeito {
 }
 
 const SEM_TEMPO = { duration: 0 };
+
+/** Foca `el` depois do render que fechou o painel, quando a página já deixou de ser inerte. */
+export const devolverFoco = (el: HTMLElement | null) => setTimeout(() => el?.focus());
 
 const COLUNA: Variants = {
   fora: ({ instantaneo, reduzir }: Jeito) =>
@@ -41,7 +44,7 @@ const FUNDO: Variants = {
 /**
  * Coluna à direita a partir do lg; abaixo, cobre a tela sobre um fundo escuro e vira modal:
  * o resto da página fica inerte, e o Tab e o Esc ficam com o painel. O conteúdo cuida do
- * próprio foco inicial; quem abre cuida de devolver o foco.
+ * próprio foco inicial; quem abre devolve o foco depois do render que fecha (`devolverFoco`).
  */
 export function PainelLateral({
   aberto,
@@ -92,7 +95,9 @@ function Coluna({ rotulo, fechar, jeito, className, children }: { rotulo: string
     window.addEventListener("keydown", aoTeclar);
     return () => window.removeEventListener("keydown", aoTeclar);
   }, [fechar]);
-  useEffect(() => (modal && ref.current ? inertizarFora(ref.current) : undefined), [modal]);
+  // Ao começar a sair, a página volta a valer: quem fechou precisa devolver o foco para lá.
+  const presente = useIsPresent();
+  useEffect(() => (modal && presente && ref.current ? inertizarFora(ref.current) : undefined), [modal, presente]);
   return (
     <motion.aside
       ref={ref}

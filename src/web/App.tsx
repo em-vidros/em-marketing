@@ -13,7 +13,7 @@ import type { AcoesConversa } from "./componentes/menu/MenuConversa";
 import { type ModoPaleta, Paleta } from "./componentes/menu/Paleta";
 import { DicasProvider } from "./componentes/menu/Teclas";
 import { estadosDaEquipe } from "./equipe";
-import { DESKTOP } from "./media";
+import { DESKTOP, inertizarFora } from "./media";
 import { MOLA } from "./movimento";
 import { lerRota, navegar, useCaminho, type Rota } from "./rota";
 import { atalhoDoBot } from "./teclado/atalhos";
@@ -295,11 +295,15 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
  * volta para o botão de menu. Entra e sai pela esquerda (estilo.css, .gaveta).
  */
 function Gaveta({ aberta, fechar, children }: { aberta: boolean; fechar: () => void; children: React.ReactNode }) {
+  // O modal do Base UI deixa o Tab escapar pelo body na segunda volta; com o resto inerte, não há para onde ir.
+  const [popup, setPopup] = useState<HTMLElement | null>(null);
+  useEffect(() => (aberta && popup ? inertizarFora(popup) : undefined), [aberta, popup]);
   return (
     <Dialog.Root open={aberta} onOpenChange={(a) => !a && fechar()}>
       <Dialog.Portal>
-        <Dialog.Backdrop className="gaveta-fundo fixed inset-0 z-50 bg-tinta/20 md:hidden" />
+        <Dialog.Backdrop data-fecha-painel className="gaveta-fundo fixed inset-0 z-50 bg-tinta/20 md:hidden" />
         <Dialog.Popup
+          ref={setPopup}
           aria-label="Menu"
           className="gaveta fixed inset-y-0 left-0 z-50 w-[min(85vw,300px)] shadow-[0_0_40px_rgb(15_13_10/0.12)] outline-none md:hidden"
         >

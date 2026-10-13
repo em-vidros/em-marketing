@@ -4,7 +4,7 @@ import { useApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
-import { PainelLateral } from "../componentes/PainelLateral";
+import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { Check } from "../componentes/Passos";
 import { Troca } from "../componentes/Troca";
 import { dia, FORMATO, PILARES, STATUS_POST } from "../componentes/peca";
@@ -100,7 +100,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   }
   const fechar = useCallback(() => {
     setAberta(null);
-    origem.current?.focus();
+    devolverFoco(origem.current);
   }, []);
   function limpar() {
     setBusca("");

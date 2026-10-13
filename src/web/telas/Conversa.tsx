@@ -12,7 +12,7 @@ import { atividadeDe } from "../componentes/ia/atividade";
 import { Pensando } from "../componentes/ia/Pensando";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
-import { PainelLateral } from "../componentes/PainelLateral";
+import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
 import { Passos, trechosDe } from "../componentes/Passos";
 import type { EstadoBot } from "../equipe";
@@ -206,7 +206,7 @@ function Chat({
   const fechar = useCallback((teclado = false) => {
     setPorTeclado(teclado);
     setPainel(null);
-    origem.current?.focus();
+    devolverFoco(origem.current);
   }, []);
 
   function enviar(t: string) {
