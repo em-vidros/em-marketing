@@ -5,6 +5,7 @@ import { apiConversas, useApi, useNomesDosBots } from "./api";
 import { auth } from "./auth";
 import { BOT_IDS } from "./bots";
 import { Barra } from "./componentes/Barra";
+import { LimiteDeErro } from "./componentes/LimiteDeErro";
 import { Avisos, fecharAviso, mostrarAviso } from "./componentes/menu/Avisos";
 import { criarConversas } from "./componentes/menu/conversas";
 import { pilhaDeDesfazer, useTemDesfazer } from "./componentes/menu/desfazer";
@@ -43,6 +44,15 @@ export function App() {
 }
 
 const VAZIO: Vivo = { mensagens: [], respondendo: false };
+
+const NOME_DA_TELA: Record<Exclude<Rota["tela"], "entrar">, string> = {
+  nova: "esta conversa",
+  conversa: "esta conversa",
+  atividade: "a atividade",
+  biblioteca: "a biblioteca",
+  bot: "a página do bot",
+  "nao-encontrada": "esta página",
+};
 
 const CHAVE_BARRA = "barra-oculta";
 const lerBarraOculta = () => {
@@ -245,36 +255,38 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
         <Gaveta aberta={menu} fechar={fecharMenu}>
           {barra(fecharMenu)}
         </Gaveta>
-        {conversaId !== null ? (
-          <TelaConversa
-            key={conversaId}
-            id={conversaId}
-            nova={conversaId === novoId}
-            aoMudar={setVivo}
-            aoTerminarTurno={aoTerminarTurno}
-            abrirMenu={abrirMenu}
-            estadoDoChefe={estados.chefe}
-          />
-        ) : rota.tela === "atividade" ? (
-          <Atividade abrirMenu={abrirMenu} />
-        ) : rota.tela === "biblioteca" ? (
-          <Biblioteca abrirMenu={abrirMenu} />
-        ) : rota.tela === "bot" ? (
-          <Bot key={rota.id} id={rota.id} aba={rota.aba} abrirMenu={abrirMenu} />
-        ) : (
-          <main id="conteudo" className="grid flex-1 place-items-center px-6 text-center">
-            <div className="flex flex-col items-center gap-3">
-              <h1 className="text-lg font-semibold">Página não encontrada</h1>
-              <a
-                href="/"
-                onClick={(e) => (e.preventDefault(), novoPedido())}
-                className="pressiona rounded-full bg-tinta px-4 py-2 font-medium text-sobre-tinta"
-              >
-                Novo pedido
-              </a>
-            </div>
-          </main>
-        )}
+        <LimiteDeErro key={conversaId ?? (rota.tela === "bot" ? `bot-${rota.id}` : rota.tela)} tela={NOME_DA_TELA[rota.tela]} abrirMenu={abrirMenu}>
+          {conversaId !== null ? (
+            <TelaConversa
+              key={conversaId}
+              id={conversaId}
+              nova={conversaId === novoId}
+              aoMudar={setVivo}
+              aoTerminarTurno={aoTerminarTurno}
+              abrirMenu={abrirMenu}
+              estadoDoChefe={estados.chefe}
+            />
+          ) : rota.tela === "atividade" ? (
+            <Atividade abrirMenu={abrirMenu} />
+          ) : rota.tela === "biblioteca" ? (
+            <Biblioteca abrirMenu={abrirMenu} />
+          ) : rota.tela === "bot" ? (
+            <Bot key={rota.id} id={rota.id} aba={rota.aba} abrirMenu={abrirMenu} />
+          ) : (
+            <main id="conteudo" className="grid flex-1 place-items-center px-6 text-center">
+              <div className="flex flex-col items-center gap-3">
+                <h1 className="text-lg font-semibold">Página não encontrada</h1>
+                <a
+                  href="/"
+                  onClick={(e) => (e.preventDefault(), novoPedido())}
+                  className="pressiona rounded-full bg-tinta px-4 py-2 font-medium text-sobre-tinta"
+                >
+                  Novo pedido
+                </a>
+              </div>
+            </main>
+          )}
+        </LimiteDeErro>
       </div>
       <Paleta
         modo={paleta}
