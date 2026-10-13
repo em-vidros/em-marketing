@@ -24,4 +24,13 @@ type ItemCalendario =
 
 ## Telas e movimento
 
-Mês, semana e dia, como no Calendário da Apple. Hoje com o círculo, setas e T para navegar, clique em espaço vazio cria pauta, arrastar move, clique abre o detalhe num popover ancorado no evento. Movimento pelo apple-design: rolagem contínua entre meses, troca de visão com zoom a partir do dia ou da semana de origem, arrasto 1:1 com o item levantado e mola com velocidade herdada ao soltar.
+Referência medida no Calendário do macOS 27 desta máquina: scratchpad/ref-cal/REFERENCIA-CALENDARIO.md. Quando o Mac e o iPad discordam, vale o Mac, porque o pedido é "igual ao Apple Calendar" e o site é usado no computador.
+
+- Mês, semana e dia. O mês tem sempre 6 linhas e rola de forma contínua por semana, com encaixe por mola sem passar do ponto (damping 1, response perto de 0,3 s);
+- Trocar de visão e avançar ou voltar é corte seco, como no Mac. Os eventos entram uns 50 ms depois da grade;
+- Hoje com círculo vermelho, linha da hora atual vermelha só na coluna de hoje, pílula da hora na coluna de horas;
+- Criar pauta com clique duplo ou arrastando num espaço vazio, como no Mac. Clique simples só seleciona ou tira a seleção;
+- Arrastar move com encaixe de 15 minutos. O item levanta com escala 1,02 e sombra, segue o ponteiro 1:1 e assenta com mola que herda a velocidade;
+- Detalhe num popover ancorado no evento, de escala 0,96 a 1 em 0,2 s a partir da seta;
+- Teclas sem ⌘, porque o navegador já usa ⌘T, ⌘N e ⌘1 a ⌘9: T hoje, setas avançam e voltam, 1, 2 e 3 trocam a visão, ⌥ com as setas move o item selecionado 15 minutos ou um dia, Delete apaga pauta, Esc fecha;
+- Com movimento reduzido, tudo vira fade de 150 ms.
