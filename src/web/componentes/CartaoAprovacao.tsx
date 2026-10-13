@@ -61,6 +61,8 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
   const { titulo, detalhe } = pergunta(parte);
   const fim = desfecho(parte);
   const pendente = parte.state === "approval-requested";
+  // Publicar agora não tem volta: o botão diz o que faz e ganha a cor de atenção.
+  const agora = parte.type === "tool-publicar_agora";
   const secao = useRef<HTMLElement>(null);
 
   // O botão some ou fica desabilitado ao responder; o foco fica no cartão, que anuncia o desfecho.
@@ -89,7 +91,7 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
             aria-keyshortcuts={ariaDe("recusar", ehMac)}
             className="pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full bg-linha px-4 text-[13px] font-medium hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
           >
-            Recusar
+            {agora ? "Não publicar" : "Não agendar"}
             <span className="hidden group-focus-within/aprovacao:inline-flex">
               <Teclas atalho="recusar" />
             </span>
@@ -99,9 +101,11 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
             disabled={respondida}
             onClick={() => responder(parte.approval.id, true)}
             aria-keyshortcuts={ariaDe("aprovar", ehMac)}
-            className="pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full bg-tinta px-4 text-[13px] font-medium text-sobre-tinta disabled:cursor-default disabled:opacity-50"
+            className={`pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-medium text-sobre-tinta disabled:cursor-default disabled:opacity-50 ${
+              agora ? "bg-esperando-texto" : "bg-tinta"
+            }`}
           >
-            Aprovar
+            {agora ? "Publicar agora" : "Agendar"}
             <span className="hidden group-focus-within/aprovacao:inline-flex">
               <Teclas atalho="aprovar" tom="escuro" />
             </span>
