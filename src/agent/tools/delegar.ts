@@ -1,6 +1,7 @@
 import { isToolUIPart, readUIMessageStream, toUIMessageStream, tool, type TextStreamPart, type ToolSet, type UIMessage } from "ai";
 import { z } from "zod";
 import { BOTS, type Especialista } from "../bots";
+import { configDoBot } from "../config";
 import { explicarErro } from "../erros";
 import { avancarTarefa, criarTarefa, type Tarefa } from "../tarefas";
 import { toolsDePost } from "./post";
@@ -63,7 +64,7 @@ const marcos = (m: UIMessage | null) =>
     .join(",");
 
 function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialista) {
-  const bot = BOTS[botId];
+  const bot = configDoBot(botId);
   const serializar = mexeNoPost(botId);
   return tool({
     description: `Delega ao ${bot.nome}: ${bot.descricao} Devolve só o resumo do que ele fez.`,

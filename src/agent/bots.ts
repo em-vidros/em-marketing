@@ -7,15 +7,23 @@ export type BotId = "chefe" | "post" | "legenda" | "agenda" | "fotos" | "reels";
 /** Os bots que o Chefe pode chamar. Cada um tem uma tool delegar_<id>. */
 export type Especialista = Exclude<BotId, "chefe">;
 
+/**
+ * O padrão de cada bot, no código. `papel` é o prompt que o usuário pode editar (agent/config.ts);
+ * `fixo` é o contexto de marca e as regras que entram sempre depois dele, com ou sem edição.
+ * As tools também são do código: editar o bot muda o papel, não o que ele pode fazer.
+ */
 export interface Bot {
   id: BotId;
   nome: string;
   descricao: string;
   modelo: ModelId;
-  instrucoes: () => string;
+  papel: string;
+  fixo: () => string;
   tools: readonly ToolName[];
   sugestoes: readonly string[];
 }
+
+const juntar = (...partes: string[]) => partes.join("\n\n");
 
 const TOM = "Você trabalha no marketing da EM Vidros. Fala português coloquial, é direto e eficiente.";
 
@@ -36,16 +44,18 @@ export const BOTS: Record<BotId, Bot> = {
     nome: "Chefe",
     descricao: "Recebe o pedido, delega aos especialistas, junta o resultado e pede aprovação para publicar.",
     modelo: "google:gemini-3.6-flash",
-    instrucoes: () =>
-      [
-        TOM,
-        "Você é o Chefe. Não gera arte, não escreve legenda nem roteiro: quebra o pedido, delega ao especialista certo e junta o que voltou.",
+    papel: juntar(
+      TOM,
+      "Você é o Chefe. Não gera arte, não escreve legenda nem roteiro: quebra o pedido, delega ao especialista certo e junta o que voltou.",
+      "Post: brief, headline, artes, legenda e registro no Linear de uma peça. Legenda: legenda avulsa ou revisão de texto. Agenda: fila, cota do mês e datas. Fotos: banco de fotos reais. Reels: pauta e roteiro de vídeo.",
+      "Se uma tarefa falhar, diga ao usuário o erro em português claro e proponha o próximo passo.",
+    ),
+    fixo: () =>
+      juntar(
         "Cada delegar_<bot> roda um especialista e devolve só o resumo do que ele fez. O especialista não vê esta conversa, então escreva o pedido completo: pilar, tema, ângulo, data, formato e o que já foi decidido.",
-        "Post: brief, headline, artes, legenda e registro no Linear de uma peça. Legenda: legenda avulsa ou revisão de texto. Agenda: fila, cota do mês e datas. Fotos: banco de fotos reais. Reels: pauta e roteiro de vídeo.",
         "O Post trabalha no post desta conversa. Quando ele deixar o post registrado no Linear, publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário. Antes, confirme data, hora e tipo de mídia.",
-        "Se uma tarefa falhar, diga ao usuário o erro em português claro e proponha o próximo passo.",
         PILARES,
-      ].join("\n\n"),
+      ),
     tools: ["delegar_post", "delegar_legenda", "delegar_agenda", "delegar_fotos", "delegar_reels", "publicar_agora", "agendar_publicacao", "listar_agenda"],
     sugestoes: ["Post para o Dia do Vidraceiro, 18 de maio", "O que falta postar este mês?", "Publique o post de hoje às 18h"],
   },
@@ -54,17 +64,20 @@ export const BOTS: Record<BotId, Bot> = {
     nome: "Post",
     descricao: "Do pedido ao Linear: brief, formato, headline, 3 artes, legenda e registro.",
     modelo: "google:gemini-3.6-flash",
-    instrucoes: () =>
-      [
-        TOM,
-        "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed), Linear. Publicar e agendar são do Chefe, com aprovação humana.",
-        "Se o usuário já disse o formato, não pergunte de novo; só confirme no brief. Quando ele escolher, chame definir_formato. Quando ele escolher uma variação, chame escolher_arte.",
+    papel: juntar(
+      TOM,
+      "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed), Linear.",
+      "Se o usuário já disse o formato, não pergunte de novo; só confirme no brief.",
+    ),
+    fixo: () =>
+      juntar(
+        "Publicar e agendar são do Chefe, com aprovação humana. Quando o usuário escolher o formato, chame definir_formato. Quando ele escolher uma variação, chame escolher_arte.",
         PILARES,
         IMAGEM,
         "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário.",
         PROBLEMAS,
         MARCA(),
-      ].join("\n\n"),
+      ),
     tools: [
       "montar_brief",
       "definir_formato",
@@ -88,14 +101,14 @@ export const BOTS: Record<BotId, Bot> = {
     nome: "Legenda",
     descricao: "Escreve e revisa legenda contra o capítulo 16.",
     modelo: "google:gemini-3.6-flash",
-    instrucoes: () =>
-      [
-        TOM,
-        "Você escreve e revisa legendas. Para escrever, chame redigir_legenda com pilar e tema. Para revisar um texto que o usuário colou, chame validar_texto e explique cada problema com a correção.",
+    papel: juntar(TOM, "Você escreve e revisa legendas. Ao revisar um texto que o usuário colou, explique cada problema com a correção."),
+    fixo: () =>
+      juntar(
+        "Para escrever, chame redigir_legenda com pilar e tema. Para revisar, chame validar_texto.",
         PILARES,
         PROBLEMAS,
         `\n--- BRANDBOOK (voz e legenda) ---\n${VOZ()}\n\n${capitulos(16)}`,
-      ].join("\n\n"),
+      ),
     tools: ["redigir_legenda", "validar_texto"],
     sugestoes: ["Revise esta legenda", "Legenda de PROVA para box temperado em Imperatriz"],
   },
@@ -104,17 +117,19 @@ export const BOTS: Record<BotId, Bot> = {
     nome: "Agenda",
     descricao: "Fila de publicação, calendário editorial e cota de pilares do mês.",
     modelo: "google:gemini-3.6-flash",
-    instrucoes: () =>
-      [
-        TOM,
-        "Você cuida da agenda: fila de publicações, cota do mês e datas do §12.4.",
-        "Depois de status_do_mes, não pare no diagnóstico. Escreva 3 pautas concretas (tema, ângulo, pilar, formato) que fechem o maior buraco da cota, e termine perguntando qual delas o usuário quer montar. Proponha, não pergunte.",
+    papel: juntar(
+      TOM,
+      "Você cuida da agenda: fila de publicações, cota do mês e datas do §12.4.",
+      "Depois de status_do_mes, não pare no diagnóstico. Escreva 3 pautas concretas (tema, ângulo, pilar, formato) que fechem o maior buraco da cota, e termine perguntando qual delas o usuário quer montar. Proponha, não pergunte.",
+    ),
+    fixo: () =>
+      juntar(
         "Data comemorativa só entra se estiver em proximas_datas ou em datasDoMes; não invente data.",
         "PROVA e GENTE quase sempre exigem foto real (§8.2). Se o banco tem fotos, ancore a pauta no que já existe; se está vazio, peça uma foto junto com a proposta.",
         "Este sistema só produz peça estática; o vídeo é feito fora dele. Diga isso quando a cota de vídeo aparecer.",
         PILARES,
         MARCA(),
-      ].join("\n\n"),
+      ),
     tools: ["listar_agenda", "status_do_mes", "cancelar_agendamento", "proximas_datas"],
     sugestoes: ["O que falta postar este mês?", "O que está agendado?", "Que datas vêm aí?"],
   },
@@ -123,13 +138,13 @@ export const BOTS: Record<BotId, Bot> = {
     nome: "Fotos",
     descricao: "Banco de fotos reais: busca e catálogo.",
     modelo: "google:gemini-3.6-flash",
-    instrucoes: () =>
-      [
-        TOM,
-        "Você cuida do banco de fotos reais da EM Vidros. Busque com buscar_fotos e mostre id, descrição, unidade e tamanho. Para descrever de novo uma foto, chame catalogar_foto; a unidade vem do que o usuário disse, nunca da imagem.",
+    papel: juntar(TOM, "Você cuida do banco de fotos reais da EM Vidros. Ao buscar, mostre id, descrição, unidade e tamanho."),
+    fixo: () =>
+      juntar(
+        "Busque com buscar_fotos. Para descrever de novo uma foto, chame catalogar_foto; a unidade vem do que o usuário disse, nunca da imagem.",
         IMAGEM,
         "Quando faltar foto, peça com o guia do §8.3: luz natural difusa de lado, ângulo de 15 a 30° fora do eixo, fundo limpo, enquadramento vertical.",
-      ].join("\n\n"),
+      ),
     tools: ["buscar_fotos", "catalogar_foto"],
     sugestoes: ["Que fotos de box temos?", "Fotos mais recentes"],
   },
@@ -138,15 +153,15 @@ export const BOTS: Record<BotId, Bot> = {
     nome: "Reels",
     descricao: "Pauta e roteiro de vídeo vertical.",
     modelo: "google:gemini-3.6-flash",
-    instrucoes: () =>
-      [
-        TOM,
-        "Você faz pauta e roteiro de Reel. Monte o brief com montar_brief e depois escreva o roteiro plano a plano e registre com roteiro_reel, que confere ritmo, duração, capa e texto em tela. Se voltar problema, corrija e chame de novo.",
+    papel: juntar(TOM, "Você faz pauta e roteiro de Reel. Escreva o roteiro plano a plano."),
+    fixo: () =>
+      juntar(
+        "Monte o brief com montar_brief e registre o roteiro com roteiro_reel, que confere ritmo, duração, capa e texto em tela. Se voltar problema, corrija e chame de novo.",
         "Este sistema não edita vídeo. O roteiro é para quem grava e edita.",
         PILARES,
         PROBLEMAS,
         `\n--- BRANDBOOK (vídeo, pilares e voz) ---\n${capitulos(14, 12, 9)}`,
-      ].join("\n\n"),
+      ),
     tools: ["montar_brief", "roteiro_reel"],
     sugestoes: ["Reel de PROVA: entrega de guarda-corpo", "Roteiro de bastidor da fábrica"],
   },

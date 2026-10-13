@@ -11,7 +11,8 @@ import {
 } from "ai";
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
-import { BOTS, ehBotId } from "../agent/bots";
+import { ehBotId } from "../agent/bots";
+import { configDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
 import { abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa } from "../agent/conversas";
 import type { Usuario } from "./auth";
@@ -87,7 +88,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
 
     const conversa = abrirConversaDoUsuario(usuario.id, id, botId, tituloDe(ultima));
     if (!conversa) return erro(404, "Conversa não encontrada.");
-    if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${BOTS[conversa.botId].nome}.`);
+    if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${configDoBot(conversa.botId).nome}.`);
 
     const historico = juntar(mensagensDaConversa(conversa.id), ultima);
     const result = executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao });

@@ -71,6 +71,20 @@ CREATE TABLE IF NOT EXISTS media (
   mtime INTEGER                   -- mtime do arquivo quando a URL foi criada (urlDaMidia)
 );
 
+-- Uma linha por gravação da config de um bot (agent/config.ts). Só cresce: a versão
+-- atual é a de maior id, e voltar a uma antiga grava uma linha nova com o texto dela.
+CREATE TABLE IF NOT EXISTS versoes_bot (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  bot_id TEXT NOT NULL,
+  nome TEXT NOT NULL,
+  descricao TEXT NOT NULL,
+  modelo TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  criada_em INTEGER NOT NULL,     -- epoch ms
+  autor TEXT NOT NULL             -- e-mail de quem gravou
+);
+CREATE INDEX IF NOT EXISTS versoes_bot_bot ON versoes_bot(bot_id, id);
+
 -- Uma linha por mídia efetivamente publicada. É a única chave que liga uma peça
 -- deste sistema ao objeto que existe no Instagram — sem ela nenhuma métrica é
 -- atribuível a um post, e isso não tem conserto retroativo: a Graph API não
