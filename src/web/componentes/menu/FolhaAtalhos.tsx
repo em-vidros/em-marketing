@@ -50,7 +50,7 @@ export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar
               />
             </label>
           </div>
-          <div className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
+          <div role="region" aria-label="Lista de atalhos" tabIndex={0} className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4">
             {GRUPOS.map((grupo) => {
               const ids = visiveis.filter((id) => (ATALHOS[id] as Atalho).grupo === grupo);
               if (ids.length === 0) return null;
