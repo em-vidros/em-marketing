@@ -1,8 +1,8 @@
 import { ContextMenu } from "@base-ui/react/context-menu";
 import { Menu } from "@base-ui/react/menu";
-import { AnimatePresence, motion, type Transition, useIsPresent, useReducedMotion } from "motion/react";
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react";
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { MOLA, MOLA_REDUZIDA } from "../../movimento";
+import { MOLA, MOLA_REDUZIDA, SAIDA, TROCA } from "../../movimento";
 import { type AtalhoId, ariaDe, ehMac } from "../../teclado/atalhos";
 import { Dica, Teclas } from "../menu/Teclas";
 import { Troca } from "../Troca";
@@ -10,10 +10,6 @@ import { casa } from "./teclas";
 
 /** O espaço entre mensagens no transcript (gap-8). Quem sai encolhe a altura e devolve este espaço, para nada pular no fim. */
 const VAO = 32;
-
-/** Os mesmos tempos do Expansivel: sai em 200 ms com ease-out forte. */
-const SAIDA: Transition = { duration: 0.2, ease: [0.23, 1, 0.32, 1] };
-const TROCA: Transition = { duration: 0.15, ease: [0.23, 1, 0.32, 1] };
 
 /** Paleta, folha de atalhos e menus (teclado/motor.ts). */
 const ISOLADO = '[data-teclado="isolado"]';
@@ -55,7 +51,7 @@ export interface PropsDoBloco {
 
 /**
  * Uma mensagem do transcript: o conteúdo, as ações que aparecem no hover ou no foco (como no
- * Grok e no Linear) e o mesmo menu no clique direito, com as teclas ao lado.
+ * Grok) e o mesmo menu no clique direito, com as teclas ao lado.
  */
 export function BlocoDaMensagem(p: PropsDoBloco) {
   const presente = useIsPresent();

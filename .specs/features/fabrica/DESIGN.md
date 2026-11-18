@@ -1,5 +1,7 @@
 # Design da Fase 3 (fábrica no site)
 
+> Nota de 17/11/2026: a integração com o Linear saiu do produto. As menções a ele neste documento são históricas.
+
 Spec: `docs/prd-agencia-multiagente.md` US-1 a US-11, §4.7, §4.11, §4.13 e §5.1
 "Fábrica no site". Referência visual: `docs/referencia-fabrica.png`. Reescrito em
 16/09/2026, quando o site deixou de ser vista de leitura e passou a substituir o

@@ -9,3 +9,7 @@ data/
 *.db-shm
 .playwright-mcp/
 !.env.example
+*.local
+.vercel
+dist/
+api/_pacote.js

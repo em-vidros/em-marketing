@@ -1,10 +1,11 @@
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, isToolUIPart, simulateReadableStream, type LanguageModel, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { AINDA_RESPONDENDO, abrirConversaDoUsuario, apagarMensagem, conversaDoUsuario, mensagensDaConversa } from "../agent/conversas";
 import { criarPost, gravarPost, transicionar, type EtapaPost, type Evento } from "../agent/post";
-import { db } from "../db";
+import { primeira } from "../db";
+import { q } from "../v2/banco";
 import { rotaDeChat } from "./chat";
 
 type Chunk = Awaited<ReturnType<MockLanguageModelV4["doStream"]>>["stream"] extends ReadableStream<infer C> ? C : never;
@@ -17,7 +18,7 @@ const turnoDoModelo = (chunks: Chunk[], unified: "stop" | "tool-calls") => ({
   stream: simulateReadableStream<Chunk>({ chunks: [...chunks, { type: "finish", finishReason: { unified, raw: undefined }, usage: uso }] }),
 });
 
-const usuario = { id: "usuario-do-chat", email: "ana@emvidros.com.br", nome: "Ana" };
+const usuario = { id: "usuario-do-chat", email: "ana@emvidros.com.br", nome: "Ana", admin: false };
 const AGENDAR = { publish_at: "2099-10-15T18:00:00-03:00", media_type: "IMAGE" };
 
 /** O Chefe pede para agendar no primeiro passo; depois só responde. */
@@ -31,24 +32,23 @@ const chefeQueAgenda = () => {
   });
 };
 
-/** Uma conversa com um post já registrado no Linear, pronto para agendar. */
-function conversaComPost(): string {
+/** Uma conversa com um post com arte escolhida e legenda, pronto para agendar. */
+async function conversaComPost(): Promise<string> {
   const id = `chat-${crypto.randomUUID()}`;
-  abrirConversaDoUsuario(usuario.id, id, "chefe", "Post de teste");
-  const arte = { variant: 1, style: "tecnico-poppins", path: "v1.jpg", interactionId: "i1", problemas: [] };
+  await abrirConversaDoUsuario(usuario.id, id, "chefe", "Post de teste");
+  const arte = { variant: 1, style: "tecnico-poppins", path: "v1.jpg", problemas: [] };
   const eventos: Evento[] = [
     { tipo: "headline", headline: { headline: "O temperado quebra em grãos.", apoio: "" } },
     { tipo: "artes", artes: [arte] },
     { tipo: "escolha", variante: 1 },
     { tipo: "legenda", legenda: "Legenda." },
-    { tipo: "registro", linearId: "EMV-1" },
   ];
   const post = eventos.reduce<EtapaPost>((p, e) => {
     const r = transicionar(p, e);
     if (!r.ok) throw new Error(r.motivo);
     return r.post;
-  }, criarPost(id, { pilar: "AUTORIDADE", tema: "temperado", precisaFotoReal: false }, "feed"));
-  gravarPost(post);
+  }, await criarPost(id, { pilar: "AUTORIDADE", tema: "temperado", precisaFotoReal: false }, "feed"));
+  await gravarPost(post);
   return id;
 }
 
@@ -66,8 +66,8 @@ async function postar(rota: ReturnType<typeof rotaDeChat>, conversaId: string, u
 }
 
 /** A última mensagem do assistente com o pedido de aprovação respondido, como o card manda. */
-function aprovar(conversaId: string): UIMessage {
-  const m = mensagensDaConversa(conversaId).findLast((x) => x.role === "assistant")!;
+async function aprovar(conversaId: string): Promise<UIMessage> {
+  const m = (await mensagensDaConversa(conversaId)).findLast((x) => x.role === "assistant")!;
   return {
     ...m,
     parts: m.parts.map((p) =>
@@ -76,44 +76,44 @@ function aprovar(conversaId: string): UIMessage {
   };
 }
 
-const parteSalva = (conversaId: string) =>
-  mensagensDaConversa(conversaId)
+const parteSalva = async (conversaId: string) =>
+  (await mensagensDaConversa(conversaId))
     .flatMap((m) => m.parts)
     .find((p) => isToolUIPart(p) && p.toolCallId === "agendar-1");
 
-const agendados = (conversaId: string) =>
-  (db.query("SELECT COUNT(*) AS n FROM queue q JOIN conversas c ON c.post_id = q.post_id WHERE c.id = ?").get(conversaId) as { n: number }).n;
+const agendados = async (conversaId: string) =>
+  (await primeira(q<{ n: number }>`SELECT count(*)::int AS n FROM queue q JOIN conversas c ON c.post_id = q.post_id WHERE c.id = ${conversaId}`))!.n;
 
 describe("aprovação de tool", () => {
   test("aprovação recusada pelo servidor fica salva como não executada, com erro em português no stream", async () => {
-    const id = conversaComPost();
+    const id = await conversaComPost();
     const pergunta: UIMessage = { id: "u1", role: "user", parts: [{ type: "text", text: "Agende para quinta às 18h." }] };
     await postar(rotaDeChat({ resolverModelo: chefeQueAgenda, segredoAprovacao: "segredo-de-ontem" }), id, pergunta);
 
-    const chunks = await postar(rotaDeChat({ resolverModelo: chefeQueAgenda, segredoAprovacao: "segredo-de-hoje" }), id, aprovar(id));
+    const chunks = await postar(rotaDeChat({ resolverModelo: chefeQueAgenda, segredoAprovacao: "segredo-de-hoje" }), id, await aprovar(id));
 
-    expect(agendados(id)).toBe(0);
-    expect(parteSalva(id)).toMatchObject({ state: "output-error", errorText: expect.stringContaining("nada foi publicado") });
+    expect(await agendados(id)).toBe(0);
+    expect(await parteSalva(id)).toMatchObject({ state: "output-error", errorText: expect.stringContaining("nada foi publicado") });
     expect(chunks).toContainEqual(expect.objectContaining({ type: "tool-output-error", toolCallId: "agendar-1" }));
   });
 
   test("a mesma aprovação mandada de novo não executa a tool outra vez", async () => {
-    const id = conversaComPost();
+    const id = await conversaComPost();
     const rota = rotaDeChat({ resolverModelo: chefeQueAgenda, segredoAprovacao: "segredo" });
     await postar(rota, id, { id: "u1", role: "user", parts: [{ type: "text", text: "Agende para quinta às 18h." }] });
-    const aprovacao = aprovar(id);
+    const aprovacao = await aprovar(id);
     await postar(rota, id, aprovacao);
 
     const reenvio = await postar(rota, id, aprovacao);
 
-    expect(agendados(id)).toBe(1);
-    expect(parteSalva(id)).toMatchObject({ state: "output-available", output: { ok: true } });
+    expect(await agendados(id)).toBe(1);
+    expect(await parteSalva(id)).toMatchObject({ state: "output-available", output: { ok: true } });
     expect(reenvio).not.toContainEqual(expect.objectContaining({ type: "tool-output-available", toolCallId: "agendar-1" }));
   });
 });
 
 const doUsuario = (id: string, texto: string): UIMessage => ({ id, role: "user", parts: [{ type: "text", text: texto }] });
-const textos = (conversaId: string) => mensagensDaConversa(conversaId).map((m) => [m.role, m.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("")]);
+const textos = async (conversaId: string) => (await mensagensDaConversa(conversaId)).map((m) => [m.role, m.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join("")]);
 const responde = (texto: string) =>
   turnoDoModelo([{ type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: texto }, { type: "text-end", id: "t" }], "stop");
 
@@ -131,7 +131,7 @@ describe("editar e apagar mensagens", () => {
     expect(visto).toContain("pedido-editado");
     expect(visto).not.toContain("pedido-original");
     expect(visto).not.toContain("pedido-seguinte");
-    expect(textos(id)).toEqual([
+    expect(await textos(id)).toEqual([
       ["user", "pedido-editado"],
       ["assistant", "Ok."],
     ]);
@@ -141,28 +141,28 @@ describe("editar e apagar mensagens", () => {
     const rota = rotaDeChat({ resolverModelo: () => new MockLanguageModelV4({ doStream: async () => responde("Ok.") }) });
     const id = `editar-bot-${crypto.randomUUID()}`;
     await postar(rota, id, doUsuario("u1", "Oi"));
-    const doBot = mensagensDaConversa(id)[1]!;
+    const doBot = (await mensagensDaConversa(id))[1]!;
 
     const comoUsuario = await pedir(rota, id, doUsuario(doBot.id, "reescrita"));
     await (await pedir(rota, id, { ...doBot, parts: [{ type: "text", text: "reescrita" }] })).text();
 
     expect([comoUsuario.status, await comoUsuario.json()]).toEqual([400, { erro: "Só dá para editar as suas mensagens." }]);
-    expect(textos(id).map(([, t]) => t).join(" ")).not.toContain("reescrita");
+    expect((await textos(id)).map(([, t]) => t).join(" ")).not.toContain("reescrita");
   });
 
   test("a aprovação de uma mensagem apagada é recusada e não agenda nada", async () => {
-    const id = conversaComPost();
+    const id = await conversaComPost();
     const rota = rotaDeChat({ resolverModelo: chefeQueAgenda, segredoAprovacao: "segredo" });
     await postar(rota, id, doUsuario("u1", "Agende para quinta às 18h."));
-    const aprovacao = aprovar(id);
+    const aprovacao = await aprovar(id);
 
-    const apagada = apagarMensagem(usuario.id, id, aprovacao.id);
+    const apagada = await apagarMensagem(usuario.id, id, aprovacao.id);
     const res = await pedir(rota, id, aprovacao);
 
     expect(apagada.ok).toBe(true);
     expect([res.status, await res.json()]).toEqual([409, { erro: "Esta mensagem não está mais na conversa." }]);
-    expect(agendados(id)).toBe(0);
-    expect(parteSalva(id)).toBeUndefined();
+    expect(await agendados(id)).toBe(0);
+    expect(await parteSalva(id)).toBeUndefined();
   });
 
   test("enquanto o bot responde, editar, mandar e apagar mensagem dão 409", async () => {
@@ -180,15 +180,15 @@ describe("editar e apagar mensagens", () => {
     const emCurso = await pedir(rota, id, doUsuario("u2", "segunda"));
 
     const edicao = await pedir(rota, id, doUsuario("u1", "editada"));
-    const apagar = apagarMensagem(usuario.id, id, "u1");
+    const apagar = await apagarMensagem(usuario.id, id, "u1");
     portao.resolve();
     await emCurso.text();
-    const depois = apagarMensagem(usuario.id, id, "u2");
+    const depois = await apagarMensagem(usuario.id, id, "u2");
 
     expect([edicao.status, await edicao.json()]).toEqual([409, { erro: AINDA_RESPONDENDO }]);
     expect(apagar).toEqual({ ok: false, status: 409, erro: AINDA_RESPONDENDO });
     expect(depois.ok).toBe(true);
-    expect(textos(id)).toEqual([
+    expect(await textos(id)).toEqual([
       ["user", "primeira"],
       ["assistant", "Ok."],
     ]);
@@ -203,54 +203,56 @@ describe("conversa direta com um especialista", () => {
     await (await pedir(rotaDeChat({ resolverModelo: () => modelo }), id, doUsuario("u1", "Revise esta legenda."), "legenda")).text();
 
     const tools = modelo.doStreamCalls[0]?.tools?.map((t) => t.name);
-    expect(conversaDoUsuario(usuario.id, id)?.botId).toBe("legenda");
+    expect((await conversaDoUsuario(usuario.id, id))?.botId).toBe("legenda");
     expect(tools).toContain("redigir_legenda");
     expect(tools).not.toContain("publicar_agora");
     expect(tools).not.toContain("agendar_publicacao");
-    expect(textos(id)).toEqual([
+    expect(await textos(id)).toEqual([
       ["user", "Revise esta legenda."],
       ["assistant", "Revisei."],
     ]);
   });
 });
 
-/** Um Gemini falso que responde o que o caso pedir. retry-after-ms: 0 faz as novas tentativas do SDK saírem na hora. */
+/** Uma OpenAI falsa que responde o que o caso pedir. retry-after-ms: 0 faz as novas tentativas do SDK saírem na hora. */
 let resposta = { status: 200, corpo: {} as unknown };
-const gemini = Bun.serve({
+const servidor = Bun.serve({
   port: 0,
   fetch: () => Response.json(resposta.corpo, { status: resposta.status, headers: { "retry-after-ms": "0" } }),
 });
-afterAll(() => gemini.stop(true));
+const chaveDaOpenAI = process.env.OPENAI_API_KEY;
+afterAll(() => {
+  servidor.stop(true);
+  if (chaveDaOpenAI !== undefined) process.env.OPENAI_API_KEY = chaveDaOpenAI;
+});
 
-const erroDoGoogle = (code: number, status: string, message: string, details: unknown[] = []) => ({ error: { code, message, status, details } });
+const erroDaOpenAI = (type: string, code: string | null, message: string) => ({ error: { message, type, param: null, code } });
 
 describe("erro do provedor", () => {
   const casos: { nome: string; status?: number; corpo?: unknown; modelo?: () => LanguageModel; espera: string; original: string }[] = [
     {
       nome: "cota esgotada",
       status: 429,
-      corpo: erroDoGoogle(429, "RESOURCE_EXHAUSTED", "You exceeded your current quota, please check your plan and billing details."),
+      corpo: erroDaOpenAI("insufficient_quota", "insufficient_quota", "You exceeded your current quota, please check your plan and billing details."),
       espera: "limite de uso",
       original: "You exceeded your current quota",
     },
     {
       nome: "chave inválida",
-      status: 400,
-      corpo: erroDoGoogle(400, "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.", [
-        { "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "API_KEY_INVALID" },
-      ]),
+      status: 401,
+      corpo: erroDaOpenAI("invalid_request_error", "invalid_api_key", "Incorrect API key provided: chave."),
       espera: "chave do modelo",
-      original: "API key not valid",
+      original: "Incorrect API key provided",
     },
     {
       nome: "modelo sobrecarregado",
       status: 503,
-      corpo: erroDoGoogle(503, "UNAVAILABLE", "The model is overloaded. Please try again later."),
+      corpo: erroDaOpenAI("server_error", null, "The model is overloaded. Please try again later."),
       espera: "sobrecarregado",
       original: "The model is overloaded",
     },
     {
-      // O que o @ai-sdk/google lança com a porta fechada, sem as novas tentativas com espera de 2 s e 4 s.
+      // O que o @ai-sdk/openai lança com a porta fechada, sem as novas tentativas com espera de 2 s e 4 s.
       nome: "sem rede",
       modelo: () =>
         new MockLanguageModelV4({
@@ -264,8 +266,8 @@ describe("erro do provedor", () => {
     {
       nome: "sem chave",
       modelo: () => {
-        delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-        return createGoogleGenerativeAI({ apiKey: undefined })("gemini-3.6-flash");
+        delete process.env.OPENAI_API_KEY;
+        return createOpenAI({ apiKey: undefined })("gpt-6-luna");
       },
       espera: "chave do modelo",
       original: "API key is missing",
@@ -285,11 +287,11 @@ describe("erro do provedor", () => {
 
   test.each(casos)("$nome chega em português e o original fica no log", async ({ status, corpo, modelo, espera, original }) => {
     resposta = { status: status ?? 200, corpo };
-    const doGemini = () => createGoogleGenerativeAI({ apiKey: "chave", baseURL: `${gemini.url}v1beta` })("gemini-3.6-flash");
+    const daOpenAI = () => createOpenAI({ apiKey: "chave", baseURL: `${servidor.url}v1` })("gpt-6-luna");
     const log = spyOn(console, "error").mockImplementation(() => {});
     const id = `erro-${crypto.randomUUID()}`;
 
-    const chunks = await postar(rotaDeChat({ resolverModelo: modelo ?? doGemini }), id, {
+    const chunks = await postar(rotaDeChat({ resolverModelo: modelo ?? daOpenAI }), id, {
       id: "u1",
       role: "user",
       parts: [{ type: "text", text: "Oi" }],

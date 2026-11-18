@@ -8,6 +8,8 @@ import { executar } from "../src/agent";
 import { BOTS, ehBotId } from "../src/agent/bots";
 import { tarefasDaConversa } from "../src/agent/tarefas";
 import type { SaidaDelegacao } from "../src/agent/tools";
+import { criarTabelas } from "../src/db";
+import { abrirBanco } from "../src/v2/banco";
 
 const [botArg = "", pedido, conversaId = `cli-${crypto.randomUUID().slice(0, 8)}`] = process.argv.slice(2);
 if (!ehBotId(botArg) || !pedido) {
@@ -38,7 +40,10 @@ function progresso(saida: SaidaDelegacao) {
   });
 }
 
-const result = executar(botArg, conversaId, [{ role: "user", content: pedido }]);
+await abrirBanco({ url: process.env.DATABASE_URL, dir: "data/pglite" });
+await criarTabelas();
+
+const result = await executar(botArg, conversaId, [{ role: "user", content: pedido }]);
 let falhou = false;
 
 for await (const part of result.stream) {
@@ -69,7 +74,7 @@ for await (const part of result.stream) {
   }
 }
 
-for (const t of tarefasDaConversa(conversaId)) {
+for (const t of await tarefasDaConversa(conversaId)) {
   console.log(`[tarefa ${t.id.slice(0, 8)}] ${t.botId} · ${t.status} · ${t.resumo ?? t.erro ?? ""}`);
 }
 

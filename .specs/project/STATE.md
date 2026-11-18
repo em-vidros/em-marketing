@@ -17,7 +17,7 @@
 - F5: falta A record `mkt.emvidros.com.br` (DNS na Wix) + arquivo Caddy no servidor; falta secret `WATCHTOWER_TOKEN` no repo GitHub (o valor existe no servidor em `/etc/emvidros/watchtower.env`).
 
 ## `.env` local (2026-07-29, chmod 600, fora do git)
-Preenchido via Playwright: `GEMINI_API_KEY` (chave "EM Marketing" já existente no projeto `gen-lang-client-0540020304`, validada), `LINEAR_API_KEY` (criada, escopada só ao time EM Vidros, validada), `LINEAR_LABEL_ID`, `TELEGRAM_WEBHOOK_SECRET` (gerado). Vazios: os 4 do Telegram/Instagram acima.
+Preenchido via Playwright: `GEMINI_API_KEY` (chave "EM Marketing" já existente no projeto `gen-lang-client-0540020304`, validada), `TELEGRAM_WEBHOOK_SECRET` (gerado). Vazios: os 4 do Telegram/Instagram acima.
 Validado de ponta a ponta com a chave real: `definir_headline` e `escrever_legenda` (82 palavras, 7 hashtags, `#EMVidros` primeira).
 
 ## Lições

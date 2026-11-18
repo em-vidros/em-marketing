@@ -33,13 +33,13 @@ let conversaAtual = "";
 async function conversar(chefe: LanguageModel, especialista: LanguageModel) {
   const conversaId = `teste-${crypto.randomUUID()}`;
   conversaAtual = conversaId;
-  const result = executar("chefe", conversaId, [{ role: "user", content: "Preciso de uma legenda." }], {
+  const result = await executar("chefe", conversaId, [{ role: "user", content: "Preciso de uma legenda." }], {
     resolverModelo: (bot) => (bot.id === "chefe" ? chefe : especialista),
   });
   const previas: unknown[] = [];
   for await (const part of result.stream) if (part.type === "tool-result" && part.preliminary) previas.push(part.output);
-  const [tarefa] = tarefasDaConversa(conversaId);
-  return { tarefa: tarefa && pegarTarefa(tarefa.id), previas };
+  const [tarefa] = await tarefasDaConversa(conversaId);
+  return { tarefa: tarefa && (await pegarTarefa(tarefa.id)), previas };
 }
 
 /** O que o modelo do Chefe recebeu como resultado da delegação, no segundo passo. */
@@ -69,7 +69,7 @@ describe("delegação do Chefe", () => {
     const chefe = chefeQueDelega();
     const quebrado = new MockLanguageModelV4({
       doStream: async () => {
-        throw new APICallError({ message: "You exceeded your current quota", url: "https://gemini", requestBodyValues: {}, statusCode: 429, isRetryable: false });
+        throw new APICallError({ message: "You exceeded your current quota", url: "https://api.openai.com", requestBodyValues: {}, statusCode: 429, isRetryable: false });
       },
     });
     const { tarefa } = await conversar(chefe, quebrado);
@@ -108,8 +108,8 @@ describe("delegação do Chefe", () => {
           const input = JSON.stringify({ tipo: "legenda", texto: "Box temperado entregue em Imperatriz." });
           return turno([{ type: "tool-call", toolCallId: "v1", toolName: "validar_texto", input }], "tool-calls");
         }
-        const [t] = tarefasDaConversa(conversaAtual);
-        gravadaNoMeio = t && pegarTarefa(t.id);
+        const [t] = await tarefasDaConversa(conversaAtual);
+        gravadaNoMeio = t && (await pegarTarefa(t.id));
         return texto("Revisei.");
       },
     });

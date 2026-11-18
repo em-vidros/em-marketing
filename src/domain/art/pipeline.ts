@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { gravarArquivo } from "../../armazem";
 import { generateArt, type Formato } from "./generate";
 import { validarArte } from "./validate";
 import type { Problema } from "../brand/validate";
@@ -24,7 +25,6 @@ export interface ArtVariant {
   variant: number;
   style: string;
   path: string;
-  interactionId: string;
   /** Gate visual (§4, §6) — medido no JPEG final, ver art/validate.ts. */
   problemas: Problema[];
 }
@@ -60,6 +60,8 @@ export function buildPrompt(opts: {
   brief: Brief;
   headline: string;
   apoio?: string;
+  /** Leituras das referências da Biblioteca: princípios a seguir, nunca o visual a copiar. */
+  inspiracoes?: string[];
 }): string {
   if (STYLES_SEM_GERACAO.has(opts.styleId))
     throw new Error(`Estilo "${opts.styleId}" exige foto real (§8.2) e não pode ser gerado.`);
@@ -81,7 +83,10 @@ export function buildPrompt(opts: {
     .replace("{HEADLINE}", opts.headline)
     .replace("{SUPPORT_LINES}", opts.formato === "feed" && opts.apoio ? `Support line: "${opts.apoio}"` : "");
 
-  return `${preenchido}\n\n${NEGATIVOS_IA}`;
+  const inspiracao = opts.inspiracoes?.length
+    ? `\n\nThe team saved these reference artworks for inspiration. Each note describes why one works. Apply the principles; never copy their subject, layout, colors or text:\n${opts.inspiracoes.map((l) => `- ${l}`).join("\n")}`
+    : "";
+  return `${preenchido}${inspiracao}\n\n${NEGATIVOS_IA}`;
 }
 
 /** US-3: gera exatamente 3 variações em estilos distintos, em paralelo. */
@@ -92,6 +97,7 @@ export async function generate3Arts(opts: {
   headline: string;
   apoio?: string;
   styles?: string[];
+  inspiracoes?: string[];
 }): Promise<ArtVariant[]> {
   if (opts.brief.precisaFotoReal)
     throw new Error(
@@ -101,18 +107,16 @@ export async function generate3Arts(opts: {
   const styles = (opts.styles ?? stylesFor(opts.brief.pilar)).filter((s) => !STYLES_SEM_GERACAO.has(s));
   if (styles.length < 3) throw new Error(`Só ${styles.length} estilos geráveis para o pilar ${opts.brief.pilar}.`);
 
-  mkdirSync("data/arts", { recursive: true });
   return Promise.all(
     styles.slice(0, 3).map(async (styleId, i) => {
-      const { jpeg, interactionId } = await generateArt({
-        prompt: buildPrompt({ styleId, formato: opts.formato, brief: opts.brief, headline: opts.headline, apoio: opts.apoio }),
+      const jpeg = await generateArt({
+        prompt: buildPrompt({ styleId, formato: opts.formato, brief: opts.brief, headline: opts.headline, apoio: opts.apoio, inspiracoes: opts.inspiracoes }),
         formato: opts.formato,
         logoVariant: DARK_STYLES.has(styleId) ? "branco" : "cor",
       });
-      const path = `data/arts/post${opts.postId}-${opts.formato}-v${i + 1}-${styleId}.jpg`;
-      writeFileSync(path, jpeg);
+      const path = await gravarArquivo("arts", `post${opts.postId}-${opts.formato}-v${i + 1}-${styleId}.jpg`, jpeg, "image/jpeg");
       const problemas = await validarArte(jpeg, opts.formato);
-      return { variant: i + 1, style: styleId, path, interactionId, problemas };
+      return { variant: i + 1, style: styleId, path, problemas };
     }),
   );
 }
@@ -124,15 +128,14 @@ export async function deriveStory(opts: {
   headline: string;
   chosen: ArtVariant;
 }): Promise<{ path: string; problemas: Problema[] }> {
-  const { jpeg } = await generateArt({
+  const jpeg = await generateArt({
     prompt:
       buildPrompt({ styleId: opts.chosen.style, formato: "stories", brief: opts.brief, headline: opts.headline }) +
-      "\n\nIMPORTANT: keep the exact same visual concept, colors, hero element and mood as the previous image — this is the 9:16 Stories adaptation of that approved artwork, recomposed for vertical (not cropped).",
+      "\n\nIMPORTANT: keep the exact same visual concept, colors, hero element and mood as the second reference image — this is the 9:16 Stories adaptation of that approved artwork, recomposed for vertical (not cropped).",
     formato: "stories",
     logoVariant: DARK_STYLES.has(opts.chosen.style) ? "branco" : "cor",
-    previousInteractionId: opts.chosen.interactionId,
+    base: opts.chosen.path,
   });
-  const path = `data/arts/post${opts.postId}-stories-derived.jpg`;
-  writeFileSync(path, jpeg);
+  const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived.jpg`, jpeg, "image/jpeg");
   return { path, problemas: await validarArte(jpeg, "stories") };
 }

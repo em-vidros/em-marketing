@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import type { ReactNode } from "react";
 import { imagensEm, passosDe, type Passo } from "../tipos";
+import { useChegouDepois } from "../movimento";
 import { LinhaFerramenta } from "./ia/LinhaFerramenta";
 
 export { Check, Girando } from "./ia/LinhaFerramenta";
@@ -26,11 +27,12 @@ export function trechosDe<P extends UIMessage["parts"][number]>(partes: readonly
 
 /** Chamadas de tool em linhas, cada uma com o ícone do estado dela. `extra` vai embaixo da linha (as artes de uma tool). */
 export function Passos({ passos, className = "", extra }: { passos: readonly Passo[]; className?: string; extra?: (p: Passo) => ReactNode }) {
+  const chegou = useChegouDepois(passos.map((p) => p.id));
   if (passos.length === 0) return null;
   return (
     <ol aria-label="Ferramentas" className={`flex list-none flex-col ${className}`}>
       {passos.map((p) => (
-        <LinhaFerramenta key={p.id} passo={p}>
+        <LinhaFerramenta key={p.id} passo={p} sobe={chegou(p.id)}>
           {extra?.(p)}
         </LinhaFerramenta>
       ))}

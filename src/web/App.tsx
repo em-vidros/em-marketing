@@ -13,7 +13,7 @@ import { FolhaAtalhos } from "./componentes/menu/FolhaAtalhos";
 import type { AcoesConversa } from "./componentes/menu/MenuConversa";
 import { type ModoPaleta, Paleta } from "./componentes/menu/Paleta";
 import { DicasProvider } from "./componentes/menu/Teclas";
-import { estadosDaEquipe } from "./equipe";
+import { agoraDasConversas, estadosDaEquipe } from "./equipe";
 import { DESKTOP, inertizarFora } from "./media";
 import { MOLA } from "./movimento";
 import { lerRota, navegar, useCaminho, type Rota } from "./rota";
@@ -21,11 +21,14 @@ import { criarEscolhaDoBot } from "./escolhaDoBot";
 import { atalhoDeConversa, atalhoDoBot } from "./teclado/atalhos";
 import { useAtalho, useTeclado } from "./teclado/motor";
 import { Atividade } from "./telas/Atividade";
+import { Arte } from "./telas/Arte";
+import { Artes } from "./telas/Artes";
 import { Biblioteca } from "./telas/Biblioteca";
 import { Calendario } from "./telas/Calendario";
 import Bot from "./telas/Bot";
 import { TelaConversa, type Vivo } from "./telas/Conversa";
 import { Entrar } from "./telas/Entrar";
+import { Uso } from "./telas/Uso";
 import type { BotId, ResumoTarefa } from "./tipos";
 
 export function App() {
@@ -52,7 +55,10 @@ const NOME_DA_TELA: Record<Exclude<Rota["tela"], "entrar">, string> = {
   conversa: "esta conversa",
   atividade: "a atividade",
   biblioteca: "a biblioteca",
+  artes: "as artes",
+  arte: "o editor da arte",
   calendario: "o calendário",
+  uso: "o uso da API",
   bot: "a página do bot",
   "nao-encontrada": "esta página",
 };
@@ -123,6 +129,7 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   useEffect(() => void conversas.carregar(), [conversas]);
 
   const conversaId = rota.tela === "nova" ? novoId : rota.tela === "conversa" ? rota.id : null;
+  const agora = agoraDasConversas(ativas, conversaId === null ? null : { id: conversaId, bot: vivo.bot, estados, respondendo }, bots);
   const conhecida = (id: string) => !!conversas.achar(id);
 
   // A conversa de "/" já virou /c/:id; voltar para "/" começa outra.
@@ -239,6 +246,7 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
       ativas={lista.ativas}
       arquivadas={lista.arquivadas}
       ativa={conversaId}
+      agora={agora}
       editando={editando}
       aoRenomear={aoRenomear}
       acoes={acoes}
@@ -284,8 +292,14 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
             <Atividade abrirMenu={abrirMenu} />
           ) : rota.tela === "biblioteca" ? (
             <Biblioteca abrirMenu={abrirMenu} />
+          ) : rota.tela === "artes" ? (
+            <Artes abrirMenu={abrirMenu} />
+          ) : rota.tela === "arte" ? (
+            <Arte key={rota.id} id={rota.id} abrirMenu={abrirMenu} />
           ) : rota.tela === "calendario" ? (
             <Calendario abrirMenu={abrirMenu} />
+          ) : rota.tela === "uso" ? (
+            <Uso abrirMenu={abrirMenu} />
           ) : rota.tela === "bot" ? (
             <Bot key={rota.id} id={rota.id} aba={rota.aba} abrirMenu={abrirMenu} conversar={() => novoPedido(rota.id)} />
           ) : (

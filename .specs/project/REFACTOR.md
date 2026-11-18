@@ -15,7 +15,7 @@ Aberta em 2026-10-13. Substitui o canal Telegram por um site com bots especializ
 - AI SDK 7 (`ai`, `@ai-sdk/google`, `@ai-sdk/anthropic`, `@ai-sdk/react`) e `zod` para os schemas das tools.
 - better-auth 1.7 sobre o mesmo `bun:sqlite`.
 - React 19, Tailwind 4, `motion`. Componentes de chat vêm do Beautiful UI; o resto vem do unlumen (shadcn) e do uiarc.
-- Arte continua em `sharp` + Gemini imagem. O validador de marca não muda.
+- Arte continua em `sharp` + `gpt-image-2.6-sunburst`. O validador de marca não muda.
 
 ## Forma dos dados
 
@@ -46,8 +46,7 @@ type EtapaPost =
   | { etapa: "headline"; ...; headline: string }
   | { etapa: "artes"; ...; artes: Arte[] }
   | { etapa: "escolhida"; ...; arte: Arte }
-  | { etapa: "legenda"; ...; legenda: string }
-  | { etapa: "registrado"; ...; linearId: string };
+  | { etapa: "legenda"; ...; legenda: string };
 ```
 
 `publicar_agora` e `agendar_publicacao` usam `needsApproval` do AI SDK. A confirmação humana sai do prompt e vira um cartão de aprovação no chat.
@@ -109,7 +108,7 @@ Fica de fora: computador por bot, chamada de voz, Slack, MCP genérico.
 
 ```
 src/
-  domain/      art, caption, brand, fotos, scheduler, instagram, linear (sem Telegram)
+  domain/      art, caption, brand, fotos, scheduler, instagram (sem Telegram)
   agent/       models.ts (registry), bots.ts, tools/*.ts, post.ts (máquina de estados)
   server/      index.ts (Bun.serve), auth.ts, chat.ts
   web/         index.html, app.tsx, components/
@@ -172,4 +171,4 @@ interface Modelo { id: ModelId; nome: string; disponivel: boolean }  // disponiv
 - Apagar uma conversa não apaga o post nem as artes da Biblioteca.
 - Editar uma mensagem do usuário troca o texto, descarta o que veio depois e o bot responde de novo. Apagar a mensagem do usuário tira o turno inteiro; apagar uma do bot tira só ela. Nenhum dos dois apaga tarefa, post, fila ou arte. Enquanto o bot responde, editar e apagar dão 409.
 
-Limite conhecido: o estado do post (agent/post.ts) é da conversa, não das mensagens. Editar ou apagar uma mensagem não volta o post à etapa de antes: se o turno removido escolheu a arte ou registrou no Linear, o post continua escolhido ou registrado, e o bot vê esse estado no turno seguinte.
+Limite conhecido: o estado do post (agent/post.ts) é da conversa, não das mensagens. Editar ou apagar uma mensagem não volta o post à etapa de antes: se o turno removido escolheu a arte ou escreveu a legenda, o post continua escolhido ou com a legenda, e o bot vê esse estado no turno seguinte.

@@ -1,5 +1,7 @@
 # Design da Fase 2 (MVP Instagram)
 
+> Nota de 17/11/2026: a integração com o Linear saiu do produto. As menções a ele neste documento são históricas.
+
 Spec: `docs/prd-agencia-multiagente.md` §2.2, §2.4 (US-1 a US-6, US-8, US-9), §3, §4.7 e
 §5.1 "MVP Instagram". A Fase 1 (`DESIGN.md`) fica como está: tabelas de transição,
 `transicionar()` como escritor único, fila com lease e época, artefatos imutáveis,

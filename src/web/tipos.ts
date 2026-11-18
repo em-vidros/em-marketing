@@ -2,12 +2,12 @@ import type { InferUITools, UIDataTypes, UIMessage } from "ai";
 import type { BotId, Especialista } from "../agent/bots";
 import type { Conversa } from "../agent/conversas";
 import type { ResumoTarefa, Tarefa } from "../agent/tarefas";
-import type { catalogo, SaidaDelegacao, ToolName } from "../agent/tools";
+import type { Catalogo, SaidaDelegacao, ToolName } from "../agent/tools";
 
 export type { BotId, Conversa, Especialista, ResumoTarefa, SaidaDelegacao, Tarefa, ToolName };
 
 /** As tools do servidor, como o useChat as vê. Os tipos de entrada e saída vêm das definições. */
-export type Ferramentas = InferUITools<ReturnType<typeof catalogo>>;
+export type Ferramentas = InferUITools<Catalogo>;
 
 export type Mensagem = UIMessage<unknown, UIDataTypes, Ferramentas>;
 export type Parte = Mensagem["parts"][number];
@@ -41,7 +41,6 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
   redigir_legenda: { fazendo: "Escrevendo a legenda", feito: "Legenda escrita" },
   validar_texto: { fazendo: "Conferindo o texto", feito: "Texto conferido" },
   derivar_story: { fazendo: "Gerando o story", feito: "Story gerado" },
-  salvar_linear: { fazendo: "Registrando no Linear", feito: "Registrado no Linear" },
   listar_agenda: { fazendo: "Lendo a agenda", feito: "Agenda lida" },
   status_do_mes: { fazendo: "Conferindo a cota do mês", feito: "Cota do mês conferida" },
   cancelar_agendamento: { fazendo: "Cancelando o agendamento", feito: "Agendamento cancelado" },

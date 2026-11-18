@@ -1,4 +1,4 @@
-import type { MudancaConversa } from "../../../agent/conversas";
+import type { ConversaExcluida, MudancaConversa } from "../../../agent/conversas";
 import type { Conversa } from "../../tipos";
 import type { PilhaDeDesfazer } from "./desfazer";
 
@@ -6,8 +6,9 @@ import type { PilhaDeDesfazer } from "./desfazer";
 export interface ApiConversas {
   listar(arquivadas: boolean): Promise<Conversa[]>;
   mudar(id: string, mudanca: MudancaConversa): Promise<Conversa>;
-  apagar(id: string): Promise<void>;
-  restaurar(id: string): Promise<Conversa>;
+  /** Remove do banco e devolve o que saiu; restaurar recebe esse mesmo objeto. */
+  apagar(id: string): Promise<ConversaExcluida>;
+  restaurar(excluida: ConversaExcluida): Promise<Conversa>;
 }
 
 export interface Lista {
@@ -19,7 +20,7 @@ export interface Lista {
 /** O toast: com `chave`, oferece Desfazer, que consome a mesma entrada da pilha que o ⌘Z. */
 export type Aviso = { tipo: "desfazivel"; chave: number; texto: string; nome?: string } | { tipo: "erro"; texto: string };
 
-/** atualizadaEm é texto ISO-like do SQLite; a ordem lexical é a ordem do tempo. */
+/** atualizadaEm é texto "AAAA-MM-DD HH:MM:SS" em UTC; a ordem lexical é a ordem do tempo. */
 const maisNovaPrimeiro = (a: Conversa, b: Conversa) => b.atualizadaEm.localeCompare(a.atualizadaEm);
 
 const sem = (lista: readonly Conversa[], id: string) => lista.filter((c) => c.id !== id);
@@ -109,8 +110,7 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void, pi
       const d = pilha.empilhar(async () => {
         recolocar(antes);
         try {
-          await pedido;
-          recolocar(await api.restaurar(id));
+          recolocar(await api.restaurar(await pedido));
           aoDesfazer?.();
         } catch {
           tirar(id);

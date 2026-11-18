@@ -1,4 +1,8 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+
+/* O app não tem tema escuro e nunca põe .dark: sem esta linha, o dark: dos componentes do shadcn seguiria o sistema. */
+@custom-variant dark (&:is(.dark *));
 
 /* Tokens do tema claro do Grok (.specs/project/REFACTOR.md, "Visual do site"). Só aqui. */
 @theme {
@@ -228,7 +232,7 @@
 }
 
 /*
- * Barra, menus e paleta (componentes/menu). Hover do Linear: entra na hora e sai em 150 ms,
+ * Barra, menus e paleta (componentes/menu). Hover: entra na hora e sai em 150 ms,
  * para o destaque nunca atrasar o cursor numa lista.
  */
 .linha {
@@ -391,418 +395,172 @@ a.linha:focus-visible {
   --color-pilar-marca-texto: #3b3833;
 }
 
+/*
+ * Os componentes do shadcn e do CalendarCN (src/web/shadcn) leem as variáveis do shadcn; aqui
+ * cada uma aponta para um token do app. O primary é o vermelho do hoje porque o CalendarCN só o
+ * usa no número de hoje e na linha da hora atual. As sete cores de evento viram os tons do
+ * calendário: green prova, purple autoridade, blue gente, orange marca, gray sem pilar,
+ * red falha e yellow data do calendário editorial (componentes/calendario/eventos.ts).
+ */
+@theme inline {
+  --text-xxs: 0.625rem;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-calendar-weekend: var(--calendar-weekend);
+  --color-calendar-current-week: var(--calendar-current-week);
+  --color-calendar-day-hover: var(--calendar-day-hover);
+  --color-calendar-day-hover-current-week: var(--calendar-day-hover-current-week);
+  --color-event-red: var(--event-red);
+  --color-event-red-border: var(--event-red-border);
+  --color-event-red-bg: var(--event-red-bg);
+  --color-event-orange: var(--event-orange);
+  --color-event-orange-border: var(--event-orange-border);
+  --color-event-orange-bg: var(--event-orange-bg);
+  --color-event-yellow: var(--event-yellow);
+  --color-event-yellow-border: var(--event-yellow-border);
+  --color-event-yellow-bg: var(--event-yellow-bg);
+  --color-event-green: var(--event-green);
+  --color-event-green-border: var(--event-green-border);
+  --color-event-green-bg: var(--event-green-bg);
+  --color-event-blue: var(--event-blue);
+  --color-event-blue-border: var(--event-blue-border);
+  --color-event-blue-bg: var(--event-blue-bg);
+  --color-event-purple: var(--event-purple);
+  --color-event-purple-border: var(--event-purple-border);
+  --color-event-purple-bg: var(--event-purple-bg);
+  --color-event-gray: var(--event-gray);
+  --color-event-gray-border: var(--event-gray-border);
+  --color-event-gray-bg: var(--event-gray-bg);
+}
+
+:root {
+  --background: var(--color-superficie);
+  --foreground: var(--color-tinta);
+  --card: var(--color-superficie);
+  --card-foreground: var(--color-tinta);
+  --popover: var(--color-superficie);
+  --popover-foreground: var(--color-tinta);
+  --primary: var(--color-hoje);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-hover);
+  --secondary-foreground: var(--color-tinta);
+  --muted: var(--color-hover);
+  --muted-foreground: var(--color-tinta-2);
+  --accent: var(--color-hover);
+  --accent-foreground: var(--color-tinta);
+  --destructive: var(--color-erro);
+  --border: var(--color-linha-forte);
+  --input: var(--color-borda-campo);
+  --ring: var(--color-tinta);
+  --calendar-weekend: var(--color-fundo);
+  --calendar-current-week: var(--color-ativo);
+  --calendar-day-hover: var(--color-hover);
+  --calendar-day-hover-current-week: var(--color-ativo);
+
+  /* Pastel com barra viva, como o Calendário da Apple. OKLCH com tom fixo por cor, texto ≥ 7:1 sobre o fundo. */
+  --event-green: #125629;
+  --event-green-border: #21b559;
+  --event-green-bg: #c2f3cb;
+  --event-purple: #57337a;
+  --event-purple-border: #b474f4;
+  --event-purple-bg: #eadff9;
+  --event-blue: #104a7c;
+  --event-blue-border: #359cfa;
+  --event-blue-bg: #d5e7fa;
+  --event-orange: #6b390f;
+  --event-orange-border: #e1791c;
+  --event-orange-bg: #fadfcd;
+  --event-gray: #4c473f;
+  --event-gray-border: #a59d91;
+  --event-gray-bg: #eee9e1;
+  --event-red: #7c2529;
+  --event-red-border: #f75c61;
+  --event-red-bg: #fadddb;
+  --event-yellow: #564610;
+  --event-yellow-border: #e1b927;
+  --event-yellow-bg: #f6e4ac;
+}
+
+@layer base {
+  [data-event-id],
+  [data-event-id] * {
+    cursor: var(--cursor, default);
+  }
+}
+
+@utility scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes column-highlight-fade {
+  from {
+    background-color: color-mix(in srgb, var(--color-hoje) 12%, transparent);
+  }
+  to {
+    background-color: transparent;
+  }
+}
+.column-highlight {
+  animation: column-highlight-fade 2s ease-out forwards;
+}
+@keyframes calendar-loading-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+.calendar-loading-bar {
+  width: 33.333%;
+  animation: calendar-loading-slide 1.2s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .column-highlight {
+    animation: none;
+  }
+  .calendar-loading-bar {
+    width: 100%;
+    opacity: 0.5;
+    animation: none;
+  }
+}
+
+/* A cor do chip marcado: o pilar dele, ou cinza sem pilar. */
 [data-tom] {
-  --barra: var(--color-borda-campo);
-  --fundo: var(--color-hover);
   --texto: #3d3d3d;
 }
 [data-tom="PROVA"] {
-  --barra: var(--color-pilar-prova);
-  --fundo: var(--color-pilar-prova-fundo);
   --texto: var(--color-pilar-prova-texto);
 }
 [data-tom="AUTORIDADE"] {
-  --barra: var(--color-pilar-autoridade);
-  --fundo: var(--color-pilar-autoridade-fundo);
   --texto: var(--color-pilar-autoridade-texto);
 }
 [data-tom="GENTE"] {
-  --barra: var(--color-pilar-gente);
-  --fundo: var(--color-pilar-gente-fundo);
   --texto: var(--color-pilar-gente-texto);
 }
 [data-tom="MARCA"] {
-  --barra: var(--color-pilar-marca);
-  --fundo: var(--color-pilar-marca-fundo);
   --texto: var(--color-pilar-marca-texto);
-}
-[data-tom="publicado"] {
-  --barra: var(--color-tinta-4);
-  --fundo: var(--color-painel);
-  --texto: var(--color-tinta-2);
-}
-[data-tom="falha"] {
-  --barra: var(--color-erro);
-  --fundo: #fdecea;
-  --texto: var(--color-erro);
-}
-[data-tom="data"] {
-  --barra: var(--color-tinta-3);
-  --fundo: var(--color-ativo);
-  --texto: var(--color-pilar-marca-texto);
-}
-
-.cal-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 16px;
-  text-align: left;
-  color: var(--color-tinta);
-  cursor: default;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-.cal-item[data-movel] {
-  touch-action: manipulation;
-}
-.cal-item[data-estado="arrastada"] {
-  opacity: 0.35;
-}
-.cal-item[data-estado="assentando"] {
-  opacity: 0;
-}
-.cal-hora {
-  flex: none;
-  color: var(--color-tinta-3);
-}
-
-/* Mês: barra fina na cor do tom e a hora à direita, sem fundo, como o Mac. */
-.cal-linha {
-  height: 18px;
-  flex: none;
-  padding: 0 4px 0 3px;
-  border-radius: 5px;
-}
-.cal-linha::before {
-  content: "";
-  flex: none;
-  width: 3px;
-  height: 12px;
-  border-radius: 2px;
-  background: var(--barra);
-}
-.cal-linha[data-tom="falha"],
-.cal-linha[data-tom="publicado"] {
-  color: var(--texto);
-}
-
-/* Dia inteiro: pílula tingida. */
-.cal-pilula {
-  height: 18px;
-  flex: none;
-  padding: 0 6px;
-  border-radius: 5px;
-  background: var(--fundo);
-  color: var(--texto);
-  font-weight: 500;
-}
-
-/* Grade de horas: bloco tingido com a barra de 3px à esquerda. */
-.cal-bloco {
-  position: absolute;
-  gap: 4px;
-  padding: 0 3px 0 7px;
-  overflow: hidden;
-  border-radius: 6px;
-  background: var(--fundo);
-  color: var(--texto);
-  box-shadow: inset 3px 0 0 var(--barra), 0 0 0 1px var(--color-superficie);
-  z-index: 1;
-}
-.cal-bloco .cal-hora {
-  color: inherit;
-}
-/* Coluna estreita: o título fica, a capa e depois a hora saem (a hora segue no nome acessível). */
-.cal-bloco {
-  container-type: inline-size;
-}
-@container (max-width: 150px) {
-  .cal-bloco > .cal-capa {
-    display: none;
-  }
-}
-@container (max-width: 96px) {
-  .cal-bloco > .cal-hora {
-    display: none;
-  }
-}
-.cal-capa {
-  flex: none;
-  width: 18px;
-  height: 22px;
-  border-radius: 3px;
-  object-fit: cover;
-  outline: 1px solid rgb(0 0 0 / 0.1);
-  outline-offset: -1px;
-}
-
-.cal-item[data-selecionado] {
-  background: var(--texto);
-  color: var(--color-superficie);
-}
-.cal-item[data-selecionado] .cal-hora {
-  color: inherit;
-}
-.cal-item[data-selecionado]::before {
-  background: currentColor;
-}
-.cal-bloco[data-selecionado] {
-  box-shadow: inset 3px 0 0 var(--barra), 0 0 0 1px var(--color-superficie), 0 2px 8px rgb(0 0 0 / 0.12);
-  z-index: 2;
-}
-.cal-item:focus-visible {
-  outline: 2px solid var(--color-tinta);
-  outline-offset: 1px;
-  z-index: 3;
-}
-
-.cal-provisorio {
-  background: var(--color-superficie);
-  color: var(--color-tinta-2);
-  outline: 1px dashed var(--color-tinta-3);
-  outline-offset: -1px;
-  box-shadow: none;
-  z-index: 3;
-}
-
-/* Hoje: círculo vermelho de 24px com o número branco. */
-.cal-hoje {
-  display: inline-grid;
-  place-items: center;
-  min-width: 24px;
-  height: 24px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--color-hoje);
-  color: var(--color-sobre-tinta);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.cal-num {
-  color: var(--color-tinta);
-}
-.cal-num-mes {
-  font-weight: 600;
-}
-.cal-casa {
-  cursor: default;
-  outline-offset: -2px;
-}
-.cal-casa[data-fim-de-semana],
-.cal-coluna[data-fim-de-semana],
-.cal-dia-inteiro[data-fim-de-semana] {
-  background-color: var(--color-fundo);
-}
-.cal-casa[data-fora] .cal-num,
-.cal-casa[data-fora] .cal-num-mes {
-  color: var(--color-tinta-3);
-}
-.cal-casa[aria-selected="true"],
-.cal-dia-inteiro[data-selecionado] {
-  background-color: var(--color-ativo);
-}
-.cal-casa[data-alvo],
-.cal-dia-inteiro[data-alvo] {
-  background-color: var(--color-pilar-prova-fundo);
-}
-.cal-casa:focus-visible,
-.cal-dia-inteiro:focus-visible {
-  outline: 2px solid var(--color-tinta);
-  outline-offset: -2px;
-}
-
-.cal-mais {
-  flex: none;
-  height: 18px;
-  padding: 0 4px;
-  border-radius: 5px;
-  font-size: 12px;
-  font-weight: 500;
-  text-align: left;
-  color: var(--color-tinta-2);
-  cursor: pointer;
-}
-@media (hover: hover) {
-  .cal-mais:hover {
-    background: var(--color-hover);
-    color: var(--color-tinta);
-  }
-}
-.cal-mais-bloco {
-  position: absolute;
-  height: 28px;
-  text-align: center;
-  background: var(--color-ativo);
-  z-index: 1;
-}
-
-.cal-ponto {
-  width: 6px;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--barra);
-}
-
-/* Semana e dia: um contêiner rola nos dois eixos, cabeçalho e horas grudados. */
-.cal-horas {
-  --coluna-min: 0px;
-  scroll-padding-left: 56px;
-}
-.cal-grade {
-  grid-template-columns: 56px repeat(var(--colunas), minmax(var(--coluna-min), 1fr));
-  grid-template-rows: 44px auto 1440px;
-}
-@media (max-width: 39.99rem) {
-  .cal-horas[data-dias="7"] {
-    /* Duas colunas e meia: a metade que aparece avisa que a semana continua de lado. */
-    --coluna-min: calc((100vw - 56px) / 2.5);
-    scroll-snap-type: x mandatory;
-  }
-}
-.cal-cabeca,
-.cal-coluna,
-.cal-dia-inteiro {
-  scroll-snap-align: start;
-}
-.cal-dia-inteiro,
-.cal-canto-dia {
-  top: 44px;
-  min-height: 28px;
-}
-.cal-dia-inteiro {
-  background-color: var(--color-superficie);
-}
-.cal-coluna {
-  background-image: linear-gradient(to bottom, var(--color-linha-forte) 1px, transparent 1px);
-  background-size: 100% 60px;
-}
-
-/* A hora de agora: 2px e um ponto só na coluna de hoje, traço fraco nas outras, pílula nas horas. */
-.cal-agora,
-.cal-agora-fraco {
-  position: absolute;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-  z-index: 4;
-}
-.cal-agora {
-  height: 2px;
-  margin-top: -1px;
-  background: var(--color-hoje);
-}
-.cal-agora::before {
-  content: "";
-  position: absolute;
-  left: -4px;
-  top: -3px;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--color-hoje);
-}
-.cal-agora-fraco {
-  height: 1px;
-  background: color-mix(in srgb, var(--color-hoje) 25%, transparent);
-}
-.cal-pilula-agora {
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--color-hoje);
-  color: var(--color-sobre-tinta);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 18px;
-}
-
-.cal-alvo {
-  position: absolute;
-  left: 1px;
-  right: 2px;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgb(15 13 10 / 0.04);
-  outline: 1px dashed var(--color-tinta-3);
-  outline-offset: -1px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--color-tinta-2);
-  pointer-events: none;
-  z-index: 3;
-}
-
-/* O fantasma do arrasto anda por transform, fora da grade, e o ponteiro passa através dele. */
-.cal-fantasma {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 80;
-  border-radius: 6px;
-  pointer-events: none;
-  visibility: hidden;
-  will-change: transform;
-}
-.cal-fantasma[data-visivel] {
-  visibility: visible;
-}
-.cal-fantasma .cal-item {
-  position: relative;
-  inset: auto;
-  width: 100%;
-  height: 100%;
-  opacity: 1;
-}
-.cal-fantasma .cal-linha {
-  background: var(--color-superficie);
-}
-.cal-fantasma-hora {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 4px);
-  padding: 1px 6px;
-  border-radius: 999px;
-  background: var(--color-tinta);
-  color: var(--color-sobre-tinta);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 16px;
-  white-space: nowrap;
-}
-.cal-pronto-fantasma {
-  gap: 8px;
-  padding: 0 8px 0 6px;
-  border-radius: 8px;
-  background: var(--color-superficie);
-  box-shadow: inset 3px 0 0 var(--barra), 0 0 0 1px var(--color-linha-forte);
-}
-
-/* O popover entra de 0,96 a 1 a partir da seta e sai só no fade (NSPopover). */
-.cal-popover {
-  transform-origin: var(--transform-origin);
-  transition:
-    opacity 200ms var(--ease-saida),
-    scale 200ms var(--ease-saida);
-}
-.cal-popover[data-starting-style] {
-  opacity: 0;
-  scale: 0.96;
-}
-.cal-popover[data-ending-style] {
-  opacity: 0;
-  transition: opacity 120ms ease-out;
-}
-.cal-seta {
-  display: flex;
-}
-.cal-seta[data-side="bottom"] {
-  top: -7px;
-}
-.cal-seta[data-side="top"] {
-  bottom: -7px;
-  rotate: 180deg;
-}
-.cal-seta[data-side="right"] {
-  left: -11px;
-  rotate: -90deg;
-}
-.cal-seta[data-side="left"] {
-  right: -11px;
-  rotate: 90deg;
 }
 
 .cal-chip {
@@ -815,12 +573,17 @@ a.linha:focus-visible {
   color: var(--color-tinta-2);
   box-shadow: inset 0 0 0 1px var(--color-linha-forte);
   cursor: pointer;
-  transition: background-color 150ms ease, color 150ms ease;
+  transition-property: scale, background-color, color;
+  transition-duration: 100ms, 150ms, 150ms;
+  transition-timing-function: var(--ease-saida), ease, ease;
+}
+.cal-chip:active {
+  scale: 0.97;
 }
 @media (hover: hover) {
   .cal-chip:hover {
     background: var(--color-hover);
-    transition-duration: 0s;
+    transition-duration: 100ms, 0s, 0s;
   }
 }
 .cal-chip:has(input:checked) {
@@ -838,9 +601,35 @@ a.linha:focus-visible {
     padding: 0 14px;
   }
 }
-.cal-chip[data-indisponivel] {
-  opacity: 0.45;
-  cursor: not-allowed;
+
+/*
+ * Pauta é ideia, ainda não é post: contorno tracejado na cor do pilar e fundo mais claro, sem a
+ * barra cheia. O CalendarCN pinta o bloco em camadas irmãs do conteúdo (fundo branco, cor, barra
+ * e, por último, o conteúdo); o :has acha o bloco pela marca que o ConteudoDoEvento põe no conteúdo.
+ * Selecionada, a pauta fica com o fundo cheio do CalendarCN, como os outros blocos.
+ */
+div:has(> div > .cal-ideia) {
+  --cal-ideia: var(--color-event-gray-border);
+}
+div:has(> div > .cal-ideia[data-cor="green"]) {
+  --cal-ideia: var(--color-event-green-border);
+}
+div:has(> div > .cal-ideia[data-cor="purple"]) {
+  --cal-ideia: var(--color-event-purple-border);
+}
+div:has(> div > .cal-ideia[data-cor="blue"]) {
+  --cal-ideia: var(--color-event-blue-border);
+}
+div:has(> div > .cal-ideia[data-cor="orange"]) {
+  --cal-ideia: var(--color-event-orange-border);
+}
+/* A sombra interna clareia o fundo da cor sem apagar o tracejado, que fica por cima dela. */
+div:has(> div > .cal-ideia):not([aria-pressed="true"]) > div:nth-child(2) {
+  border: 1.5px dashed var(--cal-ideia);
+  box-shadow: inset 0 0 0 100vmax color-mix(in oklab, var(--color-superficie) 55%, transparent);
+}
+div:has(> div > .cal-ideia):not([aria-pressed="true"]) > div:nth-child(3):not(:last-child) {
+  display: none;
 }
 
 .cal-nav {
@@ -865,54 +654,9 @@ a.linha:focus-visible {
   }
 }
 
-.cal-recusa {
-  display: block;
-  max-width: 260px;
-  padding: 6px 10px;
-  border-radius: 10px;
-  background: var(--color-tinta);
-  color: var(--color-sobre-tinta);
-  font-size: 12px;
-  line-height: 16px;
-  box-shadow: 0 8px 24px rgb(0 0 0 / 0.16);
-}
-
-.cal-barra-lista {
-  flex: none;
-  width: 3px;
-  height: 14px;
-  border-radius: 2px;
-  background: var(--barra);
-}
-
-.cal-folha {
-  transition: transform 350ms var(--ease-saida);
-}
-.cal-folha[data-starting-style],
-.cal-folha[data-ending-style] {
-  transform: translateY(100%);
-}
-.cal-folha[data-ending-style] {
-  transition-duration: 250ms;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .cal-popover,
-  .cal-popover[data-ending-style] {
-    transition: opacity 150ms ease-out;
-  }
-  .cal-popover[data-starting-style] {
-    scale: 1;
-  }
-  .cal-folha {
-    transition: opacity 150ms ease-out;
-  }
-  .cal-folha[data-starting-style],
-  .cal-folha[data-ending-style] {
-    transform: none;
-    opacity: 0;
-  }
-  .cal-nav:active {
+  .cal-nav:active,
+  .cal-chip:active {
     scale: none;
   }
 }

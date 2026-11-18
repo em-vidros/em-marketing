@@ -4,7 +4,6 @@ import { useApi, useNomesDosBots } from "../api";
 import { especialistaDa, type ParteDelegacao, type Tarefa } from "../tipos";
 import { Avatar } from "./Avatar";
 import { Falha } from "./Falha";
-import { atividadeDe } from "./ia/atividade";
 import { Pensando } from "./ia/Pensando";
 import { Raciocinio } from "./ia/Raciocinio";
 import { Markdown } from "./Markdown";
@@ -17,7 +16,6 @@ const hora = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digi
  * `aoVivo` é a mensagem que ainda está chegando; ela ganha o cursor. `noAr`: o especialista está rodando.
  */
 function Transcricao({ mensagens, aoVivo, noAr }: { mensagens: readonly UIMessage[]; aoVivo: UIMessage | null; noAr: boolean }) {
-  const pensando = noAr && atividadeDe(aoVivo, true).tipo === "pensando";
   return (
     <>
       {mensagens.map((m) =>
@@ -40,7 +38,7 @@ function Transcricao({ mensagens, aoVivo, noAr }: { mensagens: readonly UIMessag
           </div>
         ),
       )}
-      {pensando && <Pensando />}
+      {noAr && <Pensando />}
     </>
   );
 }

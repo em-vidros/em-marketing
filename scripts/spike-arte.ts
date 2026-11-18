@@ -1,7 +1,7 @@
 // Fase 1 (bloqueante): gera 3 variações reais do post "Dia do Vidraceiro 18/05"
 // em Feed (1080×1350) e Stories (1080×1920) e valida os critérios da §3.4 do PRD.
 //
-// Uso: GEMINI_API_KEY=... bun scripts/spike-arte.ts [feed|stories|ambos]
+// Uso: OPENAI_API_KEY=... bun scripts/spike-arte.ts [feed|stories|ambos]
 //
 // Usa buildPrompt/stylesFor do próprio pipeline em vez de reimplementá-los: um
 // gate que testa uma cópia do código não testa o código.
@@ -54,8 +54,8 @@ for (const formato of formatos) {
     const styleId = STYLES[i]!;
     const name = `out/spike/${formato}-v${i + 1}-${styleId}.jpg`;
     if (r.status === "fulfilled") {
-      writeFileSync(name, r.value.jpeg);
-      console.log(`✓ ${name} (${(r.value.jpeg.byteLength / 1024).toFixed(0)} KB) id=${r.value.interactionId}`);
+      writeFileSync(name, r.value);
+      console.log(`✓ ${name} (${(r.value.byteLength / 1024).toFixed(0)} KB)`);
     } else {
       console.error(`✗ ${styleId}: ${r.reason}`);
     }

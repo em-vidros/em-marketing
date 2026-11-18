@@ -1,14 +1,13 @@
 /**
  * Calendário editorial: as datas recorrentes que podem virar post.
  *
- * §12.4 é uma trava, não uma sugestão: uma data só vira post se passar em um de
- * três testes — (a) é do setor, (b) é da região onde há unidade, (c) é da
- * empresa. "Data que não passa em nenhum dos três não vira post."
+ * O §12.4 decide quais datas o sistema propõe por conta própria: uma data só
+ * entra aqui se passar em um de três testes, (a) é do setor, (b) é da região
+ * onde há unidade, (c) é da empresa. Pedido explícito do usuário para outra
+ * data não passa por esta lista: o post sai mesmo assim (agent/bots.ts, PEDIDO_MANDA).
  *
- * Por isso todo seed é obrigado a declarar em qual teste passa. A trava é
- * estrutural: sem `teste`, o TypeScript não compila e `validarSeeds` lança no
- * boot. Sem isso o calendário volta a semear Tiradentes e Dia das Mulheres,
- * como fazia antes deste commit.
+ * Todo seed declara em qual teste passa. Sem `teste`, o TypeScript não compila
+ * e `validarSeeds` lança no boot.
  */
 
 type Teste = "setor" | "regiao" | "empresa";
@@ -85,7 +84,7 @@ function dataSP(d: Date): { year: number; mmdd: string } {
 
 /**
  * Datas do §12.4 que caem na janela pedida. Serve para o `status_do_mes` propor
- * pauta de MARCA sem inventar data — se não está aqui, não passou na trava.
+ * pauta de MARCA sem inventar data.
  */
 export function proximasDatas(dias = 45): { emDias: number; ocasiao: string; porque: string }[] {
   const achados: { emDias: number; ocasiao: string; porque: string }[] = [];

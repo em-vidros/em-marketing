@@ -1,107 +1,65 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { describe, expect, test } from "bun:test";
+import { q } from "../v2/banco";
+import { criarTabelas, primeira } from ".";
 
 /**
- * O schema evolui num banco que já está em produção. Estes testes rodam a
- * migração contra o schema anterior de verdade, em subprocesso, porque o módulo
- * abre a conexão no import e roda o DDL uma vez só por processo — importar duas
- * vezes no mesmo processo não provaria idempotência.
+ * criarTabelas roda em todo boot, inclusive em dois boots ao mesmo tempo na Vercel. O banco de teste
+ * já passou por ela no preload (test/setup.ts); aqui ela roda de novo sobre dados que existem.
  */
 
-const tmp = mkdtempSync(join(tmpdir(), "emv-db-"));
-afterAll(() => rmSync(tmp, { recursive: true, force: true }));
+const novoPost = async () => (await primeira(q<{ id: number }>`INSERT INTO posts (brief) VALUES ('{"tema":"existente"}') RETURNING id`))!.id;
 
-/** Exatamente como o banco estava antes deste commit: sem publicacoes, sem fotos. */
-function schemaAnterior(path: string) {
-  const db = new Database(path);
-  db.run(`CREATE TABLE posts (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    chat_id INTEGER NOT NULL,
-    brief TEXT,
-    formato TEXT CHECK (formato IN ('feed','stories','ambos')),
-    headline TEXT,
-    legenda TEXT,
-    arts TEXT,
-    chosen INTEGER,
-    story_path TEXT,
-    linear_issue_id TEXT,
-    status TEXT DEFAULT 'draft',
-    created_at TEXT DEFAULT (datetime('now'))
-  )`);
-  db.run(`INSERT INTO posts (chat_id, brief, formato, status) VALUES (7, '{"tema":"legado"}', 'feed', 'published')`);
-  db.close();
-}
+// Pega um DDL que recria, apaga ou falha numa tabela que já existe, no boot seguinte.
+test("rodar de novo, e duas vezes ao mesmo tempo, não muda os dados nem falha", async () => {
+  const id = await novoPost();
+  const antes = await q`SELECT count(*)::int AS n FROM posts`;
 
-function migrar(path: string) {
-  const r = Bun.spawnSync(["bun", "-e", "await import('./src/db/index.ts')"], {
-    env: { ...process.env, DB_PATH: path },
-  });
-  if (r.exitCode !== 0) throw new Error(new TextDecoder().decode(r.stderr));
-}
+  await Promise.all([criarTabelas(), criarTabelas()]);
 
-const colunas = (db: Database, t: string) => (db.query(`PRAGMA table_info(${t})`).all() as { name: string }[]).map((c) => c.name);
-const tabelas = (db: Database) =>
-  (db.query("SELECT name FROM sqlite_master WHERE type = 'table'").all() as { name: string }[]).map((t) => t.name);
-
-describe("migração a partir do schema anterior", () => {
-  const path = join(tmp, "legado.db");
-  schemaAnterior(path);
-  migrar(path);
-  const db = new Database(path);
-
-  test("preserva os posts que já existiam", () => {
-    expect((db.query("SELECT COUNT(*) n FROM posts").get() as { n: number }).n).toBe(1);
-    expect((db.query("SELECT brief FROM posts").get() as { brief: string }).brief).toBe('{"tema":"legado"}');
-  });
-
-  test("remove chat_id, que só existia por causa do Telegram", () => {
-    expect(colunas(db, "posts")).not.toContain("chat_id");
-  });
-
-  test("adiciona pilar sem recriar a tabela", () => {
-    expect(colunas(db, "posts")).toContain("pilar");
-  });
-
-  test("cria publicacoes e fotos", () => {
-    expect(tabelas(db)).toContain("publicacoes");
-    expect(tabelas(db)).toContain("fotos");
-  });
-
-  test("roda duas vezes sem estragar nada", () => {
-    migrar(path);
-    const db2 = new Database(path);
-    expect((db2.query("SELECT COUNT(*) n FROM posts").get() as { n: number }).n).toBe(1);
-    expect(colunas(db2, "posts")).toContain("pilar");
-    db2.close();
-  });
+  expect(await q`SELECT count(*)::int AS n FROM posts`).toEqual(antes);
+  expect(await q`SELECT brief FROM posts WHERE id = ${id}`).toEqual([{ brief: '{"tema":"existente"}' }]);
 });
 
-describe("publicacoes — a chave que liga a peça ao Instagram", () => {
-  const path = join(tmp, "pub.db");
-  migrar(path);
-  const db = new Database(path);
+// Pega a CHECK ausente: linha sem fonte ou com as duas passaria e o tick não saberia o que publicar.
+test("queue e publicacoes recusam linha sem fonte ou com post e arte ao mesmo tempo", async () => {
+  const post = await novoPost();
+  const naFila = (postId: number | null, arteId: string | null) =>
+    q`INSERT INTO queue (post_id, arte_id, media_type, publish_at, jpeg_path) VALUES (${postId}, ${arteId}, 'IMAGE', '2031-02-01 12:00:00', '/a/n.jpg')`;
+  const publicada = (postId: number | null, arteId: string | null) =>
+    q`INSERT INTO publicacoes (post_id, arte_id, media_type, ig_media_id) VALUES (${postId}, ${arteId}, 'IMAGE', ${crypto.randomUUID()})`;
+  await expect(naFila(null, null)).rejects.toThrow();
+  await expect(naFila(post, "a1b2")).rejects.toThrow();
+  await expect(publicada(null, null)).rejects.toThrow();
+  await expect(publicada(post, "a1b2")).rejects.toThrow();
+});
 
-  test("guarda o id da mídia e o tipo", () => {
-    db.run("INSERT INTO posts (id) VALUES (1)");
-    db.run("INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (1, 'IMAGE', 'ig_abc')");
-    const row = db.query("SELECT * FROM publicacoes WHERE ig_media_id = 'ig_abc'").get() as any;
-    expect(row.post_id).toBe(1);
-    expect(row.published_at).toBeTruthy();
+describe("publicacoes, a chave que liga a peça ao Instagram", () => {
+  const ig = (sufixo: string) => `ig-db-test-${sufixo}`;
+
+  // Pega published_at fora do formato de texto que o calendário compara e converte (utcDe, isoDoUtc).
+  test("guarda o id da mídia e o tipo, com a data em texto UTC", async () => {
+    const post = await novoPost();
+    await q`INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (${post}, 'IMAGE', ${ig("abc")})`;
+    const row = (await primeira(q<{ post_id: number; published_at: string }>`SELECT * FROM publicacoes WHERE ig_media_id = ${ig("abc")}`))!;
+    expect(row.post_id).toBe(post);
+    expect(row.published_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   });
 
-  test("um post pode ter feed e story — por isso não é coluna em posts", () => {
-    db.run("INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (1, 'STORIES', 'ig_def')");
-    expect((db.query("SELECT COUNT(*) n FROM publicacoes WHERE post_id = 1").get() as { n: number }).n).toBe(2);
+  test("um post pode ter feed e story, por isso não é coluna em posts", async () => {
+    const post = await novoPost();
+    await q`INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (${post}, 'IMAGE', ${ig("feed")})`;
+    await q`INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (${post}, 'STORIES', ${ig("story")})`;
+    expect(await q`SELECT count(*)::int AS n FROM publicacoes WHERE post_id = ${post}`).toEqual([{ n: 2 }]);
   });
 
-  test("o mesmo ig_media_id não entra duas vezes", () => {
-    expect(() => db.run("INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (1, 'IMAGE', 'ig_abc')")).toThrow();
+  test("o mesmo ig_media_id não entra duas vezes", async () => {
+    const post = await novoPost();
+    await q`INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (${post}, 'IMAGE', ${ig("unico")})`;
+    await expect(q`INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (${post}, 'IMAGE', ${ig("unico")})`).rejects.toThrow();
   });
 
-  test("media_type fora do domínio é rejeitado pelo banco", () => {
-    expect(() => db.run("INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (1, 'REEL', 'ig_x')")).toThrow();
+  test("media_type fora do domínio é rejeitado pelo banco", async () => {
+    const post = await novoPost();
+    await expect(q`INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (${post}, 'REEL', ${ig("reel")})`).rejects.toThrow();
   });
 });

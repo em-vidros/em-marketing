@@ -10,7 +10,6 @@ export const STATUS_POST: Record<StatusPost, { rotulo: string; cor: string }> = 
   scheduled: { rotulo: "Agendado", cor: "text-esperando-texto" },
   published: { rotulo: "Publicado", cor: "text-tinta-2" },
   failed: { rotulo: "Falhou", cor: "text-erro" },
-  archived: { rotulo: "Arquivado", cor: "text-tinta-3" },
 };
 
 export const FORMATO: Record<Formato, string> = { feed: "Feed", stories: "Stories", ambos: "Feed e stories" };

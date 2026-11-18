@@ -76,11 +76,13 @@ describe("despachante", () => {
     expect(d(tecla("r"), cartao, 0)).toBe("recusar");
   });
 
-  test("dentro do calendário as setas andam pelos dias, e fora dele pela lista de conversas", () => {
+  test("dentro do calendário as setas trocam o período e deixam ⌥ e as setas para o CalendarCN", () => {
     const d = criarDespachante(true, () => true);
     const calendario = { tagName: "DIV", closest: (s: string) => (s.includes("calendario") ? {} : null) };
-    expect(d(tecla("ArrowDown"), calendario, 0)).toBe("cal-baixo");
+
+    expect(d(tecla("ArrowRight"), calendario, 0)).toBe("cal-direita");
+    expect(d(tecla("ArrowDown"), calendario, 0)).toBeNull();
     expect(d(tecla("ArrowDown"), div, 0)).toBe("lista-proxima");
-    expect(d(tecla("ArrowRight", { altKey: true }), calendario, 0)).toBe("cal-mover-depois");
+    expect(d(tecla("ArrowRight", { altKey: true }), calendario, 0)).toBeNull();
   });
 });

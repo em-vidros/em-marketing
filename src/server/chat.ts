@@ -11,6 +11,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
+import type { Inspiracoes } from "../agent/tools";
 import { ehBotId } from "../agent/bots";
 import { configDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
@@ -27,6 +28,7 @@ import type { Usuario } from "./auth";
 export interface OpcoesChat {
   resolverModelo?: ResolverModelo;
   segredoAprovacao?: string;
+  inspiracoes?: Inspiracoes;
 }
 
 /** O corpo do DefaultChatTransport do useChat, mais o botId que o front manda em `body`. */
@@ -95,7 +97,7 @@ function fecharAprovacoesNoErro(ultima: UIMessage) {
   });
 }
 
-export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
+export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: OpcoesChat) {
   return async (req: Request, usuario: Usuario): Promise<Response> => {
     const corpo = Corpo.safeParse(await req.json().catch(() => null));
     if (!corpo.success) return erro(400, z.prettifyError(corpo.error));
@@ -105,19 +107,19 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
     if (!validada.success) return erro(400, validada.error.message);
     const [ultima] = validada.data as [UIMessage];
 
-    const conversa = abrirConversaDoUsuario(usuario.id, id, botId, tituloDe(ultima));
+    const conversa = await abrirConversaDoUsuario(usuario.id, id, botId, tituloDe(ultima));
     if (!conversa) return erro(404, "Conversa não encontrada.");
-    if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${configDoBot(conversa.botId).nome}.`);
+    if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${(await configDoBot(conversa.botId)).nome}.`);
 
     if (!comecarTurno(conversa.id)) return erro(409, AINDA_RESPONDENDO);
     try {
-      const juntada = juntar(mensagensDaConversa(conversa.id), ultima);
+      const juntada = juntar(await mensagensDaConversa(conversa.id), ultima);
       if (!juntada.ok) {
         terminarTurno(conversa.id);
         return erro(juntada.status, juntada.erro);
       }
       const { historico } = juntada;
-      const result = executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao });
+      const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao, inspiracoes });
       // Sem backpressure do cliente: o turno termina e é salvo mesmo se a aba fechar no meio.
       result.consumeStream();
 
@@ -129,9 +131,9 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
           onError: explicarErro,
           // Um turno que falhou antes da primeira parte deixa uma mensagem do assistente vazia; ela não entra no histórico.
           // Roda também quando a aba fecha no meio (cancel do stream), então solta a conversa nos dois casos.
-          onEnd: ({ messages }) => {
+          onEnd: async ({ messages }) => {
             try {
-              gravarMensagens(conversa.id, messages.filter((m) => m.parts.length > 0));
+              await gravarMensagens(conversa.id, messages.filter((m) => m.parts.length > 0));
             } finally {
               terminarTurno(conversa.id);
             }

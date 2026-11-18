@@ -1,16 +1,16 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { createProviderRegistry } from "ai";
 
 /** Os modelos que um bot pode usar. Um id fora desta lista não chega ao banco. */
 export const MODELOS = [
-  { id: "google:gemini-3.6-flash", nome: "Gemini 3.6 Flash" },
+  { id: "openai:gpt-6-luna", nome: "GPT-6 Luna" },
   { id: "anthropic:claude-opus-5-5", nome: "Claude Opus 5.5" },
   { id: "anthropic:claude-sonnet-5-5", nome: "Claude Sonnet 5.5" },
   { id: "anthropic:claude-haiku-5-5", nome: "Claude Haiku 5.5" },
 ] as const satisfies readonly { id: `${Provedor}:${string}`; nome: string }[];
 
-type Provedor = "google" | "anthropic";
+type Provedor = "openai" | "anthropic";
 
 export type ModelId = (typeof MODELOS)[number]["id"];
 
@@ -21,8 +21,7 @@ export interface Modelo {
   disponivel: boolean;
 }
 
-/** A chave do Gemini já se chama GEMINI_API_KEY no .env; o provider esperaria GOOGLE_GENERATIVE_AI_API_KEY. */
-const CHAVE: Record<Provedor, string> = { google: "GEMINI_API_KEY", anthropic: "ANTHROPIC_API_KEY" };
+const CHAVE: Record<Provedor, string> = { openai: "OPENAI_API_KEY", anthropic: "ANTHROPIC_API_KEY" };
 
 const provedorDe = (id: ModelId) => id.slice(0, id.indexOf(":")) as Provedor;
 
@@ -41,7 +40,7 @@ export function problemaDoModelo(id: string): string | null {
 }
 
 const registry = createProviderRegistry({
-  google: createGoogleGenerativeAI({ apiKey: process.env.GEMINI_API_KEY }),
+  openai: createOpenAI(),
   anthropic: createAnthropic(),
 });
 

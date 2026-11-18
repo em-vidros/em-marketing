@@ -6,6 +6,7 @@ import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { Check } from "../componentes/Passos";
+import { Referencias } from "../componentes/Referencias";
 import { Troca } from "../componentes/Troca";
 import { dia, FORMATO, PILARES, STATUS_POST } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
@@ -129,6 +130,10 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
             />
             <Segmentado tipo="alternar" rotulo="Visualização" opcoes={VISTAS} valor={vista} aoMudar={setVista} />
           </header>
+
+          <Referencias />
+
+          <h2 className="-mb-2 border-t border-linha pt-6 text-[15px] font-semibold">Peças</h2>
 
           <div className="-mx-4 flex items-center gap-1.5 overflow-x-auto overscroll-x-contain px-4 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0">
             <div role="group" aria-label="Pilar" className="flex flex-none gap-1.5 sm:flex-wrap">

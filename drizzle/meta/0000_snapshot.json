@@ -1,0 +1,152 @@
+{
+  "id": "83637185-9cae-42fe-a0d4-8dc17aeee612",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.artes": {
+      "name": "artes",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "pedido": {
+          "name": "pedido",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "formato": {
+          "name": "formato",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "cena": {
+          "name": "cena",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "prompt_da_cena": {
+          "name": "prompt_da_cena",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "referencias": {
+          "name": "referencias",
+          "type": "uuid[]",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "camadas": {
+          "name": "camadas",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "criada_por": {
+          "name": "criada_por",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "criada_em": {
+          "name": "criada_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "atualizada_em": {
+          "name": "atualizada_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.referencias": {
+      "name": "referencias",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "arquivo": {
+          "name": "arquivo",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "leitura": {
+          "name": "leitura",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "leitura_editada_por": {
+          "name": "leitura_editada_por",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "criada_por": {
+          "name": "criada_por",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "criada_em": {
+          "name": "criada_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "removida_em": {
+          "name": "removida_em",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {},
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

@@ -68,10 +68,10 @@ export const FASE_FALADA: Record<Fase, string> = {
 /** O estado falado, a menos que o rótulo já o diga depois dos dois-pontos ("Publicando: falhou"). */
 export const estadoFalado = (rotulo: string, fase: Fase) => (rotulo.includes(": ") ? null : FASE_FALADA[fase]);
 
-export function LinhaFerramenta({ passo, children }: { passo: Passo; children?: React.ReactNode }) {
+export function LinhaFerramenta({ passo, sobe = false, children }: { passo: Passo; sobe?: boolean; children?: React.ReactNode }) {
   const falado = estadoFalado(passo.rotulo, passo.estado);
   return (
-    <li className="sobe flex min-w-0 flex-col gap-2">
+    <li className={`${sobe ? "sobe " : ""}flex min-w-0 flex-col gap-2`}>
       <div className="flex h-7 min-w-0 items-center gap-2">
         <IconeDaFase fase={passo.estado} />
         <span className={`min-w-0 truncate text-[13px] font-medium ${COR_DO_ROTULO[passo.estado]}`}>

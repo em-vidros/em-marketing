@@ -1,4 +1,5 @@
-import { db } from "../db";
+import { primeira, utcDe } from "../db";
+import { q } from "../v2/banco";
 import type { ArtVariant, Brief } from "../domain/art/pipeline";
 
 /**
@@ -36,8 +37,7 @@ export type EtapaPost =
   | (Base & { etapa: "headline"; formato: Formato; headline: Headline })
   | (Base & { etapa: "artes"; formato: Formato; headline: Headline; artes: Arte[] })
   | (ComPeca & { etapa: "escolhida" })
-  | (ComPeca & { etapa: "legenda"; legenda: string })
-  | (ComPeca & { etapa: "registrado"; legenda: string | null; linearId: string });
+  | (ComPeca & { etapa: "legenda"; legenda: string });
 
 export type Etapa = EtapaPost["etapa"];
 
@@ -48,8 +48,7 @@ export type Evento =
   | { tipo: "escolha"; variante: number }
   | { tipo: "foto"; arte: Arte; storyPath: string | null }
   | { tipo: "story"; path: string }
-  | { tipo: "legenda"; legenda: string }
-  | { tipo: "registro"; linearId: string };
+  | { tipo: "legenda"; legenda: string };
 
 export type TipoEvento = Evento["tipo"];
 
@@ -62,7 +61,6 @@ const ORIGEM = {
   foto: ["formato", "headline", "artes", "escolhida"],
   story: ["escolhida", "legenda"],
   legenda: ["escolhida", "legenda"],
-  registro: ["escolhida", "legenda"],
 } as const satisfies Record<TipoEvento, readonly Etapa[]>;
 
 export type Origem<T extends TipoEvento> = Extract<EtapaPost, { etapa: (typeof ORIGEM)[T][number] }>;
@@ -77,6 +75,8 @@ const formatoDe = (p: EtapaPost): Formato | null => (p.etapa === "brief" ? null 
 
 const precisaStory = (p: ComPeca) => p.formato === "ambos" && p.storyPath === null;
 
+const PRONTO = "o Chefe publica com publicar_agora ou agenda com agendar_publicacao, com aprovação humana";
+
 /** O que o fluxo pede agora. Vai para o modelo nas recusas e no resumo do estado. */
 export function proximoPasso(p: EtapaPost): string {
   switch (p.etapa) {
@@ -89,12 +89,10 @@ export function proximoPasso(p: EtapaPost): string {
     case "artes":
       return "escolher_arte";
     case "escolhida":
-      if (p.formato === "stories") return "salvar_linear";
+      if (p.formato === "stories") return PRONTO;
       return precisaStory(p) && p.peca.origem === "gerada" ? "derivar_story e depois escrever_legenda" : "escrever_legenda";
     case "legenda":
-      return precisaStory(p) ? "derivar_story" : "salvar_linear";
-    case "registrado":
-      return "o Chefe publica com publicar_agora ou agenda com agendar_publicacao, com aprovação humana";
+      return precisaStory(p) ? "derivar_story" : PRONTO;
   }
 }
 
@@ -112,8 +110,8 @@ export function exigir<T extends TipoEvento>(post: EtapaPost | null, tipo: T): P
       if (post.brief.precisaFotoReal)
         return nao(
           "Invariante 4 (§8.2): a peça representa produto, obra, fábrica ou pessoas da EM Vidros e exige foto real. Não gere." +
-            " Chame buscar_fotos; se o banco não tiver, peça a foto com o guia do §8.3: luz natural difusa de lado," +
-            " ângulo de 15 a 30° fora do eixo, fundo limpo, enquadramento vertical.",
+            " Chame buscar_fotos e usar_foto. Se o banco não tiver foto que sirva, monte um brief novo com precisa_foto_real false" +
+            " e um ângulo tipográfico que não mostre produto, obra nem pessoas, e gere a partir dele.",
         );
       if (!formato) return nao("Invariante 1: o formato não foi definido. Chame definir_formato.");
       if (post.etapa === "formato") return nao("Invariante 2: o headline vem antes da imagem. Chame definir_headline.");
@@ -127,12 +125,6 @@ export function exigir<T extends TipoEvento>(post: EtapaPost | null, tipo: T): P
       if (formato !== "ambos") return nao("derivar_story só existe no formato ambos.");
       if ("peca" in post && post.peca.origem === "foto")
         return nao("§8.2: a arte escolhida é uma foto real e não pode ser regenerada em 9:16. A versão vertical já saiu da própria foto.");
-      break;
-    case "registro":
-      if (post.etapa === "escolhida" && post.formato !== "stories")
-        return nao("Post com feed leva legenda antes do Linear. Chame escrever_legenda.");
-      if ((post.etapa === "escolhida" || post.etapa === "legenda") && precisaStory(post))
-        return nao("No formato ambos falta a versão stories. Chame derivar_story.");
       break;
   }
 
@@ -194,24 +186,18 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
       if (!r.ok) return r;
       return ok({ ...r.post, etapa: "legenda", legenda: evento.legenda });
     }
-    case "registro": {
-      const r = exigir(post, "registro");
-      if (!r.ok) return r;
-      const legenda = r.post.etapa === "legenda" ? r.post.legenda : null;
-      return ok({ ...r.post, etapa: "registrado", legenda, linearId: evento.linearId });
-    }
   }
 }
 
-/** O JPEG e a legenda de uma publicação. Só sai post registrado no Linear, no formato que ele tem. */
+/** O JPEG e a legenda de uma publicação. Sai post com a peça escolhida, no formato que ele tem. */
 export function midiaParaPublicar(
   post: EtapaPost | null,
   mediaType: MediaType,
 ): Permissao<{ postId: number; path: string; legenda: string | undefined }> {
   if (!post) return { ok: false, motivo: "Não há post em andamento nesta conversa." };
-  if (post.etapa !== "registrado")
-    return { ok: false, motivo: `O post precisa estar salvo no Linear antes de publicar. Próximo passo: ${proximoPasso(post)}.` };
-  const { postId, formato, peca, storyPath, legenda } = post;
+  if (!("peca" in post)) return { ok: false, motivo: `O post ainda não tem a peça escolhida. Próximo passo: ${proximoPasso(post)}.` };
+  const { postId, formato, peca, storyPath } = post;
+  const legenda = post.etapa === "escolhida" ? null : post.legenda;
   if (mediaType === "IMAGE") {
     if (formato === "stories") return { ok: false, motivo: "Este post é só stories; não há peça de feed." };
     return { ok: true, post: { postId, path: peca.arte.path, legenda: legenda ?? undefined } };
@@ -244,7 +230,6 @@ interface PostRow {
   chosen: number | null;
   story_path: string | null;
   legenda: string | null;
-  linear_issue_id: string | null;
 }
 
 function lerLinha(row: PostRow): EtapaPost {
@@ -258,7 +243,6 @@ function lerLinha(row: PostRow): EtapaPost {
   if (arte) {
     const peca: Peca = arte.style === "foto-real" || !headline ? { origem: "foto", arte } : { origem: "gerada", headline, arte };
     const comPeca: ComPeca = { ...base, formato, peca, storyPath: row.story_path };
-    if (row.linear_issue_id) return { ...comPeca, etapa: "registrado", legenda: row.legenda, linearId: row.linear_issue_id };
     if (row.legenda) return { ...comPeca, etapa: "legenda", legenda: row.legenda };
     return { ...comPeca, etapa: "escolhida" };
   }
@@ -274,44 +258,38 @@ const STATUS: Record<Etapa, string> = {
   artes: "generated",
   escolhida: "chosen",
   legenda: "chosen",
-  registrado: "archived",
 };
 
-export function postDaConversa(conversaId: string): EtapaPost | null {
-  const row = db
-    .query("SELECT p.* FROM conversas c JOIN posts p ON p.id = c.post_id WHERE c.id = ?")
-    .get(conversaId) as PostRow | null;
+export async function postDaConversa(conversaId: string): Promise<EtapaPost | null> {
+  const row = await primeira(q<PostRow>`SELECT p.* FROM conversas c JOIN posts p ON p.id = c.post_id WHERE c.id = ${conversaId}`);
   return row ? lerLinha(row) : null;
 }
 
 /** O post pelo id, lido como a conversa lê o dela. É por onde a tela de calendário agenda. */
-export function postPorId(postId: number): EtapaPost | null {
-  const row = db.query("SELECT * FROM posts WHERE id = ?").get(postId) as PostRow | null;
+export async function postPorId(postId: number): Promise<EtapaPost | null> {
+  const row = await primeira(q<PostRow>`SELECT * FROM posts WHERE id = ${postId}`);
   return row ? lerLinha(row) : null;
 }
 
-export function abrirConversa(conversaId: string, botId: string): void {
-  db.query("INSERT INTO conversas (id, bot_id) VALUES (?, ?) ON CONFLICT(id) DO NOTHING").run(conversaId, botId);
+export async function abrirConversa(conversaId: string, botId: string): Promise<void> {
+  await q`INSERT INTO conversas (id, bot_id) VALUES (${conversaId}, ${botId}) ON CONFLICT (id) DO NOTHING`;
 }
 
 /** Um brief novo abre um post novo e vira o post em andamento da conversa. */
-export function criarPost(conversaId: string, brief: Brief, formato: Formato | null): EtapaPost {
-  const { id } = db
-    .query("INSERT INTO posts (brief, pilar, formato) VALUES (?, ?, ?) RETURNING id")
-    .get(JSON.stringify(brief), brief.pilar, formato) as { id: number };
-  db.query("UPDATE conversas SET post_id = ?, updated_at = datetime('now') WHERE id = ?").run(id, conversaId);
+export async function criarPost(conversaId: string, brief: Brief, formato: Formato | null): Promise<EtapaPost> {
+  const { id } = (await primeira(q<{ id: number }>`INSERT INTO posts (brief, pilar, formato) VALUES (${JSON.stringify(brief)}, ${brief.pilar}, ${formato}) RETURNING id`))!;
+  await q`UPDATE conversas SET post_id = ${id}, updated_at = ${utcDe(Date.now())} WHERE id = ${conversaId}`;
   const base: Base = { postId: id, brief };
   return formato ? { ...base, etapa: "formato", formato } : { ...base, etapa: "brief" };
 }
 
-export function gravarPost(post: EtapaPost): void {
+export async function gravarPost(post: EtapaPost): Promise<void> {
   const formato = formatoDe(post);
   let headline: Headline | null = null;
   let artes: Arte[] | null = null;
   let chosen: number | null = null;
   let storyPath: string | null = null;
   let legenda: string | null = null;
-  let linearId: string | null = null;
 
   switch (post.etapa) {
     case "brief":
@@ -326,28 +304,15 @@ export function gravarPost(post: EtapaPost): void {
       break;
     case "escolhida":
     case "legenda":
-    case "registrado":
       headline = post.peca.origem === "gerada" ? post.peca.headline : null;
       artes = [post.peca.arte];
       chosen = post.peca.arte.variant;
       storyPath = post.storyPath;
-      if (post.etapa !== "escolhida") legenda = post.legenda;
-      if (post.etapa === "registrado") linearId = post.linearId;
+      if (post.etapa === "legenda") legenda = post.legenda;
       break;
   }
 
-  db.query(
-    `UPDATE posts SET formato = ?, headline = ?, arts = ?, chosen = ?, story_path = ?, legenda = ?, linear_issue_id = ?, status = ?
-      WHERE id = ?`,
-  ).run(
-    formato,
-    headline && JSON.stringify(headline),
-    artes && JSON.stringify(artes),
-    chosen,
-    storyPath,
-    legenda,
-    linearId,
-    STATUS[post.etapa],
-    post.postId,
-  );
+  await q`UPDATE posts SET formato = ${formato}, headline = ${headline && JSON.stringify(headline)}, arts = ${artes && JSON.stringify(artes)},
+    chosen = ${chosen}, story_path = ${storyPath}, legenda = ${legenda}, status = ${STATUS[post.etapa]}
+    WHERE id = ${post.postId}`;
 }

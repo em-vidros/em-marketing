@@ -27,7 +27,7 @@ export function Teclas({ atalho, tecla, tom = "claro" }: { atalho?: AtalhoId; te
 }
 
 /**
- * Dica de mouse com o nome da ação e o atalho, como o Linear ensina a tecla. Depois da
+ * Dica de mouse com o nome da ação e o atalho, para ensinar a tecla. Depois da
  * primeira dica, as vizinhas abrem na hora (Tooltip.Provider na raiz do app).
  */
 export function Dica({ atalho, rotulo, lado = "right", children }: { atalho?: AtalhoId; rotulo: string; lado?: "right" | "top" | "bottom"; children: ReactElement }) {

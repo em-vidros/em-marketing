@@ -1,5 +1,7 @@
 # Fábrica no servidor, site na Vercel
 
+> Nota de 17/11/2026: a integração com o Linear saiu do produto. As menções a ele neste documento são históricas.
+
 > **Status:** proposto para revisão
 >
 > Escrito em 17/09/2026. Substitui a versão do mesmo dia, que levava o projeto

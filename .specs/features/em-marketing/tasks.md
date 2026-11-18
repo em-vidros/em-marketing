@@ -34,9 +34,6 @@
 - [ ] T2.5 `src/server.ts` Elysia: `/webhooks/telegram` (secret timingSafeEqual, parse none), `/media/:id`, `/health`; allowlist
 - [ ] T2.6 Fluxo aprovação: botões v1/v2/v3/refazer/reescrever-legenda; caminho "Os dois" (derivar_story com previous_interaction_id)
 
-## F3 Linear
-- [ ] T3.1 `src/linear/` — criar/atualizar issue (team ec0c88f8…, label Instagram Post), upload anexos, comentário legenda/brief, mover status
-
 ## F4 Instagram
 - [ ] T4.1 `src/instagram/` — container → polling FINISHED → publish; IMAGE e STORIES; content_publishing_limit
 - [ ] T4.2 `src/scheduler/` — fila SQLite, tick 30s, timezone America/Sao_Paulo, aviso de falha no Telegram; `/agenda`, cancelar

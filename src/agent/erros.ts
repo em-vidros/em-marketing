@@ -17,11 +17,10 @@ function causaDe(e: unknown): Causa {
   if (InvalidToolApprovalSignatureError.isInstance(e) || InvalidToolApprovalError.isInstance(e) || ToolCallNotFoundForApprovalError.isInstance(e))
     return "aprovacao";
   if (!APICallError.isInstance(e)) return "desconhecida";
-  const { statusCode: status, responseBody = "" } = e;
+  const { statusCode: status } = e;
   if (status === undefined) return "rede";
   if (status === 429) return "cota";
-  // O Gemini recusa chave inválida com 400 INVALID_ARGUMENT, não 401.
-  if (status === 401 || status === 403 || responseBody.includes("API_KEY_INVALID")) return "chave";
+  if (status === 401 || status === 403) return "chave";
   if (status >= 500) return "sobrecarga";
   return "desconhecida";
 }

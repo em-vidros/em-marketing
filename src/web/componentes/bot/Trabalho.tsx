@@ -5,9 +5,9 @@ import { pegar, useApi, useNomesDosBots } from "../../api";
 import { aoClicarLink } from "../../rota";
 import { type BotId, type Conversa, type Fase, type ResumoTarefa, type Tarefa } from "../../tipos";
 import { Avatar } from "../Avatar";
+import { Expansivel } from "../Expansivel";
 import { Falha } from "../Falha";
 import { semMarkdown } from "../texto";
-import { atividadeDe } from "../ia/atividade";
 import { IconeDaFase } from "../ia/LinhaFerramenta";
 import { Pensando } from "../ia/Pensando";
 import { Chevron, Raciocinio } from "../ia/Raciocinio";
@@ -35,7 +35,7 @@ export function duracao(ms: number) {
   return `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-/** O SQLite grava "2026-10-13 18:00:00" em UTC, sem o fuso. */
+/** O banco grava "2026-10-13 18:00:00" em UTC, sem o fuso. */
 const daColuna = (s: string) => new Date(`${s.replace(" ", "T")}Z`);
 
 const linkDaConversa = (id: string) => `/c/${encodeURIComponent(id)}`;
@@ -93,7 +93,7 @@ function Transcricao({ tarefa }: { tarefa: Tarefa }) {
           </div>
         ),
       )}
-      {noAr && atividadeDe(ultima, true).tipo === "pensando" && <Pensando />}
+      {noAr && <Pensando />}
       {mensagens.length === 0 && !noAr && <p className="text-[13px] text-tinta-3">Esta tarefa não deixou mensagens.</p>}
     </div>
   );
@@ -129,7 +129,7 @@ export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoT
         <button
           type="button"
           aria-expanded={aberta}
-          aria-controls={painel}
+          aria-controls={aberta ? painel : undefined}
           onClick={() => setAberta((a) => !a)}
           className="grid min-w-0 flex-1 cursor-pointer grid-cols-[20px_minmax(0,1fr)_auto] items-start gap-x-3 rounded-[12px] px-3 py-2.5 text-left realce hover:bg-fundo"
         >
@@ -161,11 +161,11 @@ export function LinhaTarefa({ tarefa: t, mostrarBot = false }: { tarefa: ResumoT
           </svg>
         </a>
       </div>
-      {aberta && (
-        <div id={painel} className="sobe border-t border-linha px-4 pt-3.5 pb-4 sm:pl-12">
+      <Expansivel aberto={aberta}>
+        <div id={painel} className="border-t border-linha px-4 pt-3.5 pb-4 sm:pl-12">
           <Detalhe tarefa={t} />
         </div>
-      )}
+      </Expansivel>
     </li>
   );
 }

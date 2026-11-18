@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { existsSync, rmSync } from "node:fs";
 import sharp from "sharp";
-import { db } from "../../db";
+import { q } from "../../v2/banco";
 import { buscarFotos, contarFotos, pegarFoto, prepararFoto, resumir, salvarFoto } from "./index";
 
 // O banco de teste vem do preload (test/setup.ts). Os arquivos, não: salvarFoto e
@@ -17,14 +17,8 @@ const fixture = (w: number, h: number, hex = "#8A8A8A") =>
 async function semear(campos: Partial<Record<"descricao" | "produto" | "unidade" | "contexto" | "tags", string>>) {
   const { id, path } = await salvarFoto(await fixture(800, 600));
   criados.push(path);
-  db.query("UPDATE fotos SET descricao = ?, produto = ?, unidade = ?, contexto = ?, tags = ? WHERE id = ?").run(
-    campos.descricao ?? null,
-    campos.produto ?? null,
-    campos.unidade ?? null,
-    campos.contexto ?? null,
-    campos.tags ?? null,
-    id,
-  );
+  await q`UPDATE fotos SET descricao = ${campos.descricao ?? null}, produto = ${campos.produto ?? null}, unidade = ${campos.unidade ?? null},
+    contexto = ${campos.contexto ?? null}, tags = ${campos.tags ?? null} WHERE id = ${id}`;
   return id;
 }
 
@@ -34,7 +28,7 @@ describe("salvarFoto", () => {
     criados.push(path);
     expect(existsSync(path)).toBe(true);
     expect([largura, altura]).toEqual([1600, 1200]);
-    expect(pegarFoto(id)?.largura).toBe(1600);
+    expect((await pegarFoto(id))?.largura).toBe(1600);
   });
 
   test("normaliza para JPEG sem metadado — o EXIF de celular carrega GPS", async () => {
@@ -51,30 +45,30 @@ describe("salvarFoto", () => {
 
 describe("buscarFotos", () => {
   test("sem termo devolve as mais recentes", async () => {
-    const antes = contarFotos();
+    const antes = await contarFotos();
     await semear({ descricao: "prateleira cheia" });
-    expect(contarFotos()).toBe(antes + 1);
-    expect(buscarFotos().length).toBeGreaterThan(0);
+    expect(await contarFotos()).toBe(antes + 1);
+    expect((await buscarFotos()).length).toBeGreaterThan(0);
   });
 
   test("pontua por quantas palavras casam, não por casamento exato", async () => {
     const box = await semear({ produto: "box", unidade: "Imperatriz", tags: "temperado, banheiro" });
     await semear({ produto: "guarda-corpo", unidade: "Teresina", tags: "sacada, laminado" });
-    const r = buscarFotos("box temperado Imperatriz");
+    const r = await buscarFotos("box temperado Imperatriz");
     expect(r[0]?.id).toBe(box);
   });
 
   test("foto sem nenhuma palavra em comum não entra no resultado", async () => {
-    const r = buscarFotos("fachada ACM");
+    const r = await buscarFotos("fachada ACM");
     expect(r.every((f) => `${f.produto} ${f.tags}`.includes("fachada") || `${f.produto} ${f.tags}`.includes("ACM"))).toBe(true);
   });
 
   test("termo só de palavras curtas não devolve o banco inteiro", async () => {
-    expect(buscarFotos("de o um")).toEqual([]);
+    expect(await buscarFotos("de o um")).toEqual([]);
   });
 
   test("busca é insensível a maiúscula", async () => {
-    expect(buscarFotos("IMPERATRIZ").length).toBeGreaterThan(0);
+    expect((await buscarFotos("IMPERATRIZ")).length).toBeGreaterThan(0);
   });
 });
 
@@ -97,20 +91,20 @@ describe("prepararFoto", () => {
 
   test("conta o uso — é o começo da memória de desempenho", async () => {
     const id = await semear({ descricao: "equipe" });
-    expect(pegarFoto(id)?.usos).toBe(0);
+    expect((await pegarFoto(id))?.usos).toBe(0);
     criados.push(await prepararFoto({ fotoId: id, postId: 1, formato: "feed" }));
     criados.push(await prepararFoto({ fotoId: id, postId: 2, formato: "feed" }));
-    expect(pegarFoto(id)?.usos).toBe(2);
+    expect((await pegarFoto(id))?.usos).toBe(2);
   });
 
   test("foto inexistente lança em vez de gerar arte vazia", async () => {
-    expect(prepararFoto({ fotoId: 99999, postId: 1, formato: "feed" })).rejects.toThrow("não existe");
+    await expect(prepararFoto({ fotoId: 99999, postId: 1, formato: "feed" })).rejects.toThrow("não existe");
   });
 });
 
 test("resumir mostra o que o cérebro precisa para escolher", async () => {
   const id = await semear({ descricao: "box em temperado 8 mm", produto: "box", unidade: "Raposa", contexto: "loja" });
-  const txt = resumir(pegarFoto(id)!);
+  const txt = resumir((await pegarFoto(id))!);
   expect(txt).toContain(`#${id}`);
   expect(txt).toContain("box em temperado 8 mm");
   expect(txt).toContain("Raposa");

@@ -10,16 +10,16 @@ casa.
 | Time | Escopo | Projetos hoje |
 |---|---|---|
 | [Marketing](marketing/) | criação: arte, texto, marca | posts do Instagram @emvidros |
-| [Operações](operacoes/) | publicação, agenda, registro, infra | scheduler, CI/CD, Linear |
+| [Operações](operacoes/) | publicação, agenda, infra | scheduler, CI/CD |
 | [Vendas](vendas/) | campanhas de receita | Mês do Vidraceiro, sorteios (via fluxo do marketing) |
 
 ## Como a agência trabalha
 
-Do pedido no Telegram ao arquivo no Linear:
+Do pedido no Telegram à publicação:
 
 ```
 social media (brief) → designer (3 artes) → redator (legenda, só Feed)
-→ aprovação no Telegram → arquivista (Linear) → publicador (Instagram)
+→ aprovação no Telegram → publicador (Instagram)
 ```
 
 Cada etapa tem um agente descrito na pasta do seu time.

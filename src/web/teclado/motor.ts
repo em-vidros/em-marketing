@@ -119,7 +119,7 @@ export function useTeclado() {
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       const foco = document.activeElement as HTMLElement | null;
-      // Esc tira o foco do campo, e as teclas de uma letra voltam a valer (Linear, Grok).
+      // Esc tira o foco do campo, e as teclas de uma letra voltam a valer (como no Grok).
       if (e.key === "Escape" && ehCampo(foco) && !foco?.closest(ISOLADO)) {
         foco?.blur();
         return;

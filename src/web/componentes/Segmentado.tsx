@@ -49,8 +49,10 @@ export function Segmentado<V extends string>({
     botoes.current[j]?.focus();
   }
 
+  // layoutRoot: a pílula anima relativa ao controle, não à página; num popover que se reposiciona ela ficava para trás.
   return (
-    <div
+    <motion.div
+      layoutRoot
       role={abas ? "tablist" : "group"}
       aria-label={rotulo}
       onKeyDown={aoTeclar}
@@ -91,6 +93,6 @@ export function Segmentado<V extends string>({
           </button>
         );
       })}
-    </div>
+    </motion.div>
   );
 }

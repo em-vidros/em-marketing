@@ -1,5 +1,7 @@
 # Design congelado — Fase 1 (Fundação)
 
+> Nota de 17/11/2026: a integração com o Linear saiu do produto. As menções a ele neste documento são históricas.
+
 Spec: `docs/prd-agencia-multiagente.md` §4 e §5.1. Este arquivo é o contrato que a
 implementação segue. Saiu de duas explorações independentes que convergiram no
 essencial; onde divergiram, a escolha está registrada em `decisoes.tsv`.

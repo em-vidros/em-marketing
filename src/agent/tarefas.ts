@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
-import { db } from "../db";
+import { primeira } from "../db";
+import { q } from "../v2/banco";
 import type { BotId } from "./bots";
 import { conversasDoBot, type Conversa } from "./conversas";
 
@@ -74,17 +75,15 @@ const resumoDaLinha = (r: Omit<Linha, "mensagens">): ResumoTarefa => ({
   atualizadaEm: r.atualizada_em,
 });
 
-function gravar(t: Tarefa): Tarefa {
-  db.query(
-    `INSERT INTO tarefas (id, conversa_id, bot_id, pedido, status, mensagens, resumo, erro, criada_em, atualizada_em)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(id) DO UPDATE SET status = excluded.status, mensagens = excluded.mensagens, resumo = excluded.resumo,
-       erro = excluded.erro, atualizada_em = excluded.atualizada_em`,
-  ).run(t.id, t.conversaId, t.botId, t.pedido, t.status, JSON.stringify(t.mensagens), t.resumo, t.erro, t.criadaEm, t.atualizadaEm);
+async function gravar(t: Tarefa): Promise<Tarefa> {
+  await q`INSERT INTO tarefas (id, conversa_id, bot_id, pedido, status, mensagens, resumo, erro, criada_em, atualizada_em)
+    VALUES (${t.id}, ${t.conversaId}, ${t.botId}, ${t.pedido}, ${t.status}, ${JSON.stringify(t.mensagens)}, ${t.resumo}, ${t.erro}, ${t.criadaEm}, ${t.atualizadaEm})
+    ON CONFLICT (id) DO UPDATE SET status = excluded.status, mensagens = excluded.mensagens, resumo = excluded.resumo,
+      erro = excluded.erro, atualizada_em = excluded.atualizada_em`;
   return t;
 }
 
-export function criarTarefa(conversaId: string, botId: BotId, pedido: string, mensagens: UIMessage[]): Tarefa {
+export function criarTarefa(conversaId: string, botId: BotId, pedido: string, mensagens: UIMessage[]): Promise<Tarefa> {
   const agora = Date.now();
   return gravar({
     id: crypto.randomUUID(),
@@ -100,32 +99,25 @@ export function criarTarefa(conversaId: string, botId: BotId, pedido: string, me
   });
 }
 
-export const avancarTarefa = (t: Tarefa, m: MudancaTarefa): Tarefa => gravar(transicionarTarefa(t, m));
+export const avancarTarefa = (t: Tarefa, m: MudancaTarefa): Promise<Tarefa> => gravar(transicionarTarefa(t, m));
 
-const COLUNAS_RESUMO = "id, conversa_id, bot_id, pedido, status, resumo, erro, criada_em, atualizada_em";
-
-export function tarefasDaConversa(conversaId: string): ResumoTarefa[] {
-  return (
-    db.query(`SELECT ${COLUNAS_RESUMO} FROM tarefas WHERE conversa_id = ? ORDER BY criada_em`).all(conversaId) as Omit<Linha, "mensagens">[]
-  ).map(resumoDaLinha);
+export async function tarefasDaConversa(conversaId: string): Promise<ResumoTarefa[]> {
+  const linhas = await q<Omit<Linha, "mensagens">>`SELECT id, conversa_id, bot_id, pedido, status, resumo, erro, criada_em, atualizada_em
+    FROM tarefas WHERE conversa_id = ${conversaId} ORDER BY criada_em`;
+  return linhas.map(resumoDaLinha);
 }
 
-export function pegarTarefa(id: string): Tarefa | null {
-  const r = db.query("SELECT * FROM tarefas WHERE id = ?").get(id) as Linha | null;
+export async function pegarTarefa(id: string): Promise<Tarefa | null> {
+  const r = await primeira(q<Linha>`SELECT * FROM tarefas WHERE id = ${id}`);
   return r ? { ...resumoDaLinha(r), mensagens: JSON.parse(r.mensagens) as UIMessage[] } : null;
 }
 
 /** Tarefas na fila ou em andamento nas conversas do usuário, mais recentes primeiro. */
-export function tarefasAtivas(userId: string): ResumoTarefa[] {
-  const colunas = COLUNAS_RESUMO.split(", ").map((c) => `t.${c}`).join(", ");
-  return (
-    db
-      .query(
-        `SELECT ${colunas} FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
-         WHERE c.user_id = ? AND c.apagada_em IS NULL AND t.status IN (${ATIVOS.map(() => "?").join(",")}) ORDER BY t.criada_em DESC`,
-      )
-      .all(userId, ...ATIVOS) as Omit<Linha, "mensagens">[]
-  ).map(resumoDaLinha);
+export async function tarefasAtivas(userId: string): Promise<ResumoTarefa[]> {
+  const linhas = await q<Omit<Linha, "mensagens">>`SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.resumo, t.erro, t.criada_em, t.atualizada_em
+    FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
+    WHERE c.user_id = ${userId} AND t.status = ANY(${[...ATIVOS]}::text[]) ORDER BY t.criada_em DESC`;
+  return linhas.map(resumoDaLinha);
 }
 
 /**
@@ -136,15 +128,11 @@ export type TrabalhoDoBot =
   | { tipo: "tarefas"; itens: ResumoTarefa[]; proximo: number | null }
   | { tipo: "conversas"; itens: Conversa[]; proximo: number | null };
 
-export function trabalhoDoBot(userId: string, botId: BotId, offset: number, limite: number): TrabalhoDoBot {
+export async function trabalhoDoBot(userId: string, botId: BotId, offset: number, limite: number): Promise<TrabalhoDoBot> {
   const pagina = <T>(linhas: T[]) => ({ itens: linhas.slice(0, limite), proximo: linhas.length > limite ? offset + limite : null });
-  if (botId === "chefe") return { tipo: "conversas", ...pagina(conversasDoBot(userId, botId, offset, limite + 1)) };
-  const colunas = COLUNAS_RESUMO.split(", ").map((c) => `t.${c}`).join(", ");
-  const linhas = db
-    .query(
-      `SELECT ${colunas} FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
-       WHERE c.user_id = ? AND c.apagada_em IS NULL AND t.bot_id = ? ORDER BY t.criada_em DESC, t.id LIMIT ? OFFSET ?`,
-    )
-    .all(userId, botId, limite + 1, offset) as Omit<Linha, "mensagens">[];
+  if (botId === "chefe") return { tipo: "conversas", ...pagina(await conversasDoBot(userId, botId, offset, limite + 1)) };
+  const linhas = await q<Omit<Linha, "mensagens">>`SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.resumo, t.erro, t.criada_em, t.atualizada_em
+    FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
+    WHERE c.user_id = ${userId} AND t.bot_id = ${botId} ORDER BY t.criada_em DESC, t.id LIMIT ${limite + 1} OFFSET ${offset}`;
   return { tipo: "tarefas", ...pagina(linhas.map(resumoDaLinha)) };
 }

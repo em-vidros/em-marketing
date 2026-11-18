@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { NomesDosBots } from "../api";
 import { auth } from "../auth";
 import { BOT_IDS } from "../bots";
-import type { EstadosDaEquipe } from "../equipe";
+import type { AgoraDaConversa, EstadosDaEquipe } from "../equipe";
 import { aoClicarLink } from "../rota";
 import { ariaDe, atalhoDoBot, ehMac } from "../teclado/atalhos";
 import type { Conversa } from "../tipos";
@@ -12,7 +12,7 @@ import { type AcoesConversa, BotaoAcoes, MenuDeContexto } from "./menu/MenuConve
 import { Dica, Teclas } from "./menu/Teclas";
 
 const diaLocal = (d: Date) => d.toLocaleDateString("sv-SE");
-/** atualizadaEm vem do SQLite em UTC, sem fuso: "2026-10-13 14:02:11". */
+/** atualizadaEm vem do banco em UTC, sem fuso: "2026-10-13 14:02:11". */
 const ehDeHoje = (c: Conversa) => diaLocal(new Date(`${c.atualizadaEm.replace(" ", "T")}Z`)) === diaLocal(new Date());
 
 const CHAVE_ARQUIVADAS = "barra:arquivadas-aberta";
@@ -26,6 +26,8 @@ const lerAberta = () => {
 
 export interface PropsLista {
   ativa: string | null;
+  /** O que cada conversa em andamento está fazendo, por id. */
+  agora: Record<string, AgoraDaConversa>;
   editando: string | null;
   aoRenomear: (id: string, titulo: string | null) => void;
   acoes: AcoesConversa;
@@ -68,7 +70,8 @@ function CampoTitulo({ c, aoRenomear }: { c: Conversa; aoRenomear: PropsLista["a
   );
 }
 
-function Linha({ c, ativa, editando, aoRenomear, acoes, aoNavegar, tabulavel }: PropsLista & { c: Conversa; tabulavel: boolean }) {
+function Linha({ c, ativa, agora, editando, aoRenomear, acoes, aoNavegar, tabulavel }: PropsLista & { c: Conversa; tabulavel: boolean }) {
+  const fazendo = agora[c.id];
   return (
     <MenuDeContexto conversa={c} acoes={acoes}>
       <div data-linha={c.id} data-atual={c.id === ativa || undefined} className="linha group/linha relative flex min-h-10 items-center gap-1 rounded-item pr-1">
@@ -87,7 +90,14 @@ function Linha({ c, ativa, editando, aoRenomear, acoes, aoNavegar, tabulavel }: 
           >
             {/* A conversa direta com um especialista leva o rosto dele; a do Chefe, que é a maioria, não. */}
             {c.botId !== "chefe" && <Avatar bot={c.botId} tamanho={16} />}
-            <span className="truncate">{c.titulo}</span>
+            <span className={`flex min-w-0 flex-col ${fazendo ? "py-1.5" : ""}`}>
+              <span className="truncate">{c.titulo}</span>
+              {fazendo && (
+                <span aria-live="polite" className={`truncate text-xs leading-tight ${fazendo.trabalhando ? "brilho" : "text-tinta-3"}`}>
+                  {fazendo.texto}
+                </span>
+              )}
+            </span>
           </a>
         )}
         {editando !== c.id && <BotaoAcoes conversa={c} acoes={acoes} />}
@@ -160,10 +170,10 @@ export function Barra({
   return (
     <nav aria-label="Navegação" className="flex h-full flex-col gap-5 overflow-hidden bg-painel py-3.5">
       <div className="flex flex-col gap-5 px-2.5">
-        <div className="flex items-center gap-2.5 px-2.5 py-1">
+        <a href="/" onClick={(e) => (aoClicarLink(e), aoNavegar())} className="flex items-center gap-2.5 self-start rounded-md px-2.5 py-1">
           <img src="/logo/em-simbolo.svg" alt="" width={26} height={14} className="h-3.5 w-auto" />
           <span className="text-[15px] font-semibold tracking-[-0.015em]">EM Marketing</span>
-        </div>
+        </a>
 
         <div className="flex items-center gap-1.5">
           <button
@@ -245,7 +255,7 @@ export function Barra({
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={`transition-transform duration-150 ${mostrarArquivadas ? "rotate-90" : ""}`}
+                  className={`transition-transform duration-300 ease-(--ease-saida) motion-reduce:transition-none ${mostrarArquivadas ? "rotate-90" : ""}`}
                 >
                   <path d="M3.5 2l3 3-3 3" />
                 </svg>
@@ -280,6 +290,15 @@ export function Barra({
             Biblioteca
           </a>
         </Dica>
+        <Dica rotulo="Artes">
+          <a
+            href="/artes"
+            aria-current={telaAtual.startsWith("/artes") ? "page" : undefined}
+            onClick={(e) => (aoClicarLink(e), aoNavegar())}
+            className={linkDe(telaAtual.startsWith("/artes"))}>
+            Artes
+          </a>
+        </Dica>
         <Dica rotulo="Calendário" atalho="ir-calendario">
           <a
             href="/calendario"
@@ -295,6 +314,14 @@ export function Barra({
         </button>
         <div className="mt-2 flex items-center gap-2 border-t border-linha px-3 pt-3 text-xs text-tinta-3">
           <span className="min-w-0 flex-1 truncate">{email}</span>
+          <a
+            href="/uso"
+            aria-current={telaAtual === "/uso" ? "page" : undefined}
+            onClick={(e) => (aoClicarLink(e), aoNavegar())}
+            className={`flex h-8 items-center rounded-full px-2.5 whitespace-nowrap hover:bg-hover hover:text-tinta ${telaAtual === "/uso" ? "bg-ativo text-tinta" : "text-tinta-2"}`}
+          >
+            Uso da API
+          </a>
           <button type="button" onClick={() => auth.signOut()} className="h-8 cursor-pointer rounded-full px-2.5 text-tinta-2 hover:bg-hover hover:text-tinta">
             Sair
           </button>

@@ -15,7 +15,7 @@ import {
 } from "./post";
 
 const brief: Brief = { pilar: "AUTORIDADE", tema: "temperado x comum", precisaFotoReal: false };
-const arte = (variant: number, style = "tecnico-poppins"): Arte => ({ variant, style, path: `v${variant}.jpg`, interactionId: `i${variant}`, problemas: [] });
+const arte = (variant: number, style = "tecnico-poppins"): Arte => ({ variant, style, path: `v${variant}.jpg`, problemas: [] });
 const headline = { headline: "O temperado quebra em grãos.", apoio: "" };
 
 /** Aplica os eventos em ordem e falha o teste na primeira recusa. */
@@ -56,15 +56,9 @@ describe("ordem do fluxo", () => {
 });
 
 describe("invariante 3: stories não têm legenda", () => {
-  test("legenda é recusada e o stories vai direto ao Linear", () => {
+  test("legenda é recusada no stories", () => {
     const p = rodar(comArtes("stories"), { tipo: "escolha", variante: 2 });
     expect(exigir(p, "legenda")).toMatchObject({ ok: false, motivo: expect.stringContaining("Invariante 3") });
-    expect(rodar(p, { tipo: "registro", linearId: "L1" }).etapa).toBe("registrado");
-  });
-
-  test("feed precisa de legenda antes do Linear", () => {
-    const p = rodar(comArtes("feed"), { tipo: "escolha", variante: 1 });
-    expect(exigir(p, "registro").ok).toBe(false);
   });
 });
 
@@ -84,66 +78,66 @@ describe("invariante 4: foto real (§8.2)", () => {
 });
 
 describe("formato ambos", () => {
-  test("derivar_story só no ambos, e o Linear espera o story", () => {
+  test("derivar_story só no ambos, e pode vir depois da legenda", () => {
     const feed = rodar(comArtes("feed"), { tipo: "escolha", variante: 1 });
     expect(exigir(feed, "story").ok).toBe(false);
 
     const ambos = rodar(comArtes("ambos"), { tipo: "escolha", variante: 1 }, { tipo: "legenda", legenda: "Legenda." });
-    expect(exigir(ambos, "registro").ok).toBe(false);
-    expect(rodar(ambos, { tipo: "story", path: "s.jpg" }, { tipo: "registro", linearId: "L1" }).etapa).toBe("registrado");
+    expect(rodar(ambos, { tipo: "story", path: "s.jpg" })).toMatchObject({ etapa: "legenda", storyPath: "s.jpg" });
   });
 });
 
 describe("publicação", () => {
-  const registrado = rodar(
+  const pronto = rodar(
     comArtes("ambos"),
     { tipo: "escolha", variante: 3 },
     { tipo: "story", path: "s.jpg" },
     { tipo: "legenda", legenda: "Legenda." },
-    { tipo: "registro", linearId: "L1" },
   );
 
-  test("só publica post registrado no Linear", () => {
-    const antes = rodar(comArtes("feed"), { tipo: "escolha", variante: 1 }, { tipo: "legenda", legenda: "x" });
-    expect(midiaParaPublicar(antes, "IMAGE").ok).toBe(false);
+  // Pega a volta de uma etapa obrigatória depois da escolha e um post sem peça passando.
+  test("publica post com a peça escolhida, mesmo sem legenda; sem peça escolhida, não", () => {
+    const semEscolha = comArtes("feed");
+    const escolhida = rodar(comArtes("feed"), { tipo: "escolha", variante: 1 });
+    expect(midiaParaPublicar(semEscolha, "IMAGE").ok).toBe(false);
+    expect(midiaParaPublicar(escolhida, "IMAGE")).toEqual({ ok: true, post: { postId: 1, path: "v1.jpg", legenda: undefined } });
   });
 
   test("feed leva a arte escolhida e a legenda; stories leva o 9:16 sem legenda", () => {
-    expect(midiaParaPublicar(registrado, "IMAGE")).toEqual({ ok: true, post: { postId: 1, path: "v3.jpg", legenda: "Legenda." } });
-    expect(midiaParaPublicar(registrado, "STORIES")).toEqual({ ok: true, post: { postId: 1, path: "s.jpg", legenda: undefined } });
+    expect(midiaParaPublicar(pronto, "IMAGE")).toEqual({ ok: true, post: { postId: 1, path: "v3.jpg", legenda: "Legenda." } });
+    expect(midiaParaPublicar(pronto, "STORIES")).toEqual({ ok: true, post: { postId: 1, path: "s.jpg", legenda: undefined } });
   });
 
   test("tipo de mídia fora do formato é recusado", () => {
-    const soStories = rodar(comArtes("stories"), { tipo: "escolha", variante: 1 }, { tipo: "registro", linearId: "L" });
+    const soStories = rodar(comArtes("stories"), { tipo: "escolha", variante: 1 });
     expect(midiaParaPublicar(soStories, "IMAGE").ok).toBe(false);
   });
 });
 
 describe("persistência por conversa", () => {
-  test("cada etapa gravada volta igual do banco", () => {
-    abrirConversa("t-persist", "post");
-    const inicio = criarPost("t-persist", brief, "ambos");
+  test("cada etapa gravada volta igual do banco", async () => {
+    await abrirConversa("t-persist", "post");
+    const inicio = await criarPost("t-persist", brief, "ambos");
     const eventos: Evento[] = [
       { tipo: "headline", headline },
       { tipo: "artes", artes: [arte(1), arte(2), arte(3)] },
       { tipo: "escolha", variante: 2 },
       { tipo: "story", path: "s.jpg" },
       { tipo: "legenda", legenda: "Legenda." },
-      { tipo: "registro", linearId: "L1" },
     ];
     let p = inicio;
-    expect(postDaConversa("t-persist")).toEqual(p);
+    expect(await postDaConversa("t-persist")).toEqual(p);
     for (const e of eventos) {
       p = rodar(p, e);
-      gravarPost(p);
-      expect(postDaConversa("t-persist")).toEqual(p);
+      await gravarPost(p);
+      expect(await postDaConversa("t-persist")).toEqual(p);
     }
   });
 
-  test("conversas diferentes têm posts diferentes", () => {
-    abrirConversa("t-a", "post");
-    abrirConversa("t-b", "post");
-    criarPost("t-a", brief, null);
-    expect(postDaConversa("t-b")).toBeNull();
+  test("conversas diferentes têm posts diferentes", async () => {
+    await abrirConversa("t-a", "post");
+    await abrirConversa("t-b", "post");
+    await criarPost("t-a", brief, null);
+    expect(await postDaConversa("t-b")).toBeNull();
   });
 });
