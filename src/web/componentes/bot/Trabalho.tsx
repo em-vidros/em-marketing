@@ -36,7 +36,7 @@ export function duracao(ms: number) {
   return `${Math.floor(m / 60)} h ${m % 60} min`;
 }
 
-/** O SQLite grava "2026-10-13 18:00:00" em UTC, sem o fuso. */
+/** O banco grava "2026-10-13 18:00:00" em UTC, sem o fuso. */
 const daColuna = (s: string) => new Date(`${s.replace(" ", "T")}Z`);
 
 const linkDaConversa = (id: string) => `/c/${encodeURIComponent(id)}`;

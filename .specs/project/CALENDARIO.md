@@ -48,7 +48,7 @@ Todas pedem sessão (401 `{erro}` sem ela). Recusas vêm como `{erro}` em portug
 | `DELETE /api/fila/:id` | | 204, status `cancelled`; vale para pendente e para falho |
 | `POST /api/fila/:id/restaurar` | | `ItemAgendado` |
 
-`queue.publish_at` continua no formato do SQLite, `AAAA-MM-DD HH:MM:SS` em UTC, porque o tick do scheduler compara o texto com `datetime('now')`. A API recebe e devolve epoch ms e converte na borda.
+`queue.publish_at` fica em texto `AAAA-MM-DD HH:MM:SS` em UTC, porque o tick do scheduler compara o texto com a hora atual no mesmo formato (`utcDe`). A API recebe e devolve epoch ms e converte na borda.
 
 ## Telas e movimento
 

@@ -19,7 +19,7 @@ export interface Lista {
 /** O toast: com `chave`, oferece Desfazer, que consome a mesma entrada da pilha que o ⌘Z. */
 export type Aviso = { tipo: "desfazivel"; chave: number; texto: string; nome?: string } | { tipo: "erro"; texto: string };
 
-/** atualizadaEm é texto ISO-like do SQLite; a ordem lexical é a ordem do tempo. */
+/** atualizadaEm é texto "AAAA-MM-DD HH:MM:SS" em UTC; a ordem lexical é a ordem do tempo. */
 const maisNovaPrimeiro = (a: Conversa, b: Conversa) => b.atualizadaEm.localeCompare(a.atualizadaEm);
 
 const sem = (lista: readonly Conversa[], id: string) => lista.filter((c) => c.id !== id);

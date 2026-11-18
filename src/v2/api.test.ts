@@ -5,12 +5,13 @@ import { join } from "node:path";
 import sharp from "sharp";
 import { criarApi } from "./api";
 import { arquivosNoDisco } from "./arquivos";
-import { abrirBanco } from "./banco";
+import { banco } from "./banco";
 import { FORMATOS, type Formato } from "./camadas";
 import type { Ia } from "./ia";
 import { escolherReferencias } from "./referencias";
+import { artes, referencias } from "./schema";
 
-const ana = { id: "u-ana", email: "ana@emvidros.com.br", nome: "Ana" };
+const ana = { id: "u-ana", email: "ana@emvidros.com.br", nome: "Ana", admin: false };
 
 const cenaFalsa = (formato: Formato) =>
   sharp({ create: { width: FORMATOS[formato].largura, height: FORMATOS[formato].altura, channels: 3, background: "#E4E1D8" } }).jpeg().toBuffer();
@@ -29,9 +30,11 @@ let api: ReturnType<typeof criarApi>;
 
 beforeEach(async () => {
   leiturasRecebidas = [];
-  const banco = await abrirBanco({ dir: null });
+  // O banco é o do preload, de todos os arquivos de teste; cada caso começa sem referências nem artes.
+  await banco().delete(referencias);
+  await banco().delete(artes);
   const arquivos = arquivosNoDisco(mkdtempSync(join(tmpdir(), "em-v2-")));
-  api = criarApi({ banco, ia: iaFalsa, arquivos }, async (req) => (req.headers.get("x-teste") === "ana" ? ana : null));
+  api = criarApi({ banco: banco(), ia: iaFalsa, arquivos }, async (req) => (req.headers.get("x-teste") === "ana" ? ana : null));
 });
 
 const pedir = (caminho: string, init: RequestInit = {}) =>

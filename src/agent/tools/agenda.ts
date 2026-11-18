@@ -1,6 +1,6 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { db } from "../../db";
+import { q } from "../../v2/banco";
 import { tokens } from "../../domain/brand";
 import { cotaDePilares } from "../../domain/brand/cota";
 import { contarFotos } from "../../domain/fotos";
@@ -14,17 +14,13 @@ const mesCorrente = () =>
  * O código calcula o buraco e junta o material (pilar deficitário, datas que
  * passam no §12.4, fotos no banco). Quem redige a pauta é o modelo.
  */
-function statusDoMes(mes: string) {
+async function statusDoMes(mes: string) {
   // Brasil é UTC-3 sem horário de verão desde 2019; created_at é UTC.
-  const linhas = db
-    .query(
-      `SELECT COALESCE(pilar,'(sem pilar)') AS pilar, COUNT(*) AS n
-         FROM posts
-        WHERE strftime('%Y-%m', created_at, '-3 hours') = ?
-          AND status IN ('scheduled','published')
-        GROUP BY 1`,
-    )
-    .all(mes) as { pilar: string; n: number }[];
+  const linhas = await q<{ pilar: string; n: number }>`SELECT COALESCE(pilar,'(sem pilar)') AS pilar, count(*)::int AS n
+    FROM posts
+    WHERE to_char(created_at::timestamp - interval '3 hours', 'YYYY-MM') = ${mes}
+      AND status IN ('scheduled','published')
+    GROUP BY 1`;
 
   const total = linhas.reduce((s, l) => s + l.n, 0);
   const { base, itens } = cotaDePilares(Object.fromEntries(linhas.map((l) => [l.pilar, l.n])), total);
@@ -42,7 +38,7 @@ function statusDoMes(mes: string) {
       .sort((a, b) => b.faltam - a.faltam)
       .map((d) => ({ pilar: d.pilar, faltam: d.faltam, ...tokens.pilares[d.pilar] })),
     datasDoMes: proximasDatas(45),
-    fotosNoBanco: contarFotos(),
+    fotosNoBanco: await contarFotos(),
   };
 }
 
@@ -51,7 +47,7 @@ export const toolsDeAgenda = {
     description: "Lista a fila de publicações agendadas.",
     inputSchema: z.object({}),
     execute: async () => ({
-      fila: listQueue().map((i) => ({
+      fila: (await listQueue()).map((i) => ({
         id: i.id,
         mediaType: i.media_type,
         publishAt: i.publish_at,
@@ -70,7 +66,7 @@ export const toolsDeAgenda = {
   cancelar_agendamento: tool({
     description: "Cancela um item pendente da fila pelo id.",
     inputSchema: z.object({ id: z.number().int() }),
-    execute: async ({ id }) => ({ id, cancelado: cancelQueueItem(id) }),
+    execute: async ({ id }) => ({ id, cancelado: await cancelQueueItem(id) }),
   }),
 
   proximas_datas: tool({

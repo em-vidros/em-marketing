@@ -1,6 +1,7 @@
 import { toFile } from "openai";
 import sharp from "sharp";
 import { readFileSync } from "node:fs";
+import { lerArquivo } from "../../armazem";
 import { tokens } from "../brand";
 import { MODELO_DE_IMAGEM, openai } from "../../openai";
 
@@ -23,7 +24,7 @@ const logo = (variant: "cor" | "branco") =>
 /**
  * Gera uma arte no formato pedido e normaliza para a dimensão exata
  * (resize cover + crop, JPEG q90 sRGB), conforme PRD §3.3.
- * `base` é o caminho de uma arte aprovada que a nova deve seguir.
+ * `base` é o caminho (disco ou Blob) de uma arte aprovada que a nova deve seguir.
  */
 export async function generateArt(opts: {
   prompt: string;
@@ -33,7 +34,11 @@ export async function generateArt(opts: {
 }): Promise<Buffer> {
   const f = FORMATS[opts.formato];
   const imagens = [await logo(opts.logoVariant ?? "cor")];
-  if (opts.base) imagens.push(await toFile(readFileSync(opts.base), "base.jpg", { type: "image/jpeg" }));
+  if (opts.base) {
+    const base = await lerArquivo(opts.base);
+    if (!base) throw new Error("A arte escolhida sumiu do armazenamento.");
+    imagens.push(await toFile(base, "base.jpg", { type: "image/jpeg" }));
+  }
 
   const resposta = await openai().images.edit({
     model: MODELO_DE_IMAGEM,

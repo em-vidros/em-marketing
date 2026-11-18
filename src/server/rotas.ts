@@ -31,11 +31,12 @@ import {
 import { agendar, cancelar, prontos, reagendar, restaurar, type EstudioDaFila, type RecusaDaFila } from "../agent/fila";
 import { ehModelId, modelos, problemaDoModelo, type ModelId } from "../agent/models";
 import { pegarTarefa, tarefasAtivas, tarefasDaConversa, trabalhoDoBot } from "../agent/tarefas";
+import { ehUrl } from "../armazem";
 import {
   agendamentos,
   aprovacoesPendentes,
-  db,
   inicioDoDia,
+  primeira,
   pecasDoUsuario,
   publicacoesRecentes,
   tarefasEmCurso,
@@ -46,6 +47,7 @@ import {
 import { PILARES } from "../domain/art/pipeline";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
 import { listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
+import { q } from "../v2/banco";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
 
@@ -222,57 +224,57 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     "/api/auth/*": (req: Request) => auth.handler(req),
 
     "/api/modelos": { GET: comSessao(() => Response.json(modelos())) },
-    "/api/bots": { GET: comSessao(() => Response.json(BOT_IDS.map(configDoBot))) },
+    "/api/bots": { GET: comSessao(async () => Response.json(await Promise.all(BOT_IDS.map(configDoBot)))) },
     "/api/bots/:id/config": {
-      GET: doBot<"/api/bots/:id/config">((_, __, botId) => Response.json(detalheDoBot(botId))),
+      GET: doBot<"/api/bots/:id/config">(async (_, __, botId) => Response.json(await detalheDoBot(botId))),
       PUT: doBot<"/api/bots/:id/config">(async (req, u, botId) => {
         const corpo = await lerCorpo(req, EdicaoBot);
-        return "resposta" in corpo ? corpo.resposta : Response.json(gravarVersao(botId, corpo.dados, u.email));
+        return "resposta" in corpo ? corpo.resposta : Response.json(await gravarVersao(botId, corpo.dados, u.email));
       }),
     },
-    "/api/bots/:id/versoes": { GET: doBot<"/api/bots/:id/versoes">((_, __, botId) => Response.json(versoesDoBot(botId))) },
+    "/api/bots/:id/versoes": { GET: doBot<"/api/bots/:id/versoes">(async (_, __, botId) => Response.json(await versoesDoBot(botId))) },
     "/api/bots/:id/versoes/:versao/restaurar": {
-      POST: doBot<"/api/bots/:id/versoes/:versao/restaurar">((req, u, botId) => {
-        const versao = versaoDoBot(botId, Number(req.params.versao));
+      POST: doBot<"/api/bots/:id/versoes/:versao/restaurar">(async (req, u, botId) => {
+        const versao = await versaoDoBot(botId, Number(req.params.versao));
         if (!versao) return naoEncontrado();
         const problema = problemaDoModelo(versao.modelo);
-        return problema ? invalido(problema) : Response.json(restaurarVersao(versao, u.email));
+        return problema ? invalido(problema) : Response.json(await restaurarVersao(versao, u.email));
       }),
     },
-    "/api/bots/:id/padrao": { POST: doBot<"/api/bots/:id/padrao">((_, u, botId) => Response.json(restaurarPadrao(botId, u.email))) },
+    "/api/bots/:id/padrao": { POST: doBot<"/api/bots/:id/padrao">(async (_, u, botId) => Response.json(await restaurarPadrao(botId, u.email))) },
     "/api/bots/:id/tarefas": {
-      GET: doBot<"/api/bots/:id/tarefas">((req, u, botId) => {
+      GET: doBot<"/api/bots/:id/tarefas">(async (req, u, botId) => {
         const pagina = Pagina.safeParse(Object.fromEntries(new URL(req.url).searchParams));
         if (!pagina.success) return invalido(pagina.error.issues[0]?.message ?? "Página inválida.");
-        return Response.json(trabalhoDoBot(u.id, botId, pagina.data.offset, pagina.data.limite));
+        return Response.json(await trabalhoDoBot(u.id, botId, pagina.data.offset, pagina.data.limite));
       }),
     },
     "/api/chat": { POST: comSessao(rotaDeChat(opcoes)) },
     "/api/conversas": {
-      GET: comSessao((req, u) => Response.json(conversasDoUsuario(u.id, new URL(req.url).searchParams.get("arquivadas") === "1"))),
+      GET: comSessao(async (req, u) => Response.json(await conversasDoUsuario(u.id, new URL(req.url).searchParams.get("arquivadas") === "1"))),
     },
     "/api/conversas/:id": {
-      GET: comSessao<"/api/conversas/:id">((req, u) => {
-        const conversa = conversaDoUsuario(u.id, req.params.id);
-        return conversa ? Response.json({ conversa, mensagens: mensagensDaConversa(conversa.id) }) : naoEncontrado();
+      GET: comSessao<"/api/conversas/:id">(async (req, u) => {
+        const conversa = await conversaDoUsuario(u.id, req.params.id);
+        return conversa ? Response.json({ conversa, mensagens: await mensagensDaConversa(conversa.id) }) : naoEncontrado();
       }),
       PATCH: comSessao<"/api/conversas/:id">(async (req, u) => {
         const corpo = await lerCorpo(req, EdicaoConversa);
         if ("resposta" in corpo) return corpo.resposta;
-        const conversa = mudarConversa(u.id, req.params.id, corpo.dados);
+        const conversa = await mudarConversa(u.id, req.params.id, corpo.dados);
         return conversa ? Response.json(conversa) : naoEncontrado();
       }),
-      DELETE: comSessao<"/api/conversas/:id">((req, u) => (apagarConversa(u.id, req.params.id) ? new Response(null, { status: 204 }) : naoEncontrado())),
+      DELETE: comSessao<"/api/conversas/:id">(async (req, u) => ((await apagarConversa(u.id, req.params.id)) ? new Response(null, { status: 204 }) : naoEncontrado())),
     },
     "/api/conversas/:id/restaurar": {
-      POST: comSessao<"/api/conversas/:id/restaurar">((req, u) => {
-        const conversa = restaurarConversa(u.id, req.params.id);
+      POST: comSessao<"/api/conversas/:id/restaurar">(async (req, u) => {
+        const conversa = await restaurarConversa(u.id, req.params.id);
         return conversa ? Response.json(conversa) : naoEncontrado();
       }),
     },
     "/api/conversas/:id/mensagens/:mensagemId": {
-      DELETE: comSessao<"/api/conversas/:id/mensagens/:mensagemId">((req, u) => {
-        const r = apagarMensagem(u.id, req.params.id, req.params.mensagemId);
+      DELETE: comSessao<"/api/conversas/:id/mensagens/:mensagemId">(async (req, u) => {
+        const r = await apagarMensagem(u.id, req.params.id, req.params.mensagemId);
         return r.ok ? Response.json({ removidas: r.removidas, depoisDe: r.depoisDe, antesDe: r.antesDe }) : recusar(r);
       }),
     },
@@ -282,41 +284,41 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         if ("resposta" in corpo) return corpo.resposta;
         const removidas = await safeValidateUIMessages({ messages: corpo.dados.removidas });
         if (!removidas.success) return invalido("As mensagens mandadas não são válidas.");
-        const r = restaurarMensagens(u.id, req.params.id, { ...corpo.dados, removidas: removidas.data });
+        const r = await restaurarMensagens(u.id, req.params.id, { ...corpo.dados, removidas: removidas.data });
         return r.ok ? Response.json({ mensagens: r.mensagens }) : recusar(r);
       }),
     },
     "/api/conversas/:id/tarefas": {
-      GET: comSessao<"/api/conversas/:id/tarefas">((req, u) =>
-        conversaDoUsuario(u.id, req.params.id) ? Response.json(tarefasDaConversa(req.params.id)) : naoEncontrado(),
+      GET: comSessao<"/api/conversas/:id/tarefas">(async (req, u) =>
+        (await conversaDoUsuario(u.id, req.params.id)) ? Response.json(await tarefasDaConversa(req.params.id)) : naoEncontrado(),
       ),
     },
     "/api/tarefas/:id": {
-      GET: comSessao<"/api/tarefas/:id">((req, u) => {
-        const tarefa = pegarTarefa(req.params.id);
-        return tarefa && conversaDoUsuario(u.id, tarefa.conversaId) ? Response.json(tarefa) : naoEncontrado();
+      GET: comSessao<"/api/tarefas/:id">(async (req, u) => {
+        const tarefa = await pegarTarefa(req.params.id);
+        return tarefa && (await conversaDoUsuario(u.id, tarefa.conversaId)) ? Response.json(tarefa) : naoEncontrado();
       }),
     },
-    "/api/atividade": { GET: comSessao((_, u) => Response.json(tarefasAtivas(u.id))) },
+    "/api/atividade": { GET: comSessao(async (_, u) => Response.json(await tarefasAtivas(u.id))) },
     "/api/atividade/agora": {
-      GET: comSessao((_, u) => {
+      GET: comSessao(async (_, u) => {
         const hoje = inicioDoDia();
         const agora: Agora = {
-          trabalhando: tarefasEmCurso(u.id),
-          esperando: aprovacoesPendentes(u.id),
-          concluidas: tarefasFeitas(u.id, hoje, Number.MAX_SAFE_INTEGER),
+          trabalhando: await tarefasEmCurso(u.id),
+          esperando: await aprovacoesPendentes(u.id),
+          concluidas: await tarefasFeitas(u.id, hoje, Number.MAX_SAFE_INTEGER),
         };
         return Response.json(agora);
       }),
     },
-    "/api/atividade/agendado": { GET: comSessao(() => Response.json(agendamentos())) },
+    "/api/atividade/agendado": { GET: comSessao(async () => Response.json(await agendamentos())) },
     "/api/atividade/historico": {
-      GET: comSessao((_, u) => {
-        const historico: Historico = { tarefas: tarefasFeitas(u.id, 0, inicioDoDia()), publicacoes: publicacoesRecentes() };
+      GET: comSessao(async (_, u) => {
+        const historico: Historico = { tarefas: await tarefasFeitas(u.id, 0, inicioDoDia()), publicacoes: await publicacoesRecentes() };
         return Response.json(historico);
       }),
     },
-    "/api/pecas": { GET: comSessao((_, u) => Response.json(pecasDoUsuario(u.id))) },
+    "/api/pecas": { GET: comSessao(async (_, u) => Response.json(await pecasDoUsuario(u.id))) },
     "/api/calendario": {
       GET: comSessao(async (req, u) => {
         const janela = Janela.safeParse(Object.fromEntries(new URL(req.url).searchParams));
@@ -327,7 +329,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     "/api/pautas": {
       POST: comSessao(async (req, u) => {
         const corpo = await lerCorpo(req, NovaPauta);
-        return "resposta" in corpo ? corpo.resposta : Response.json(criarPauta(u.id, corpo.dados), { status: 201 });
+        return "resposta" in corpo ? corpo.resposta : Response.json(await criarPauta(u.id, corpo.dados), { status: 201 });
       }),
     },
     "/api/pautas/:id": {
@@ -336,29 +338,29 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         if (id === null) return naoEncontrado();
         const corpo = await lerCorpo(req, EdicaoPauta);
         if ("resposta" in corpo) return corpo.resposta;
-        const pauta = mudarPauta(u.id, id, corpo.dados);
+        const pauta = await mudarPauta(u.id, id, corpo.dados);
         return pauta ? Response.json(pauta) : naoEncontrado();
       }),
-      DELETE: comSessao<"/api/pautas/:id">((req) => {
+      DELETE: comSessao<"/api/pautas/:id">(async (req) => {
         const id = idDa(req.params.id);
-        return id !== null && apagarPauta(id) ? new Response(null, { status: 204 }) : naoEncontrado();
+        return id !== null && (await apagarPauta(id)) ? new Response(null, { status: 204 }) : naoEncontrado();
       }),
     },
     "/api/pautas/:id/restaurar": {
-      POST: comSessao<"/api/pautas/:id/restaurar">((req, u) => {
+      POST: comSessao<"/api/pautas/:id/restaurar">(async (req, u) => {
         const id = idDa(req.params.id);
-        const pauta = id === null ? null : restaurarPauta(u.id, id);
+        const pauta = id === null ? null : await restaurarPauta(u.id, id);
         return pauta ? Response.json(pauta) : naoEncontrado();
       }),
     },
     "/api/pautas/:id/conversa": {
-      POST: comSessao<"/api/pautas/:id/conversa">((req, u) => {
+      POST: comSessao<"/api/pautas/:id/conversa">(async (req, u) => {
         const id = idDa(req.params.id);
-        const conversa = id === null ? null : conversaDaPauta(u.id, id);
+        const conversa = id === null ? null : await conversaDaPauta(u.id, id);
         return conversa ? Response.json(conversa) : naoEncontrado();
       }),
     },
-    "/api/prontos": { GET: comSessao(async () => Response.json(prontos((await listarArtes(estudio.banco)).map(resumoDaArte)))) },
+    "/api/prontos": { GET: comSessao(async () => Response.json(await prontos((await listarArtes(estudio.banco)).map(resumoDaArte)))) },
     "/api/fila": {
       POST: comSessao(async (req) => {
         const corpo = await lerCorpo(req, NovoAgendamento);
@@ -373,13 +375,13 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         if (id === null) return naoEncontrado();
         const corpo = await lerCorpo(req, Reagendamento);
         if ("resposta" in corpo) return corpo.resposta;
-        const r = reagendar(id, corpo.dados.publicaEm);
+        const r = await reagendar(id, corpo.dados.publicaEm);
         return r.ok ? Response.json({ item: await agendadoPorId(id, lerArtes), anterior: r.anterior }) : recusarNaFila(r);
       }),
-      DELETE: comSessao<"/api/fila/:id">((req) => {
+      DELETE: comSessao<"/api/fila/:id">(async (req) => {
         const id = idDa(req.params.id);
         if (id === null) return naoEncontrado();
-        const r = cancelar(id);
+        const r = await cancelar(id);
         return r.ok ? new Response(null, { status: 204 }) : recusarNaFila(r);
       }),
     },
@@ -387,7 +389,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
       POST: comSessao<"/api/fila/:id/restaurar">(async (req) => {
         const id = idDa(req.params.id);
         if (id === null) return naoEncontrado();
-        const r = restaurar(id);
+        const r = await restaurar(id);
         return r.ok ? Response.json(await agendadoPorId(id, lerArtes)) : recusarNaFila(r);
       }),
     },
@@ -419,9 +421,10 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     }),
 
     // Público de propósito: a Meta baixa a imagem por esta URL na hora de publicar, sem sessão.
-    // O id é aleatório de 128 bits e expira depois da publicação.
+    // O id é aleatório de 128 bits e expira depois da publicação. Um caminho do Blob vai direto para a URL pública dele.
     "/media/:id": async (req: BunRequest<"/media/:id">) => {
-      const row = db.query("SELECT path, expired FROM media WHERE id = ?").get(req.params.id) as { path: string; expired: number } | null;
+      const row = await primeira(q<{ path: string; expired: number }>`SELECT path, expired FROM media WHERE id = ${req.params.id}`);
+      if (row && !row.expired && ehUrl(row.path)) return Response.redirect(row.path, 302);
       const arquivo = row && !row.expired ? Bun.file(row.path) : null;
       if (!arquivo || !(await arquivo.exists())) return naoEncontrado();
       return new Response(arquivo, { headers: { "content-type": "image/jpeg" } });

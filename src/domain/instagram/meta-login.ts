@@ -1,8 +1,8 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { primeira } from "../../db";
+import { q } from "../../v2/banco";
 
 const GRAPH = "https://graph.facebook.com/v23.0";
-/** Lido a cada chamada: o teste aponta para um arquivo temporário depois que o módulo já carregou. */
-const arquivo = () => process.env.IG_CREDENCIAIS_ARQUIVO ?? "data/instagram.json";
+const CHAVE = "instagram";
 
 export interface Credenciais {
   igUserId: string;
@@ -10,13 +10,14 @@ export interface Credenciais {
   pagina: string;
 }
 
-/** O .env manda; o arquivo é o que o login da Meta grava. */
-export function credenciais(): Credenciais {
-  const doArquivo: Partial<Credenciais> = existsSync(arquivo()) ? JSON.parse(readFileSync(arquivo(), "utf8")) : {};
-  const igUserId = process.env.IG_USER_ID ?? doArquivo.igUserId;
-  const pageToken = process.env.IG_PAGE_TOKEN ?? doArquivo.pageToken;
+/** O .env manda; o banco guarda o que o login da Meta gravou. */
+export async function credenciais(): Promise<Credenciais> {
+  const linha = await primeira(q<{ valor: string }>`SELECT valor FROM configuracoes WHERE chave = ${CHAVE}`);
+  const salvas: Partial<Credenciais> = linha ? JSON.parse(linha.valor) : {};
+  const igUserId = process.env.IG_USER_ID ?? salvas.igUserId;
+  const pageToken = process.env.IG_PAGE_TOKEN ?? salvas.pageToken;
   if (!igUserId || !pageToken) throw new Error("Instagram não conectado. Abra /auth/meta e faça login.");
-  return { igUserId, pageToken, pagina: doArquivo.pagina ?? "" };
+  return { igUserId, pageToken, pagina: salvas.pagina ?? "" };
 }
 
 function config() {
@@ -81,6 +82,7 @@ export async function concluirLogin(codigo: string, origem: string): Promise<Cre
     pageToken: pagina.access_token,
     pagina: pagina.name,
   };
-  writeFileSync(arquivo(), JSON.stringify(salvas, null, 2), { mode: 0o600 });
+  await q`INSERT INTO configuracoes (chave, valor) VALUES (${CHAVE}, ${JSON.stringify(salvas)})
+    ON CONFLICT (chave) DO UPDATE SET valor = excluded.valor`;
   return salvas;
 }

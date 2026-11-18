@@ -1,13 +1,15 @@
-import { colunasDaFonte, db, newMediaId, type Fonte, type TipoMidia } from "../../db";
+import { ehUrl } from "../../armazem";
+import { colunasDaFonte, newMediaId, type Fonte, type TipoMidia } from "../../db";
+import { q } from "../../v2/banco";
 import { credenciais } from "./meta-login";
 
 const GRAPH = "https://graph.facebook.com/v23.0";
-const IG_USER = () => credenciais().igUserId;
-const TOKEN = () => credenciais().pageToken;
+const IG_USER = async () => (await credenciais()).igUserId;
+const TOKEN = async () => (await credenciais()).pageToken;
 const PUBLIC_BASE = () => process.env.PUBLIC_BASE_URL ?? "https://mkt.emvidros.com.br";
 
 async function graph(path: string, params: Record<string, string>): Promise<any> {
-  const body = new URLSearchParams({ ...params, access_token: TOKEN() });
+  const body = new URLSearchParams({ ...params, access_token: await TOKEN() });
   const res = await fetch(`${GRAPH}/${path}`, { method: "POST", body });
   const json: any = await res.json();
   if (json.error) throw new Error(`Graph API ${path}: ${json.error.message}`);
@@ -16,7 +18,7 @@ async function graph(path: string, params: Record<string, string>): Promise<any>
 
 export async function publishingLimit(): Promise<number> {
   const res = await fetch(
-    `${GRAPH}/${IG_USER()}/content_publishing_limit?access_token=${TOKEN()}`,
+    `${GRAPH}/${await IG_USER()}/content_publishing_limit?access_token=${await TOKEN()}`,
   );
   const json: any = await res.json();
   return json.data?.[0]?.quota_usage ?? 0;
@@ -25,7 +27,7 @@ export async function publishingLimit(): Promise<number> {
 /** Best-effort: o permalink é conveniência, a chave é o ig_media_id. */
 async function permalink(igMediaId: string): Promise<string | null> {
   try {
-    const res = await fetch(`${GRAPH}/${igMediaId}?fields=permalink&access_token=${TOKEN()}`);
+    const res = await fetch(`${GRAPH}/${igMediaId}?fields=permalink&access_token=${await TOKEN()}`);
     return ((await res.json()) as any).permalink ?? null;
   } catch {
     return null;
@@ -46,19 +48,20 @@ export async function publishImage(opts: {
   mediaType: TipoMidia;
   caption?: string;
 }): Promise<string> {
-  const mediaId = newMediaId(opts.jpegPath);
-  const image_url = `${PUBLIC_BASE()}/media/${mediaId}`;
+  // O JPEG no Blob já tem URL pública; o do disco sai por /media/:id, que expira depois da publicação.
+  const mediaId = ehUrl(opts.jpegPath) ? null : await newMediaId(opts.jpegPath);
+  const image_url = mediaId ? `${PUBLIC_BASE()}/media/${mediaId}` : opts.jpegPath;
 
   const params: Record<string, string> = { image_url };
   if (opts.mediaType === "STORIES") params.media_type = "STORIES";
   else if (opts.caption) params.caption = opts.caption;
 
-  const { id: containerId } = await graph(`${IG_USER()}/media`, params);
+  const { id: containerId } = await graph(`${await IG_USER()}/media`, params);
 
   // polling 1×/min, máx 5 min (PRD §4.3)
   for (let i = 0; i < 5; i++) {
     const res = await fetch(
-      `${GRAPH}/${containerId}?fields=status_code&access_token=${TOKEN()}`,
+      `${GRAPH}/${containerId}?fields=status_code&access_token=${await TOKEN()}`,
     );
     const { status_code } = (await res.json()) as any;
     if (status_code === "FINISHED") break;
@@ -66,13 +69,13 @@ export async function publishImage(opts: {
     await Bun.sleep(60_000);
   }
 
-  const { id: igMediaId } = await graph(`${IG_USER()}/media_publish`, {
+  const { id: igMediaId } = await graph(`${await IG_USER()}/media_publish`, {
     creation_id: containerId,
   });
 
-  db.query("UPDATE media SET expired = 1 WHERE id = ?").run(mediaId);
-  db.query(
-    "INSERT INTO publicacoes (post_id, arte_id, media_type, ig_media_id, permalink) VALUES (?, ?, ?, ?, ?)",
-  ).run(...colunasDaFonte(opts.fonte), opts.mediaType, igMediaId, await permalink(igMediaId));
+  if (mediaId) await q`UPDATE media SET expired = 1 WHERE id = ${mediaId}`;
+  const [postId, arteId] = colunasDaFonte(opts.fonte);
+  await q`INSERT INTO publicacoes (post_id, arte_id, media_type, ig_media_id, permalink)
+    VALUES (${postId}, ${arteId}, ${opts.mediaType}, ${igMediaId}, ${await permalink(igMediaId)})`;
   return igMediaId;
 }

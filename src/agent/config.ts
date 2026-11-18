@@ -1,4 +1,5 @@
-import { db } from "../db";
+import { primeira } from "../db";
+import { q } from "../v2/banco";
 import { BOTS, type BotId } from "./bots";
 import { ehModelId, type ModelId } from "./models";
 import type { ToolName } from "./tools";
@@ -70,14 +71,14 @@ const daLinha = (r: Linha): VersaoBot => ({
   autor: r.autor,
 });
 
-const ultimaVersao = (botId: BotId): VersaoBot | null => {
-  const r = db.query("SELECT * FROM versoes_bot WHERE bot_id = ? ORDER BY id DESC LIMIT 1").get(botId) as Linha | null;
+const ultimaVersao = async (botId: BotId): Promise<VersaoBot | null> => {
+  const r = await primeira(q<Linha>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC LIMIT 1`);
   return r && daLinha(r);
 };
 
-export function configDoBot(botId: BotId): ConfigBot {
+export async function configDoBot(botId: BotId): Promise<ConfigBot> {
   const padrao = padraoDe(botId);
-  const versao = ultimaVersao(botId);
+  const versao = await ultimaVersao(botId);
   const atual: Editavel = versao ?? padrao;
   return {
     id: botId,
@@ -91,17 +92,17 @@ export function configDoBot(botId: BotId): ConfigBot {
   };
 }
 
-export const detalheDoBot = (botId: BotId): DetalheBot => ({ ...configDoBot(botId), fixo: BOTS[botId].fixo(), tools: BOTS[botId].tools });
+export const detalheDoBot = async (botId: BotId): Promise<DetalheBot> => ({ ...(await configDoBot(botId)), fixo: BOTS[botId].fixo(), tools: BOTS[botId].tools });
 
 /** O system prompt do bot: o papel em vigor e, depois dele, a parte fixa do código. */
 export const instrucoesDe = (config: ConfigBot): string => `${config.prompt}\n\n${BOTS[config.id].fixo()}`;
 
-export function versoesDoBot(botId: BotId): VersaoBot[] {
-  return (db.query("SELECT * FROM versoes_bot WHERE bot_id = ? ORDER BY id DESC").all(botId) as Linha[]).map(daLinha);
+export async function versoesDoBot(botId: BotId): Promise<VersaoBot[]> {
+  return (await q<Linha>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC`).map(daLinha);
 }
 
-export function versaoDoBot(botId: BotId, versaoId: number): VersaoBot | null {
-  const r = db.query("SELECT * FROM versoes_bot WHERE bot_id = ? AND id = ?").get(botId, versaoId) as Linha | null;
+export async function versaoDoBot(botId: BotId, versaoId: number): Promise<VersaoBot | null> {
+  const r = await primeira(q<Linha>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} AND id = ${versaoId}`);
   return r && daLinha(r);
 }
 
@@ -109,23 +110,16 @@ export function versaoDoBot(botId: BotId, versaoId: number): VersaoBot | null {
  * Grava os campos mudados sobre a config em vigor. Se nada muda, não grava: repetir o mesmo
  * pedido não cria uma versão por clique. O modelo já chega validado pela rota.
  */
-export function gravarVersao(botId: BotId, mudanca: Partial<Editavel>, autor: string): DetalheBot {
-  const atual = configDoBot(botId);
+export async function gravarVersao(botId: BotId, mudanca: Partial<Editavel>, autor: string): Promise<DetalheBot> {
+  const atual = await configDoBot(botId);
   const nova: Editavel = { nome: atual.nome, descricao: atual.descricao, modelo: atual.modelo, prompt: atual.prompt, ...mudanca };
   if (CAMPOS.every((c) => nova[c] === atual[c])) return detalheDoBot(botId);
-  db.query("INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, criada_em, autor) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
-    botId,
-    nova.nome,
-    nova.descricao,
-    nova.modelo,
-    nova.prompt,
-    Date.now(),
-    autor,
-  );
+  await q`INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, criada_em, autor)
+    VALUES (${botId}, ${nova.nome}, ${nova.descricao}, ${nova.modelo}, ${nova.prompt}, ${Date.now()}, ${autor})`;
   return detalheDoBot(botId);
 }
 
-export const restaurarVersao = ({ botId, nome, descricao, modelo, prompt }: VersaoBot, autor: string): DetalheBot =>
+export const restaurarVersao = ({ botId, nome, descricao, modelo, prompt }: VersaoBot, autor: string): Promise<DetalheBot> =>
   gravarVersao(botId, { nome, descricao, modelo, prompt }, autor);
 
-export const restaurarPadrao = (botId: BotId, autor: string): DetalheBot => gravarVersao(botId, padraoDe(botId), autor);
+export const restaurarPadrao = (botId: BotId, autor: string): Promise<DetalheBot> => gravarVersao(botId, padraoDe(botId), autor);

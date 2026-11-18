@@ -1,4 +1,5 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
+import { gravarArquivo } from "../../armazem";
 import { generateArt, type Formato } from "./generate";
 import { validarArte } from "./validate";
 import type { Problema } from "../brand/validate";
@@ -106,7 +107,6 @@ export async function generate3Arts(opts: {
   const styles = (opts.styles ?? stylesFor(opts.brief.pilar)).filter((s) => !STYLES_SEM_GERACAO.has(s));
   if (styles.length < 3) throw new Error(`Só ${styles.length} estilos geráveis para o pilar ${opts.brief.pilar}.`);
 
-  mkdirSync("data/arts", { recursive: true });
   return Promise.all(
     styles.slice(0, 3).map(async (styleId, i) => {
       const jpeg = await generateArt({
@@ -114,8 +114,7 @@ export async function generate3Arts(opts: {
         formato: opts.formato,
         logoVariant: DARK_STYLES.has(styleId) ? "branco" : "cor",
       });
-      const path = `data/arts/post${opts.postId}-${opts.formato}-v${i + 1}-${styleId}.jpg`;
-      writeFileSync(path, jpeg);
+      const path = await gravarArquivo("arts", `post${opts.postId}-${opts.formato}-v${i + 1}-${styleId}.jpg`, jpeg, "image/jpeg");
       const problemas = await validarArte(jpeg, opts.formato);
       return { variant: i + 1, style: styleId, path, problemas };
     }),
@@ -137,7 +136,6 @@ export async function deriveStory(opts: {
     logoVariant: DARK_STYLES.has(opts.chosen.style) ? "branco" : "cor",
     base: opts.chosen.path,
   });
-  const path = `data/arts/post${opts.postId}-stories-derived.jpg`;
-  writeFileSync(path, jpeg);
+  const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived.jpg`, jpeg, "image/jpeg");
   return { path, problemas: await validarArte(jpeg, "stories") };
 }

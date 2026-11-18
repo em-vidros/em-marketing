@@ -9,12 +9,13 @@ export type { RodarEspecialista, SaidaDelegacao } from "./delegar";
 export type { Inspiracoes } from "./post";
 
 /** Todas as tools. As de post leem e gravam o post da conversa; as de delegação rodam especialistas nela. */
-export const catalogo = (conversaId: string, rodar: RodarEspecialista, inspiracoes?: Inspiracoes) => ({
+export const catalogo = async (conversaId: string, rodar: RodarEspecialista, inspiracoes?: Inspiracoes) => ({
   ...toolsDePost(conversaId, inspiracoes),
   ...toolsDeFotos,
   ...toolsDeAgenda,
   ...toolsDeTexto,
-  ...toolsDeDelegacao(conversaId, rodar),
+  ...(await toolsDeDelegacao(conversaId, rodar)),
 });
 
-export type ToolName = keyof ReturnType<typeof catalogo>;
+export type Catalogo = Awaited<ReturnType<typeof catalogo>>;
+export type ToolName = keyof Catalogo;

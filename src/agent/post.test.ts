@@ -115,9 +115,9 @@ describe("publicação", () => {
 });
 
 describe("persistência por conversa", () => {
-  test("cada etapa gravada volta igual do banco", () => {
-    abrirConversa("t-persist", "post");
-    const inicio = criarPost("t-persist", brief, "ambos");
+  test("cada etapa gravada volta igual do banco", async () => {
+    await abrirConversa("t-persist", "post");
+    const inicio = await criarPost("t-persist", brief, "ambos");
     const eventos: Evento[] = [
       { tipo: "headline", headline },
       { tipo: "artes", artes: [arte(1), arte(2), arte(3)] },
@@ -126,18 +126,18 @@ describe("persistência por conversa", () => {
       { tipo: "legenda", legenda: "Legenda." },
     ];
     let p = inicio;
-    expect(postDaConversa("t-persist")).toEqual(p);
+    expect(await postDaConversa("t-persist")).toEqual(p);
     for (const e of eventos) {
       p = rodar(p, e);
-      gravarPost(p);
-      expect(postDaConversa("t-persist")).toEqual(p);
+      await gravarPost(p);
+      expect(await postDaConversa("t-persist")).toEqual(p);
     }
   });
 
-  test("conversas diferentes têm posts diferentes", () => {
-    abrirConversa("t-a", "post");
-    abrirConversa("t-b", "post");
-    criarPost("t-a", brief, null);
-    expect(postDaConversa("t-b")).toBeNull();
+  test("conversas diferentes têm posts diferentes", async () => {
+    await abrirConversa("t-a", "post");
+    await abrirConversa("t-b", "post");
+    await criarPost("t-a", brief, null);
+    expect(await postDaConversa("t-b")).toBeNull();
   });
 });

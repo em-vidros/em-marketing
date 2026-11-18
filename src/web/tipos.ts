@@ -2,12 +2,12 @@ import type { InferUITools, UIDataTypes, UIMessage } from "ai";
 import type { BotId, Especialista } from "../agent/bots";
 import type { Conversa } from "../agent/conversas";
 import type { ResumoTarefa, Tarefa } from "../agent/tarefas";
-import type { catalogo, SaidaDelegacao, ToolName } from "../agent/tools";
+import type { Catalogo, SaidaDelegacao, ToolName } from "../agent/tools";
 
 export type { BotId, Conversa, Especialista, ResumoTarefa, SaidaDelegacao, Tarefa, ToolName };
 
 /** As tools do servidor, como o useChat as vê. Os tipos de entrada e saída vêm das definições. */
-export type Ferramentas = InferUITools<ReturnType<typeof catalogo>>;
+export type Ferramentas = InferUITools<Catalogo>;
 
 export type Mensagem = UIMessage<unknown, UIDataTypes, Ferramentas>;
 export type Parte = Mensagem["parts"][number];

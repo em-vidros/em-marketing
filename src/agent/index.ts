@@ -28,18 +28,18 @@ const DELEGADA =
  * uma edição do bot vale no turno seguinte, sem reiniciar o servidor.
  * O especialista de uma tarefa roda na conversa do Chefe, então lê e grava o mesmo post.
  */
-export function executar(botId: BotId, conversaId: string, messages: ModelMessage[], opcoes: Opcoes = {}) {
+export async function executar(botId: BotId, conversaId: string, messages: ModelMessage[], opcoes: Opcoes = {}) {
   const { resolverModelo = doRegistry, abortSignal, delegada = false, segredoAprovacao, inspiracoes } = opcoes;
-  const bot = configDoBot(botId);
-  abrirConversa(conversaId, botId);
+  const bot = await configDoBot(botId);
+  await abrirConversa(conversaId, botId);
   const instrucoes = [instrucoesDe(bot), ...(delegada ? [DELEGADA] : [])].join("\n\n");
   const rodar: RodarEspecialista = (especialista, pedido, sinal) =>
     executar(especialista, conversaId, [{ role: "user", content: pedido }], { resolverModelo, abortSignal: sinal, delegada: true, inspiracoes });
   return streamText({
     model: resolverModelo(bot),
-    instructions: `${instrucoes}\n\n--- ESTADO DO POST DESTA CONVERSA ---\n${resumoDoPost(postDaConversa(conversaId))}`,
+    instructions: `${instrucoes}\n\n--- ESTADO DO POST DESTA CONVERSA ---\n${resumoDoPost(await postDaConversa(conversaId))}`,
     messages,
-    tools: catalogo(conversaId, rodar, inspiracoes),
+    tools: await catalogo(conversaId, rodar, inspiracoes),
     activeTools: [...BOTS[botId].tools],
     toolApproval: APROVACAO,
     experimental_toolApprovalSecret: segredoAprovacao,

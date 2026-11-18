@@ -1,4 +1,5 @@
-import { db } from "../db";
+import { primeira, utcDe } from "../db";
+import { q } from "../v2/banco";
 import type { ArtVariant, Brief } from "../domain/art/pipeline";
 
 /**
@@ -259,34 +260,30 @@ const STATUS: Record<Etapa, string> = {
   legenda: "chosen",
 };
 
-export function postDaConversa(conversaId: string): EtapaPost | null {
-  const row = db
-    .query("SELECT p.* FROM conversas c JOIN posts p ON p.id = c.post_id WHERE c.id = ?")
-    .get(conversaId) as PostRow | null;
+export async function postDaConversa(conversaId: string): Promise<EtapaPost | null> {
+  const row = await primeira(q<PostRow>`SELECT p.* FROM conversas c JOIN posts p ON p.id = c.post_id WHERE c.id = ${conversaId}`);
   return row ? lerLinha(row) : null;
 }
 
 /** O post pelo id, lido como a conversa lê o dela. É por onde a tela de calendário agenda. */
-export function postPorId(postId: number): EtapaPost | null {
-  const row = db.query("SELECT * FROM posts WHERE id = ?").get(postId) as PostRow | null;
+export async function postPorId(postId: number): Promise<EtapaPost | null> {
+  const row = await primeira(q<PostRow>`SELECT * FROM posts WHERE id = ${postId}`);
   return row ? lerLinha(row) : null;
 }
 
-export function abrirConversa(conversaId: string, botId: string): void {
-  db.query("INSERT INTO conversas (id, bot_id) VALUES (?, ?) ON CONFLICT(id) DO NOTHING").run(conversaId, botId);
+export async function abrirConversa(conversaId: string, botId: string): Promise<void> {
+  await q`INSERT INTO conversas (id, bot_id) VALUES (${conversaId}, ${botId}) ON CONFLICT (id) DO NOTHING`;
 }
 
 /** Um brief novo abre um post novo e vira o post em andamento da conversa. */
-export function criarPost(conversaId: string, brief: Brief, formato: Formato | null): EtapaPost {
-  const { id } = db
-    .query("INSERT INTO posts (brief, pilar, formato) VALUES (?, ?, ?) RETURNING id")
-    .get(JSON.stringify(brief), brief.pilar, formato) as { id: number };
-  db.query("UPDATE conversas SET post_id = ?, updated_at = datetime('now') WHERE id = ?").run(id, conversaId);
+export async function criarPost(conversaId: string, brief: Brief, formato: Formato | null): Promise<EtapaPost> {
+  const { id } = (await primeira(q<{ id: number }>`INSERT INTO posts (brief, pilar, formato) VALUES (${JSON.stringify(brief)}, ${brief.pilar}, ${formato}) RETURNING id`))!;
+  await q`UPDATE conversas SET post_id = ${id}, updated_at = ${utcDe(Date.now())} WHERE id = ${conversaId}`;
   const base: Base = { postId: id, brief };
   return formato ? { ...base, etapa: "formato", formato } : { ...base, etapa: "brief" };
 }
 
-export function gravarPost(post: EtapaPost): void {
+export async function gravarPost(post: EtapaPost): Promise<void> {
   const formato = formatoDe(post);
   let headline: Headline | null = null;
   let artes: Arte[] | null = null;
@@ -315,17 +312,7 @@ export function gravarPost(post: EtapaPost): void {
       break;
   }
 
-  db.query(
-    `UPDATE posts SET formato = ?, headline = ?, arts = ?, chosen = ?, story_path = ?, legenda = ?, status = ?
-      WHERE id = ?`,
-  ).run(
-    formato,
-    headline && JSON.stringify(headline),
-    artes && JSON.stringify(artes),
-    chosen,
-    storyPath,
-    legenda,
-    STATUS[post.etapa],
-    post.postId,
-  );
+  await q`UPDATE posts SET formato = ${formato}, headline = ${headline && JSON.stringify(headline)}, arts = ${artes && JSON.stringify(artes)},
+    chosen = ${chosen}, story_path = ${storyPath}, legenda = ${legenda}, status = ${STATUS[post.etapa]}
+    WHERE id = ${post.postId}`;
 }

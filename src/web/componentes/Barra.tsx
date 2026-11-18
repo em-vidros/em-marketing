@@ -12,7 +12,7 @@ import { type AcoesConversa, BotaoAcoes, MenuDeContexto } from "./menu/MenuConve
 import { Dica, Teclas } from "./menu/Teclas";
 
 const diaLocal = (d: Date) => d.toLocaleDateString("sv-SE");
-/** atualizadaEm vem do SQLite em UTC, sem fuso: "2026-10-13 14:02:11". */
+/** atualizadaEm vem do banco em UTC, sem fuso: "2026-10-13 14:02:11". */
 const ehDeHoje = (c: Conversa) => diaLocal(new Date(`${c.atualizadaEm.replace(" ", "T")}Z`)) === diaLocal(new Date());
 
 const CHAVE_ARQUIVADAS = "barra:arquivadas-aberta";

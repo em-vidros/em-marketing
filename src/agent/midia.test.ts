@@ -21,7 +21,7 @@ const turno = (chunks: Chunk[], unified: "stop" | "tool-calls") => ({
   stream: simulateReadableStream<Chunk>({ chunks: [...chunks, { type: "finish", finishReason: { unified, raw: undefined }, usage: uso }] }),
 });
 
-const server = Bun.serve({ port: 0, routes: rotas({ estudio: await estudioDeTeste() }) });
+const server = Bun.serve({ port: 0, routes: rotas({ estudio: estudioDeTeste() }) });
 const criados: string[] = [];
 afterAll(() => {
   server.stop(true);
@@ -36,7 +36,7 @@ async function usarFoto(conversaId: string, fotoId: number) {
       turno([{ type: "text-start", id: "t" }, { type: "text-delta", id: "t", delta: "Pronto." }, { type: "text-end", id: "t" }], "stop"),
     ],
   });
-  const result = executar("post", conversaId, [{ role: "user", content: "Use a foto." }], { resolverModelo: () => post });
+  const result = await executar("post", conversaId, [{ role: "user", content: "Use a foto." }], { resolverModelo: () => post });
   for await (const part of result.stream) if (part.type === "tool-result" && part.toolName === "usar_foto") return part.output;
   throw new Error("usar_foto não devolveu resultado");
 }
@@ -45,8 +45,8 @@ test("a foto que usar_foto prepara aparece no painel por uma URL /media que abre
   const foto = await salvarFoto(await sharp({ create: { width: 800, height: 1000, channels: 3, background: "#2F646A" } }).jpeg().toBuffer());
   criados.push(foto.path);
   const conversaId = `midia-${crypto.randomUUID()}`;
-  abrirConversa(conversaId, "post");
-  const { postId } = criarPost(conversaId, { pilar: "PROVA", tema: "box temperado", precisaFotoReal: true }, "feed");
+  await abrirConversa(conversaId, "post");
+  const { postId } = await criarPost(conversaId, { pilar: "PROVA", tema: "box temperado", precisaFotoReal: true }, "feed");
   criados.push(`data/arts/post${postId}-feed-foto${foto.id}.jpg`);
 
   const primeira = imagensEm(await usarFoto(conversaId, foto.id));
@@ -62,13 +62,13 @@ test("uma arte refeita no mesmo caminho ganha outra URL /media, e a URL só muda
   criados.push(path);
   await Bun.write(path, "primeira");
   utimesSync(path, 1_700_000_000, 1_700_000_000);
-  const antes = urlDaMidia(path);
+  const antes = await urlDaMidia(path);
 
   await Bun.write(path, "refeita");
   utimesSync(path, 1_700_000_100, 1_700_000_100);
-  const depois = urlDaMidia(path);
+  const depois = await urlDaMidia(path);
 
   expect(depois).not.toBe(antes);
-  expect(urlDaMidia(path)).toBe(depois);
+  expect(await urlDaMidia(path)).toBe(depois);
   expect(await (await fetch(new URL(depois, server.url))).text()).toBe("refeita");
 });

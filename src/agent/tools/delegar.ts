@@ -11,7 +11,7 @@ export type RodarEspecialista = (
   botId: Especialista,
   pedido: string,
   abortSignal: AbortSignal | undefined,
-) => { readonly stream: ReadableStream<TextStreamPart<ToolSet>> };
+) => Promise<{ readonly stream: ReadableStream<TextStreamPart<ToolSet>> }>;
 
 /**
  * As prévias levam a mensagem do especialista inteira, para a UI desenhar ao vivo.
@@ -63,8 +63,8 @@ const marcos = (m: UIMessage | null) =>
     })
     .join(",");
 
-function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialista) {
-  const bot = configDoBot(botId);
+async function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialista) {
+  const bot = await configDoBot(botId);
   const serializar = mexeNoPost(botId);
   return tool({
     description: `Delega ao ${bot.nome}: ${bot.descricao} Devolve só o resumo do que ele fez.`,
@@ -73,7 +73,7 @@ function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialis
     }),
     execute: async function* ({ pedido }, { abortSignal }): AsyncGenerator<SaidaDelegacao> {
       const pergunta: UIMessage = { id: crypto.randomUUID(), role: "user", parts: [{ type: "text", text: pedido }] };
-      let tarefa: Tarefa = criarTarefa(conversaId, botId, pedido, [pergunta]);
+      let tarefa: Tarefa = await criarTarefa(conversaId, botId, pedido, [pergunta]);
       let resposta: UIMessage | null = null;
       const mensagens = () => (resposta ? [pergunta, resposta] : [pergunta]);
       // O erro do stream chega ao catch já como texto; a explicação é feita aqui, com o erro original.
@@ -81,21 +81,21 @@ function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialis
       yield { tarefaId: tarefa.id, status: "na_fila" };
       const sair = serializar ? await entrarNaFila(conversaId) : () => {};
       try {
-        tarefa = avancarTarefa(tarefa, { status: "trabalhando" });
+        tarefa = await avancarTarefa(tarefa, { status: "trabalhando" });
         yield { tarefaId: tarefa.id, status: "trabalhando", mensagem: null };
-        const { stream } = rodar(botId, pedido, abortSignal);
+        const { stream } = await rodar(botId, pedido, abortSignal);
         for await (const m of readUIMessageStream({ stream: toUIMessageStream({ stream, onError: (e) => (explicado = explicarErro(e)) }), terminateOnError: true })) {
           const avancou = marcos(m) !== marcos(resposta);
           resposta = m;
-          if (avancou) tarefa = avancarTarefa(tarefa, { status: "trabalhando", mensagens: mensagens() });
+          if (avancou) tarefa = await avancarTarefa(tarefa, { status: "trabalhando", mensagens: mensagens() });
           yield { tarefaId: tarefa.id, status: "trabalhando", mensagem: m };
         }
         const resumo = ultimoTexto(resposta);
-        tarefa = avancarTarefa(tarefa, { status: "concluida", resumo, mensagens: mensagens() });
+        tarefa = await avancarTarefa(tarefa, { status: "concluida", resumo, mensagens: mensagens() });
         yield { tarefaId: tarefa.id, status: "concluida", resumo };
       } catch (e) {
         const erro = explicado ?? explicarErro(e);
-        tarefa = avancarTarefa(tarefa, { status: "falhou", erro, mensagens: mensagens() });
+        tarefa = await avancarTarefa(tarefa, { status: "falhou", erro, mensagens: mensagens() });
         yield { tarefaId: tarefa.id, status: "falhou", erro };
       } finally {
         sair();
@@ -104,10 +104,10 @@ function delegar(conversaId: string, botId: Especialista, rodar: RodarEspecialis
   });
 }
 
-export const toolsDeDelegacao = (conversaId: string, rodar: RodarEspecialista) => ({
-  delegar_post: delegar(conversaId, "post", rodar),
-  delegar_legenda: delegar(conversaId, "legenda", rodar),
-  delegar_agenda: delegar(conversaId, "agenda", rodar),
-  delegar_fotos: delegar(conversaId, "fotos", rodar),
-  delegar_reels: delegar(conversaId, "reels", rodar),
+export const toolsDeDelegacao = async (conversaId: string, rodar: RodarEspecialista) => ({
+  delegar_post: await delegar(conversaId, "post", rodar),
+  delegar_legenda: await delegar(conversaId, "legenda", rodar),
+  delegar_agenda: await delegar(conversaId, "agenda", rodar),
+  delegar_fotos: await delegar(conversaId, "fotos", rodar),
+  delegar_reels: await delegar(conversaId, "reels", rodar),
 });

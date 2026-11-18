@@ -107,19 +107,19 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: Op
     if (!validada.success) return erro(400, validada.error.message);
     const [ultima] = validada.data as [UIMessage];
 
-    const conversa = abrirConversaDoUsuario(usuario.id, id, botId, tituloDe(ultima));
+    const conversa = await abrirConversaDoUsuario(usuario.id, id, botId, tituloDe(ultima));
     if (!conversa) return erro(404, "Conversa não encontrada.");
-    if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${configDoBot(conversa.botId).nome}.`);
+    if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${(await configDoBot(conversa.botId)).nome}.`);
 
     if (!comecarTurno(conversa.id)) return erro(409, AINDA_RESPONDENDO);
     try {
-      const juntada = juntar(mensagensDaConversa(conversa.id), ultima);
+      const juntada = juntar(await mensagensDaConversa(conversa.id), ultima);
       if (!juntada.ok) {
         terminarTurno(conversa.id);
         return erro(juntada.status, juntada.erro);
       }
       const { historico } = juntada;
-      const result = executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao, inspiracoes });
+      const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao, inspiracoes });
       // Sem backpressure do cliente: o turno termina e é salvo mesmo se a aba fechar no meio.
       result.consumeStream();
 
@@ -131,9 +131,9 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: Op
           onError: explicarErro,
           // Um turno que falhou antes da primeira parte deixa uma mensagem do assistente vazia; ela não entra no histórico.
           // Roda também quando a aba fecha no meio (cancel do stream), então solta a conversa nos dois casos.
-          onEnd: ({ messages }) => {
+          onEnd: async ({ messages }) => {
             try {
-              gravarMensagens(conversa.id, messages.filter((m) => m.parts.length > 0));
+              await gravarMensagens(conversa.id, messages.filter((m) => m.parts.length > 0));
             } finally {
               terminarTurno(conversa.id);
             }

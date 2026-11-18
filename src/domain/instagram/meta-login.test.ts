@@ -1,11 +1,5 @@
 import { afterEach, beforeEach, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-const dir = mkdtempSync(join(tmpdir(), "meta-"));
-process.env.IG_CREDENCIAIS_ARQUIVO = join(dir, "instagram.json");
-const { concluirLogin, urlDeLogin } = await import("./meta-login");
+import { concluirLogin, credenciais, urlDeLogin } from "./meta-login";
 
 const realFetch = globalThis.fetch;
 beforeEach(() => {
@@ -13,6 +7,8 @@ beforeEach(() => {
   process.env.META_APP_SECRET = "segredo";
   process.env.META_CONFIG_ID = "456";
   delete process.env.PUBLIC_BASE_URL;
+  delete process.env.IG_USER_ID;
+  delete process.env.IG_PAGE_TOKEN;
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
@@ -47,7 +43,7 @@ test("o login grava o Page token da página que tem Instagram", async () => {
 
   const salvas = await concluirLogin("codigo", "http://localhost:3000");
   expect(salvas).toEqual({ igUserId: "ig-1", pageToken: "page-token", pagina: "EM Vidros" });
-  expect(JSON.parse(readFileSync(process.env.IG_CREDENCIAIS_ARQUIVO!, "utf8"))).toEqual(salvas);
+  expect(await credenciais()).toEqual(salvas);
 });
 
 test("sem página com Instagram, o login falha com a causa", async () => {

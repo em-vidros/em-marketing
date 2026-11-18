@@ -1,5 +1,6 @@
 import type { UIMessage } from "ai";
-import { db } from "../db";
+import { primeira, utcDe } from "../db";
+import { q, transacao } from "../v2/banco";
 import type { BotId } from "./bots";
 
 /**
@@ -34,8 +35,6 @@ interface Linha {
   arquivada_em: number | null;
 }
 
-const COLUNAS = "id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em";
-
 const daLinha = (r: Linha): Conversa => ({
   id: r.id,
   botId: r.bot_id,
@@ -47,8 +46,10 @@ const daLinha = (r: Linha): Conversa => ({
 });
 
 /** Só devolve a conversa se ela for do usuário e não estiver apagada. Os três casos dão o mesmo null. */
-export function conversaDoUsuario(userId: string, id: string): Conversa | null {
-  const r = db.query(`SELECT ${COLUNAS} FROM conversas WHERE id = ? AND user_id = ? AND apagada_em IS NULL`).get(id, userId) as Linha | null;
+export async function conversaDoUsuario(userId: string, id: string): Promise<Conversa | null> {
+  const r = await primeira(
+    q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas WHERE id = ${id} AND user_id = ${userId} AND apagada_em IS NULL`,
+  );
   return r ? daLinha(r) : null;
 }
 
@@ -56,69 +57,69 @@ export function conversaDoUsuario(userId: string, id: string): Conversa | null {
  * Cria a conversa se o id ainda não existe e devolve a do usuário. Se o id já é
  * de outro usuário, o INSERT não faz nada e a leitura devolve null.
  */
-export function abrirConversaDoUsuario(userId: string, id: string, botId: BotId, titulo: string): Conversa | null {
-  db.query("INSERT INTO conversas (id, bot_id, user_id, titulo) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO NOTHING").run(id, botId, userId, titulo);
+export async function abrirConversaDoUsuario(userId: string, id: string, botId: BotId, titulo: string): Promise<Conversa | null> {
+  await q`INSERT INTO conversas (id, bot_id, user_id, titulo) VALUES (${id}, ${botId}, ${userId}, ${titulo}) ON CONFLICT (id) DO NOTHING`;
   return conversaDoUsuario(userId, id);
 }
 
 /** As conversas vivas do usuário: as da lista principal, ou só as arquivadas. */
-export function conversasDoUsuario(userId: string, arquivadas = false): Conversa[] {
-  const filtro = arquivadas ? "arquivada_em IS NOT NULL" : "arquivada_em IS NULL";
-  return (
-    db.query(`SELECT ${COLUNAS} FROM conversas WHERE user_id = ? AND apagada_em IS NULL AND ${filtro} ORDER BY updated_at DESC`).all(userId) as Linha[]
-  ).map(daLinha);
+export async function conversasDoUsuario(userId: string, arquivadas = false): Promise<Conversa[]> {
+  const linhas = await q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas
+    WHERE user_id = ${userId} AND apagada_em IS NULL AND (arquivada_em IS NOT NULL) = ${arquivadas} ORDER BY updated_at DESC`;
+  return linhas.map(daLinha);
 }
 
 /** As conversas vivas do usuário com um bot, arquivadas inclusive, da mais recente para trás. */
-export function conversasDoBot(userId: string, botId: BotId, offset: number, limite: number): Conversa[] {
-  return (
-    db
-      .query(`SELECT ${COLUNAS} FROM conversas WHERE user_id = ? AND bot_id = ? AND apagada_em IS NULL ORDER BY updated_at DESC, id LIMIT ? OFFSET ?`)
-      .all(userId, botId, limite, offset) as Linha[]
-  ).map(daLinha);
+export async function conversasDoBot(userId: string, botId: BotId, offset: number, limite: number): Promise<Conversa[]> {
+  const linhas = await q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas
+    WHERE user_id = ${userId} AND bot_id = ${botId} AND apagada_em IS NULL ORDER BY updated_at DESC, id LIMIT ${limite} OFFSET ${offset}`;
+  return linhas.map(daLinha);
 }
 
 /** Renomeia e arquiva. Arquivar de novo mantém a data da primeira vez. Não mexe em updated_at, que ordena a lista. */
-export function mudarConversa(userId: string, id: string, { titulo, arquivada }: MudancaConversa): Conversa | null {
-  if (!conversaDoUsuario(userId, id)) return null;
-  if (titulo !== undefined) db.query("UPDATE conversas SET titulo = ? WHERE id = ?").run(titulo, id);
+export async function mudarConversa(userId: string, id: string, { titulo, arquivada }: MudancaConversa): Promise<Conversa | null> {
+  if (!(await conversaDoUsuario(userId, id))) return null;
+  if (titulo !== undefined) await q`UPDATE conversas SET titulo = ${titulo} WHERE id = ${id}`;
   if (arquivada !== undefined)
-    db.query("UPDATE conversas SET arquivada_em = CASE WHEN ? THEN COALESCE(arquivada_em, ?) END WHERE id = ?").run(arquivada, Date.now(), id);
+    await q`UPDATE conversas SET arquivada_em = CASE WHEN ${arquivada}::boolean THEN COALESCE(arquivada_em, ${Date.now()}::double precision) END WHERE id = ${id}`;
   return conversaDoUsuario(userId, id);
 }
 
 /** Marca como apagada. Apagar de novo mantém a data da primeira vez. false se a conversa não é do usuário. */
-export function apagarConversa(userId: string, id: string): boolean {
-  return db.query("UPDATE conversas SET apagada_em = COALESCE(apagada_em, ?) WHERE id = ? AND user_id = ?").run(Date.now(), id, userId).changes > 0;
+export async function apagarConversa(userId: string, id: string): Promise<boolean> {
+  const r = await q`UPDATE conversas SET apagada_em = COALESCE(apagada_em, ${Date.now()}::double precision) WHERE id = ${id} AND user_id = ${userId} RETURNING id`;
+  return r.length > 0;
 }
 
 /** Desfaz o apagar. Restaurar uma conversa viva não muda nada. */
-export function restaurarConversa(userId: string, id: string): Conversa | null {
-  db.query("UPDATE conversas SET apagada_em = NULL WHERE id = ? AND user_id = ?").run(id, userId);
+export async function restaurarConversa(userId: string, id: string): Promise<Conversa | null> {
+  await q`UPDATE conversas SET apagada_em = NULL WHERE id = ${id} AND user_id = ${userId}`;
   return conversaDoUsuario(userId, id);
 }
 
 export const PRAZO_DA_LIXEIRA = 30 * 86_400_000;
 
 /** Remove de vez as conversas apagadas há mais de 30 dias e as tarefas delas. Posts e artes ficam: são da Biblioteca. */
-export const purgarConversasApagadas = db.transaction((agora: number = Date.now()): number => {
+export function purgarConversasApagadas(agora: number = Date.now()): Promise<number> {
   const limite = agora - PRAZO_DA_LIXEIRA;
-  db.query("DELETE FROM tarefas WHERE conversa_id IN (SELECT id FROM conversas WHERE apagada_em < ?)").run(limite);
-  return db.query("DELETE FROM conversas WHERE apagada_em < ?").run(limite).changes;
-});
+  return transacao(async () => {
+    await q`DELETE FROM tarefas WHERE conversa_id IN (SELECT id FROM conversas WHERE apagada_em < ${limite})`;
+    return (await q`DELETE FROM conversas WHERE apagada_em < ${limite} RETURNING id`).length;
+  });
+}
 
-export function mensagensDaConversa(id: string): UIMessage[] {
-  const r = db.query("SELECT mensagens FROM conversas WHERE id = ?").get(id) as { mensagens: string } | null;
+export async function mensagensDaConversa(id: string): Promise<UIMessage[]> {
+  const r = await primeira(q<{ mensagens: string }>`SELECT mensagens FROM conversas WHERE id = ${id}`);
   return r ? (JSON.parse(r.mensagens) as UIMessage[]) : [];
 }
 
-export function gravarMensagens(id: string, mensagens: UIMessage[]): void {
-  db.query("UPDATE conversas SET mensagens = ?, updated_at = datetime('now') WHERE id = ?").run(JSON.stringify(mensagens), id);
+export async function gravarMensagens(id: string, mensagens: UIMessage[]): Promise<void> {
+  await q`UPDATE conversas SET mensagens = ${JSON.stringify(mensagens)}, updated_at = ${utcDe(Date.now())} WHERE id = ${id}`;
 }
 
 /** Gravar o histórico sem mexer em updated_at: apagar ou restaurar uma mensagem não muda a ordem da lista. */
-function trocarMensagens(id: string, mensagens: UIMessage[]): void {
-  db.query("UPDATE conversas SET mensagens = ? WHERE id = ?").run(JSON.stringify(mensagens), id);
+async function trocarMensagens(id: string, mensagens: UIMessage[]): Promise<void> {
+  await q`UPDATE conversas SET mensagens = ${JSON.stringify(mensagens)} WHERE id = ${id}`;
 }
 
 /**
@@ -156,15 +157,15 @@ export interface Remocao {
  * Apagar a mensagem do usuário tira o turno: ela e as respostas do bot até a próxima mensagem do usuário.
  * Apagar uma mensagem do bot tira só ela. Tarefas, posts, fila e artes ficam como estão.
  */
-export function apagarMensagem(userId: string, conversaId: string, mensagemId: string): ({ ok: true } & Remocao) | Recusa {
-  if (!conversaDoUsuario(userId, conversaId)) return NAO_ENCONTRADA;
+export async function apagarMensagem(userId: string, conversaId: string, mensagemId: string): Promise<({ ok: true } & Remocao) | Recusa> {
+  if (!(await conversaDoUsuario(userId, conversaId))) return NAO_ENCONTRADA;
   if (respondendo.has(conversaId)) return OCUPADA;
-  const mensagens = mensagensDaConversa(conversaId);
+  const mensagens = await mensagensDaConversa(conversaId);
   const i = mensagens.findIndex((m) => m.id === mensagemId);
   if (i === -1) return NAO_ENCONTRADA;
   const proximaDoUsuario = mensagens.findIndex((m, j) => j > i && m.role === "user");
   const fim = mensagens[i]!.role !== "user" ? i + 1 : proximaDoUsuario === -1 ? mensagens.length : proximaDoUsuario;
-  trocarMensagens(conversaId, mensagens.toSpliced(i, fim - i));
+  await trocarMensagens(conversaId, mensagens.toSpliced(i, fim - i));
   return { ok: true, removidas: mensagens.slice(i, fim), depoisDe: mensagens[i - 1]?.id ?? null, antesDe: mensagens[fim]?.id ?? null };
 }
 
@@ -174,10 +175,14 @@ const MUDOU: Recusa = { ok: false, status: 409, erro: "A conversa mudou depois d
  * Põe de volta o que apagarMensagem tirou, entre depoisDe e antesDe. Se elas já estão lá, não muda nada.
  * Se as vizinhas não estão mais lado a lado, a posição é ambígua e o pedido é recusado.
  */
-export function restaurarMensagens(userId: string, conversaId: string, { removidas, depoisDe, antesDe }: Remocao): { ok: true; mensagens: UIMessage[] } | Recusa {
-  if (!conversaDoUsuario(userId, conversaId)) return NAO_ENCONTRADA;
+export async function restaurarMensagens(
+  userId: string,
+  conversaId: string,
+  { removidas, depoisDe, antesDe }: Remocao,
+): Promise<{ ok: true; mensagens: UIMessage[] } | Recusa> {
+  if (!(await conversaDoUsuario(userId, conversaId))) return NAO_ENCONTRADA;
   if (respondendo.has(conversaId)) return OCUPADA;
-  const mensagens = mensagensDaConversa(conversaId);
+  const mensagens = await mensagensDaConversa(conversaId);
   const idEm = (j: number) => mensagens[j]?.id ?? null;
   const inicio = depoisDe === null ? 0 : mensagens.findIndex((m) => m.id === depoisDe) + 1;
   if (depoisDe !== null && inicio === 0) return MUDOU;
@@ -185,6 +190,6 @@ export function restaurarMensagens(userId: string, conversaId: string, { removid
   if (ids.every((id, k) => idEm(inicio + k) === id) && idEm(inicio + ids.length) === antesDe) return { ok: true, mensagens };
   if (idEm(inicio) !== antesDe || mensagens.some((m) => ids.includes(m.id))) return MUDOU;
   const restauradas = mensagens.toSpliced(inicio, 0, ...removidas);
-  trocarMensagens(conversaId, restauradas);
+  await trocarMensagens(conversaId, restauradas);
   return { ok: true, mensagens: restauradas };
 }

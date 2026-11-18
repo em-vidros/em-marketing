@@ -1,6 +1,7 @@
 import sharp from "sharp";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { db } from "../../db";
+import { gravarArquivo, lerArquivo } from "../../armazem";
+import { primeira } from "../../db";
+import { q } from "../../v2/banco";
 import { MODELO_DE_TEXTO, openai } from "../../openai";
 import { tokens } from "../brand";
 import type { Formato } from "../art/generate";
@@ -34,18 +35,14 @@ export interface Foto {
 const CONTEXTOS = ["obra", "fabrica", "loja", "equipe", "produto", "outro"] as const;
 
 export async function salvarFoto(buffer: Buffer): Promise<{ id: number; path: string; largura: number; altura: number }> {
-  mkdirSync("data/fotos", { recursive: true });
   // Normaliza para JPEG sRGB sem metadado (o EXIF de celular carrega GPS).
   const jpeg = await sharp(buffer).rotate().toColorspace("srgb").jpeg({ quality: 92 }).toBuffer();
   const { width = 0, height = 0 } = await sharp(jpeg).metadata();
 
-  const row = db
-    .query("INSERT INTO fotos (path, largura, altura) VALUES (?, ?, ?) RETURNING id")
-    .get("", width, height) as { id: number };
+  const row = (await primeira(q<{ id: number }>`INSERT INTO fotos (path, largura, altura) VALUES ('', ${width}, ${height}) RETURNING id`))!;
 
-  const path = `data/fotos/${row.id}.jpg`;
-  writeFileSync(path, jpeg);
-  db.query("UPDATE fotos SET path = ? WHERE id = ?").run(path, row.id);
+  const path = await gravarArquivo("fotos", `${row.id}.jpg`, jpeg, "image/jpeg");
+  await q`UPDATE fotos SET path = ${path} WHERE id = ${row.id}`;
   return { id: row.id, path, largura: width, altura: height };
 }
 
@@ -55,10 +52,10 @@ export async function salvarFoto(buffer: Buffer): Promise<{ id: number; path: st
  * uma foto e dizer se aquilo é a loja do Angelim ou a de Imperatriz.
  */
 export async function catalogarFoto(id: number, legendaDoUsuario?: string): Promise<Foto> {
-  const foto = pegarFoto(id);
+  const foto = await pegarFoto(id);
   if (!foto) throw new Error(`Foto ${id} não existe`);
 
-  const data = (await sharp(foto.path).resize(768, null, { fit: "inside" }).jpeg({ quality: 80 }).toBuffer()).toString(
+  const data = (await sharp(await bytesDa(foto)).resize(768, null, { fit: "inside" }).jpeg({ quality: 80 }).toBuffer()).toString(
     "base64",
   );
 
@@ -99,36 +96,35 @@ export async function catalogarFoto(id: number, legendaDoUsuario?: string): Prom
 
   const contexto = CONTEXTOS.includes(j.contexto) ? j.contexto : null;
   const tags = Array.isArray(j.tags) ? j.tags.join(", ") : (j.tags ?? null);
-  db.query("UPDATE fotos SET descricao = ?, produto = ?, unidade = ?, contexto = ?, tags = ? WHERE id = ?").run(
-    j.descricao || null,
-    j.produto || null,
-    j.unidade || null,
-    contexto,
-    tags || null,
-    id,
-  );
-  return pegarFoto(id)!;
+  await q`UPDATE fotos SET descricao = ${j.descricao || null}, produto = ${j.produto || null}, unidade = ${j.unidade || null},
+    contexto = ${contexto}, tags = ${tags || null} WHERE id = ${id}`;
+  return (await pegarFoto(id))!;
 }
 
-export function pegarFoto(id: number): Foto | null {
-  return (db.query("SELECT * FROM fotos WHERE id = ?").get(id) as Foto) ?? null;
+async function bytesDa(foto: Foto): Promise<Uint8Array> {
+  const bytes = await lerArquivo(foto.path);
+  if (!bytes) throw new Error(`O arquivo da foto ${foto.id} sumiu.`);
+  return bytes;
 }
 
-export function buscarFotos(termo?: string, limite = 8): Foto[] {
-  if (!termo?.trim())
-    return db.query("SELECT * FROM fotos ORDER BY id DESC LIMIT ?").all(limite) as Foto[];
+export function pegarFoto(id: number): Promise<Foto | null> {
+  return primeira(q<Foto>`SELECT * FROM fotos WHERE id = ${id}`);
+}
+
+export async function buscarFotos(termo?: string, limite = 8): Promise<Foto[]> {
+  if (!termo?.trim()) return q<Foto>`SELECT * FROM fotos ORDER BY id DESC LIMIT ${limite}`;
   // Busca por palavra: "box temperado imperatriz" acha foto marcada só com "box".
   const palavras = termo.toLowerCase().split(/\s+/).filter((p) => p.length >= 3).slice(0, 5);
   if (!palavras.length) return [];
-  const campo = "lower(coalesce(descricao,'') || ' ' || coalesce(produto,'') || ' ' || coalesce(unidade,'') || ' ' || coalesce(contexto,'') || ' ' || coalesce(tags,''))";
-  const pontos = palavras.map(() => `(CASE WHEN ${campo} LIKE ? THEN 1 ELSE 0 END)`).join(" + ");
-  return db
-    .query(`SELECT *, (${pontos}) AS score FROM fotos WHERE score > 0 ORDER BY score DESC, id DESC LIMIT ?`)
-    .all(...palavras.map((p) => `%${p}%`), limite) as Foto[];
+  return q<Foto>`SELECT * FROM (
+      SELECT *, (SELECT count(*) FROM unnest(${palavras.map((p) => `%${p}%`)}::text[]) padrao
+        WHERE lower(coalesce(descricao,'') || ' ' || coalesce(produto,'') || ' ' || coalesce(unidade,'') || ' ' || coalesce(contexto,'') || ' ' || coalesce(tags,'')) LIKE padrao)::int AS score
+      FROM fotos
+    ) f WHERE score > 0 ORDER BY score DESC, id DESC LIMIT ${limite}`;
 }
 
-export function contarFotos(): number {
-  return (db.query("SELECT COUNT(*) n FROM fotos").get() as { n: number }).n;
+export async function contarFotos(): Promise<number> {
+  return (await primeira(q<{ n: number }>`SELECT count(*)::int AS n FROM fotos`))!.n;
 }
 
 /**
@@ -141,20 +137,18 @@ export async function prepararFoto(opts: {
   postId: number;
   formato: Formato;
 }): Promise<string> {
-  const foto = pegarFoto(opts.fotoId);
+  const foto = await pegarFoto(opts.fotoId);
   if (!foto) throw new Error(`Foto ${opts.fotoId} não existe`);
   const alvo = tokens.formats[opts.formato].final;
 
-  mkdirSync("data/arts", { recursive: true });
-  const jpeg = await sharp(foto.path)
+  const jpeg = await sharp(await bytesDa(foto))
     .resize(alvo.width, alvo.height, { fit: "cover", position: "attention" })
     .toColorspace("srgb")
     .jpeg({ quality: tokens.output.quality })
     .toBuffer();
 
-  const path = `data/arts/post${opts.postId}-${opts.formato}-foto${foto.id}.jpg`;
-  writeFileSync(path, jpeg);
-  db.query("UPDATE fotos SET usos = usos + 1 WHERE id = ?").run(foto.id);
+  const path = await gravarArquivo("arts", `post${opts.postId}-${opts.formato}-foto${foto.id}.jpg`, jpeg, "image/jpeg");
+  await q`UPDATE fotos SET usos = usos + 1 WHERE id = ${foto.id}`;
   return path;
 }
 

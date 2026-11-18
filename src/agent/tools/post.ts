@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { db, urlDaMidia } from "../../db";
+import { emOrdem, urlDaMidia } from "../../db";
+import { q } from "../../v2/banco";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief } from "../../domain/art/pipeline";
 import { temErro } from "../../domain/brand/validate";
@@ -25,17 +26,17 @@ const formato = z.enum(["feed", "stories", "ambos"]);
 const mediaType = z.enum(["IMAGE", "STORIES"]);
 
 /** Grava o evento e devolve o estado novo, ou a recusa da máquina de estados. */
-function aplicar(conversaId: string, evento: Evento) {
-  const r = transicionar(postDaConversa(conversaId), evento);
+async function aplicar(conversaId: string, evento: Evento) {
+  const r = transicionar(await postDaConversa(conversaId), evento);
   if (!r.ok) return r;
-  gravarPost(r.post);
+  await gravarPost(r.post);
   return { ok: true as const, etapa: r.post.etapa, proximoPasso: proximoPasso(r.post) };
 }
 
-const artePublica = (a: { variant: number; style: string; path: string; problemas: unknown[] }) => ({
+const artePublica = async (a: { variant: number; style: string; path: string; problemas: unknown[] }) => ({
   variante: a.variant,
   estilo: a.style,
-  url: urlDaMidia(a.path),
+  url: await urlDaMidia(a.path),
   problemas: a.problemas,
 });
 
@@ -43,7 +44,7 @@ const artePublica = (a: { variant: number; style: string; path: string; problema
 export type Inspiracoes = () => Promise<string[]>;
 
 export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
-  const atual = (): EtapaPost | null => postDaConversa(conversaId);
+  const atual = (): Promise<EtapaPost | null> => postDaConversa(conversaId);
 
   return {
     montar_brief: tool({
@@ -60,8 +61,8 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
       }),
       execute: async ({ precisa_foto_real, formato, ...resto }) => {
         const brief: Brief = { ...resto, precisaFotoReal: precisa_foto_real };
-        const post = criarPost(conversaId, brief, formato ?? null);
-        const candidatas = brief.precisaFotoReal ? buscarFotos(`${brief.tema} ${brief.angulo ?? ""}`).map(fotoPublica) : [];
+        const post = await criarPost(conversaId, brief, formato ?? null);
+        const candidatas = brief.precisaFotoReal ? await emOrdem(await buscarFotos(`${brief.tema} ${brief.angulo ?? ""}`), fotoPublica) : [];
         return { ok: true as const, postId: post.postId, brief, formato: formato ?? null, fotosCandidatas: candidatas, proximoPasso: proximoPasso(post) };
       },
     }),
@@ -76,10 +77,10 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
       description: "Gera o texto que vai dentro da arte. Pré-requisito de gerar_3_artes.",
       inputSchema: z.object({}),
       execute: async () => {
-        const r = exigir(atual(), "headline");
+        const r = exigir(await atual(), "headline");
         if (!r.ok) return r;
         const { headline, apoio, problemas } = await definirHeadline(r.post.brief, r.post.formato);
-        const estado = aplicar(conversaId, { tipo: "headline", headline: { headline, apoio } });
+        const estado = await aplicar(conversaId, { tipo: "headline", headline: { headline, apoio } });
         return { ...estado, headline, apoio, problemas, bloqueia: temErro(problemas) };
       },
     }),
@@ -88,7 +89,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
       description: "Gera as 3 variações de arte no formato escolhido. Refazer as artes é chamar de novo.",
       inputSchema: z.object({}),
       execute: async () => {
-        const r = exigir(atual(), "artes");
+        const r = exigir(await atual(), "artes");
         if (!r.ok) return r;
         const p = r.post;
         const headline = headlineParaGerar(p);
@@ -98,8 +99,8 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         // Referência é conveniência: sem elas, ou com o banco fora, a arte sai do estilo puro.
         const lidas = (await inspiracoes?.().catch(() => [])) ?? [];
         const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, inspiracoes: lidas });
-        const estado = aplicar(conversaId, { tipo: "artes", artes });
-        return { ...estado, artes: artes.map(artePublica) };
+        const estado = await aplicar(conversaId, { tipo: "artes", artes });
+        return { ...estado, artes: await emOrdem(artes, artePublica) };
       },
     }),
 
@@ -114,9 +115,9 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         "Usa uma foto do banco como a arte do post. É o caminho dos posts que exigem foto real e por isso não podem ser gerados. Pré-requisito: formato definido.",
       inputSchema: z.object({ foto_id: z.number().int() }),
       execute: async ({ foto_id }) => {
-        const r = exigir(atual(), "foto");
+        const r = exigir(await atual(), "foto");
         if (!r.ok) return r;
-        const foto = pegarFoto(foto_id);
+        const foto = await pegarFoto(foto_id);
         if (!foto) return { ok: false as const, motivo: `A foto #${foto_id} não existe no banco.` };
         const { postId, formato } = r.post;
         // Foto real não passa pelo gate visual de art/validate.ts: aquele gate mede a
@@ -125,12 +126,12 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         const path = await prepararFoto({ fotoId: foto.id, postId, formato: principal });
         const storyPath = formato === "ambos" ? await prepararFoto({ fotoId: foto.id, postId, formato: "stories" }) : null;
         const arte = { variant: 1, style: "foto-real", path, problemas: [] };
-        const estado = aplicar(conversaId, { tipo: "foto", arte, storyPath });
+        const estado = await aplicar(conversaId, { tipo: "foto", arte, storyPath });
         return {
           ...estado,
           fotoId: foto.id,
-          url: urlDaMidia(path),
-          storyUrl: storyPath && urlDaMidia(storyPath),
+          url: await urlDaMidia(path),
+          storyUrl: storyPath && (await urlDaMidia(storyPath)),
           recorte: "automático, confirme o enquadramento com o usuário",
         };
       },
@@ -140,7 +141,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
       description: "No formato ambos, gera a versão 9:16 do conceito escolhido.",
       inputSchema: z.object({}),
       execute: async () => {
-        const r = exigir(atual(), "story");
+        const r = exigir(await atual(), "story");
         if (!r.ok) return r;
         const p = r.post;
         if (p.peca.origem !== "gerada") return { ok: false as const, motivo: "A arte escolhida é foto real." };
@@ -150,8 +151,8 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
           headline: p.peca.headline.headline,
           chosen: p.peca.arte,
         });
-        const estado = aplicar(conversaId, { tipo: "story", path });
-        return { ...estado, url: urlDaMidia(path), problemas };
+        const estado = await aplicar(conversaId, { tipo: "story", path });
+        return { ...estado, url: await urlDaMidia(path), problemas };
       },
     }),
 
@@ -159,12 +160,12 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
       description: "Gera a legenda de publicação do post escolhido. Proibido quando formato=stories.",
       inputSchema: z.object({}),
       execute: async () => {
-        const r = exigir(atual(), "legenda");
+        const r = exigir(await atual(), "legenda");
         if (!r.ok) return r;
         const p = r.post;
         const headline = p.peca.origem === "gerada" ? p.peca.headline.headline : "";
         const { legenda, problemas } = await escreverLegenda(p.brief, headline);
-        const estado = aplicar(conversaId, { tipo: "legenda", legenda });
+        const estado = await aplicar(conversaId, { tipo: "legenda", legenda });
         return { ...estado, legenda, problemas, bloqueia: temErro(problemas) };
       },
     }),
@@ -176,7 +177,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         media_type: mediaType,
       }),
       execute: async ({ publish_at, media_type }) => {
-        const r = agendarPost(atual(), media_type, Date.parse(publish_at));
+        const r = await agendarPost(await atual(), media_type, Date.parse(publish_at));
         if (!r.ok) return { ok: false as const, motivo: r.motivo };
         return { ok: true as const, postId: r.postId, mediaType: media_type, publishAt: publish_at };
       },
@@ -186,7 +187,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
       description: "Publica imediatamente no Instagram.",
       inputSchema: z.object({ media_type: mediaType }),
       execute: async ({ media_type }) => {
-        const r = midiaParaPublicar(atual(), media_type);
+        const r = midiaParaPublicar(await atual(), media_type);
         if (!r.ok) return r;
         const igMediaId = await publishImage({
           fonte: { tipo: "post", postId: r.post.postId },
@@ -194,7 +195,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
           mediaType: media_type,
           caption: r.post.legenda,
         });
-        db.query("UPDATE posts SET status = 'published' WHERE id = ?").run(r.post.postId);
+        await q`UPDATE posts SET status = 'published' WHERE id = ${r.post.postId}`;
         return { ok: true as const, postId: r.post.postId, mediaType: media_type, igMediaId };
       },
     }),
