@@ -1,6 +1,5 @@
 import type { NovaPauta } from "../../../agent/calendario";
-import type { PostPronto } from "../../../agent/fila";
-import type { TipoMidia } from "../../../db";
+import type { PedidoDeAgendamento, Pronto } from "../../../agent/fila";
 import type { ApiCalendario } from "../../api";
 import type { Aviso } from "../menu/conversas";
 import type { PilhaDeDesfazer } from "../menu/desfazer";
@@ -16,10 +15,9 @@ const inicioDoBloco = (b: number) => somarDias(ORIGEM, b * BLOCO);
 
 export interface Leitura {
   porDia: ReadonlyMap<Dia, readonly ItemCalendario[]>;
-  achar: (chave: Chave) => ItemCalendario | null;
   /** Um bloco da tela falhou na primeira leitura e não tem nada para mostrar. */
   erro: Error | null;
-  prontos: readonly PostPronto[] | null;
+  prontos: readonly Pronto[] | null;
 }
 
 const mensagem = (e: unknown) => (e instanceof Error ? e.message : String(e));
@@ -34,7 +32,7 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
   /** Mudanças esperando o servidor; null é um item que saiu. Uma releitura no meio não as desfaz. */
   const local = new Map<Chave, ItemCalendario | null>();
   const blocos = new Map<number, "carregando" | "pronto" | Error>();
-  let prontos: PostPronto[] | null = null;
+  let prontos: Pronto[] | null = null;
   const ouvintes = new Set<() => void>();
   let leitura: Leitura | null = null;
 
@@ -54,7 +52,7 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
     }
     for (const lista of porDia.values()) lista.sort(ordem);
     const erro = [...blocos.values()].find((b): b is Error => b instanceof Error) ?? null;
-    leitura = { porDia, achar: (k) => todos.get(k) ?? null, erro, prontos };
+    leitura = { porDia, erro, prontos };
     return leitura;
   }
 
@@ -166,15 +164,6 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
       void lerProntos();
     },
 
-    /** Uma prévia só na tela, sem servidor: o agendado arrastado esperando a confirmação. */
-    prever(i: Movel, lugar: Lugar) {
-      local.set(chaveDe(i), noLugar(i, lugar));
-      mudou();
-    },
-    descartarPrevia(chave: Chave) {
-      if (local.delete(chave)) mudou();
-    },
-
     async criarPauta(nova: Pick<NovaPauta, "dia" | "titulo"> & Partial<NovaPauta>): Promise<ItemPauta | null> {
       try {
         const p = await api.criarPauta(nova);
@@ -211,9 +200,9 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
     },
 
     /** Devolve o motivo quando o servidor recusa; a confirmação mostra ao lado dos campos. */
-    async agendar(post: PostPronto, midia: TipoMidia, publicaEm: number): Promise<string | null> {
+    async agendar(pedido: PedidoDeAgendamento): Promise<string | null> {
       try {
-        const a = await api.agendar(post.postId, midia, publicaEm);
+        const a = await api.agendar(pedido);
         base.set(chaveDe(a), a);
         mudou();
         void lerProntos();

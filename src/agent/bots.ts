@@ -43,17 +43,17 @@ export const BOTS: Record<BotId, Bot> = {
     id: "chefe",
     nome: "Chefe",
     descricao: "Recebe o pedido, delega aos especialistas, junta o resultado e pede aprovação para publicar.",
-    modelo: "google:gemini-3.6-flash",
+    modelo: "openai:gpt-6-luna",
     papel: juntar(
       TOM,
       "Você é o Chefe. Não gera arte, não escreve legenda nem roteiro: quebra o pedido, delega ao especialista certo e junta o que voltou.",
-      "Post: brief, headline, artes, legenda e registro no Linear de uma peça. Legenda: legenda avulsa ou revisão de texto. Agenda: fila, cota do mês e datas. Fotos: banco de fotos reais. Reels: pauta e roteiro de vídeo.",
+      "Post: brief, headline, artes e legenda de uma peça. Legenda: legenda avulsa ou revisão de texto. Agenda: fila, cota do mês e datas. Fotos: banco de fotos reais. Reels: pauta e roteiro de vídeo.",
       "Se uma tarefa falhar, diga ao usuário o erro em português claro e proponha o próximo passo.",
     ),
     fixo: () =>
       juntar(
         "Cada delegar_<bot> roda um especialista e devolve só o resumo do que ele fez. O especialista não vê esta conversa, então escreva o pedido completo: pilar, tema, ângulo, data, formato e o que já foi decidido.",
-        "O Post trabalha no post desta conversa. Quando ele deixar o post registrado no Linear, publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário. Antes, confirme data, hora e tipo de mídia.",
+        "O Post trabalha no post desta conversa. Quando ele deixar o post pronto (peça escolhida, legenda no feed e versão stories no formato ambos), publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário. Antes, confirme data, hora e tipo de mídia.",
         PILARES,
       ),
     tools: ["delegar_post", "delegar_legenda", "delegar_agenda", "delegar_fotos", "delegar_reels", "publicar_agora", "agendar_publicacao", "listar_agenda"],
@@ -62,11 +62,11 @@ export const BOTS: Record<BotId, Bot> = {
   post: {
     id: "post",
     nome: "Post",
-    descricao: "Do pedido ao Linear: brief, formato, headline, 3 artes, legenda e registro.",
-    modelo: "google:gemini-3.6-flash",
+    descricao: "Do pedido à peça pronta: brief, formato, headline, 3 artes e legenda.",
+    modelo: "openai:gpt-6-luna",
     papel: juntar(
       TOM,
-      "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed), Linear.",
+      "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed) e versão stories (só no formato ambos).",
       "Se o usuário já disse o formato, não pergunte de novo; só confirme no brief.",
     ),
     fixo: () =>
@@ -88,7 +88,6 @@ export const BOTS: Record<BotId, Bot> = {
       "usar_foto",
       "escrever_legenda",
       "derivar_story",
-      "salvar_linear",
       "listar_agenda",
       "status_do_mes",
       "cancelar_agendamento",
@@ -100,7 +99,7 @@ export const BOTS: Record<BotId, Bot> = {
     id: "legenda",
     nome: "Legenda",
     descricao: "Escreve e revisa legenda contra o capítulo 16.",
-    modelo: "google:gemini-3.6-flash",
+    modelo: "openai:gpt-6-luna",
     papel: juntar(TOM, "Você escreve e revisa legendas. Ao revisar um texto que o usuário colou, explique cada problema com a correção."),
     fixo: () =>
       juntar(
@@ -116,7 +115,7 @@ export const BOTS: Record<BotId, Bot> = {
     id: "agenda",
     nome: "Agenda",
     descricao: "Fila de publicação, calendário editorial e cota de pilares do mês.",
-    modelo: "google:gemini-3.6-flash",
+    modelo: "openai:gpt-6-luna",
     papel: juntar(
       TOM,
       "Você cuida da agenda: fila de publicações, cota do mês e datas do §12.4.",
@@ -137,7 +136,7 @@ export const BOTS: Record<BotId, Bot> = {
     id: "fotos",
     nome: "Fotos",
     descricao: "Banco de fotos reais: busca e catálogo.",
-    modelo: "google:gemini-3.6-flash",
+    modelo: "openai:gpt-6-luna",
     papel: juntar(TOM, "Você cuida do banco de fotos reais da EM Vidros. Ao buscar, mostre id, descrição, unidade e tamanho."),
     fixo: () =>
       juntar(
@@ -152,7 +151,7 @@ export const BOTS: Record<BotId, Bot> = {
     id: "reels",
     nome: "Reels",
     descricao: "Pauta e roteiro de vídeo vertical.",
-    modelo: "google:gemini-3.6-flash",
+    modelo: "openai:gpt-6-luna",
     papel: juntar(TOM, "Você faz pauta e roteiro de Reel. Escreva o roteiro plano a plano."),
     fixo: () =>
       juntar(

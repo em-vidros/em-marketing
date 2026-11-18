@@ -1,0 +1,1278 @@
+import type React from "react";
+import type { Locale } from "date-fns";
+
+/**
+ * Calendar view mode — "day" shows a single column, "week" shows 7 columns,
+ * "month" a month grid, "agenda" a list of the coming days' events and
+ * "year" twelve month grids
+ */
+export type ViewType = "day" | "week" | "month" | "agenda" | "year";
+
+/**
+ * Views drawn by the hourly time grid: "day" (one column) and "week"
+ * (`numberOfDays` columns)
+ */
+export type TimeGridView = Extract<ViewType, "day" | "week">;
+
+/**
+ * Day a week starts on, using the date-fns convention (0 = Sunday ... 6 = Saturday)
+ */
+export type WeekStartsOn = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * Clock style for time labels: 12 ("3 PM", "3:30 PM") or 24 ("15:00")
+ */
+export type HourCycle = 12 | 24;
+
+/**
+ * View settings for display preferences (toggleable from the view dropdown)
+ */
+export interface ViewSettings {
+  showWeekends: boolean;
+  showDeclinedEvents: boolean;
+  showWeekNumbers: boolean;
+}
+
+/**
+ * Represents a single day in the week view
+ */
+export interface WeekDay {
+  /** The full Date object for this day */
+  date: Date;
+  /** Short day name (e.g., "Sun", "Mon") */
+  dayName: string;
+  /** Day of month (1-31) */
+  dayNumber: number;
+  /** Whether this day is today */
+  isToday: boolean;
+}
+
+/**
+ * Represents a single hour slot in the time axis
+ */
+export interface HourSlot {
+  /** Hour in 24-hour format (0-23) */
+  hour: number;
+  /** Formatted label (e.g., "12 AM", "1 PM") */
+  label: string;
+}
+
+/**
+ * Represents an event reminder
+ */
+export interface EventReminder {
+  /** How long before the event it fires; 0 fires at the start */
+  amount: number;
+  unit: "minutes" | "hours" | "days" | "weeks";
+  /**
+   * Time of day the reminder fires, for all-day events ("1 day before at
+   * 9 AM"). Timed events leave it out: their reminders count back from the
+   * start.
+   */
+  time?: { hours: number; minutes: number };
+}
+
+/**
+ * Kind of event, picked from the menu at the top of the details panel
+ */
+export type EventKind = "event" | "focus-time" | "out-of-office" | "birthday";
+
+/**
+ * How often a repeat rule repeats
+ */
+export type RecurrenceFrequency = "daily" | "weekly" | "monthly" | "yearly";
+
+/**
+ * Day of the week in a repeat rule, using the date-fns convention
+ * (0 = Sunday ... 6 = Saturday)
+ */
+export type RecurrenceWeekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+
+/**
+ * When a repeating event stops: never, on a date (inclusive), or after a
+ * number of occurrences
+ */
+export type RecurrenceEnd =
+  | { type: "never" }
+  | { type: "on"; date: Date }
+  | { type: "after"; count: number };
+
+/**
+ * A structured repeat rule, the subset of RFC 5545 RRULE the details panel
+ * edits ("Every 2 weeks on Mon, Thu", "Every month on the first Thu")
+ */
+export interface RecurrenceRule {
+  /** How often it repeats */
+  frequency: RecurrenceFrequency;
+  /** Repeats every `interval` days, weeks, months or years. Defaults to 1 */
+  interval?: number;
+  /**
+   * Days a weekly rule falls on. Defaults to the weekday of the event's
+   * start. Monday to Friday reads as "Every weekday".
+   */
+  weekdays?: RecurrenceWeekday[];
+  /**
+   * What a monthly rule repeats on: the start's day of the month ("on the
+   * 5th") or its weekday and position in the month ("on the first Thu").
+   * Defaults to "day-of-month".
+   */
+  monthlyBy?: "day-of-month" | "weekday-of-month";
+  /**
+   * Which of its weekdays in the month a `"weekday-of-month"` rule falls on:
+   * 1 to 4 for the first to the fourth, -1 for the last (RRULE's
+   * `BYDAY=-1TH`). Defaults to the start's position in its month, so set -1
+   * to keep "the last Thu" when the start is also the fourth one.
+   */
+  weekOfMonth?: 1 | 2 | 3 | 4 | -1;
+  /**
+   * Day the weeks of a weekly rule start on, which decides the weeks an
+   * "every 2 weeks" rule skips (RFC 5545 WKST). Defaults to 1 (Monday), as
+   * in RFC 5545.
+   */
+  weekStartsOn?: WeekStartsOn;
+  /** When the series stops. Defaults to never */
+  end?: RecurrenceEnd;
+}
+
+/**
+ * A rule as the details show it: "Every week" in full color and "on Thu"
+ * muted
+ */
+export interface RecurrenceLabel {
+  /** "Every week", "Every 2 days", "Every weekday" */
+  main: string;
+  /** "on Thu", "on the 1st Sat until Dec 6", "for 7 times"; may be empty */
+  detail: string;
+}
+
+/**
+ * A repeat rule with every default filled in, so two rules compare by value
+ */
+export interface NormalizedRecurrenceRule {
+  frequency: RecurrenceFrequency;
+  interval: number;
+  weekdays: RecurrenceWeekday[];
+  monthlyBy: NonNullable<RecurrenceRule["monthlyBy"]>;
+  weekOfMonth: NonNullable<RecurrenceRule["weekOfMonth"]>;
+  weekStartsOn: WeekStartsOn;
+  end: RecurrenceEnd;
+}
+
+/**
+ * Options of `formatRRule`, which writes a rule as an RFC 5545 RRULE
+ */
+export interface FormatRRuleOptions {
+  /** IANA zone the series is set in; the viewer's when unset */
+  timeZone?: string;
+  /** Whether the series is all-day, so UNTIL is written as a DATE */
+  isAllDay?: boolean;
+}
+
+/**
+ * The previous or next occurrence of a repeating event
+ */
+export interface SeriesOccurrence<
+  TEvent extends CalendarEvent = CalendarEvent,
+> {
+  /**
+   * Id of the occurrence: its stored event's, or
+   * `<series id>-<yyyy-MM-dd>` for one generated from the rule
+   */
+  id: string;
+  /** When the occurrence starts */
+  start: Date;
+  /**
+   * The occurrence: the event stored for that date, or the one generated
+   * for it (`expandRecurringEvents`)
+   */
+  event?: TEvent;
+}
+
+/**
+ * One zone of the details' time zone picker
+ */
+export interface TimeZoneOption {
+  /** IANA id, e.g. "America/Sao_Paulo" */
+  id: string;
+  /** Offset from UTC on the reference date, in minutes (-180 for GMT−3) */
+  offsetMinutes: number;
+  /** "GMT−03:00" */
+  offsetLabel: string;
+  /** "Brasilia Standard Time", or the IANA id when the zone has no name */
+  name: string;
+  /** "Sao Paulo", or the IANA id when the zone has no city */
+  city: string;
+}
+
+/**
+ * A guest's answer to an invitation
+ */
+export type ParticipantResponse =
+  | "accepted"
+  | "declined"
+  | "tentative"
+  | "needs-action";
+
+/**
+ * A person invited to an event
+ */
+export interface EventParticipant {
+  /** Email address, also the participant's identity */
+  email: string;
+  /** Display name. Defaults to the email */
+  name?: string;
+  /** Their answer to the invitation. Defaults to "needs-action" */
+  response?: ParticipantResponse;
+  /** Whether they organize the event */
+  organizer?: boolean;
+  /** Whether their attendance is optional */
+  optional?: boolean;
+}
+
+/**
+ * A meeting room booked for an event
+ */
+export interface EventRoom {
+  /** Unique identifier for the room (its resource email in Google Calendar) */
+  id: string;
+  /** Display name (e.g. "Room 3A") */
+  name: string;
+  /** Building or floor shown under the name */
+  location?: string;
+  /** Number of seats */
+  capacity?: number;
+  /** Whether the room accepted the booking. Defaults to "needs-action" */
+  response?: ParticipantResponse;
+}
+
+/**
+ * Video conferencing service attached to an event
+ */
+export type ConferenceProvider =
+  | "google-meet"
+  | "zoom"
+  | "microsoft-teams"
+  | "other";
+
+/**
+ * A video call attached to an event
+ */
+export interface EventConference {
+  /** Service that hosts the call */
+  provider: ConferenceProvider;
+  /**
+   * Label of the `conferenceProviders` option that created it, which tells
+   * apart two options of the same `provider` (e.g. two Zoom accounts)
+   */
+  label?: string;
+  /** Link that joins the call */
+  url: string;
+  /** Meeting code or ID shown beside the link (e.g. "abc-defg-hij") */
+  meetingId?: string;
+}
+
+/**
+ * A person the participants field suggests while typing (an address book
+ * entry, a coworker)
+ */
+export interface EventContact {
+  /** Email address, the participant's identity once added */
+  email: string;
+  /** Display name. Defaults to the email */
+  name?: string;
+  /**
+   * Whether they were invited recently. Recent contacts are listed before
+   * typing, with a history icon
+   */
+  recent?: boolean;
+}
+
+/**
+ * A video conferencing service the details panel offers. Picking it calls
+ * `createConference`, whose result is set as the event's `conference`.
+ */
+export interface ConferenceProviderOption {
+  /** Service the call is hosted on */
+  provider: ConferenceProvider;
+  /**
+   * Name shown in the menu and on the event (e.g. "Video call"), unique
+   * among the options
+   */
+  label: string;
+  /** 16px icon shown in the menu and on the event. Defaults to a camera */
+  icon?: React.ReactNode;
+  /** Muted text at the end of the menu item, e.g. "Connect" */
+  hint?: string;
+  /**
+   * Creates the call for the event, e.g. by asking the service for a
+   * meeting link. The panel shows the option as pending until a returned
+   * promise settles; a rejected one adds no call.
+   */
+  createConference: (
+    event: DetailedCalendarEvent,
+  ) => EventConference | Promise<EventConference>;
+}
+
+/**
+ * A place the location field suggests while typing
+ */
+export interface LocationSuggestion {
+  /** Name of the place (e.g. "Central Park") */
+  name: string;
+  /** Address shown under the name and kept after it (e.g. "New York, NY, USA") */
+  address?: string;
+}
+
+/**
+ * A link attached to an event
+ */
+export interface EventLink {
+  /** Address the link opens */
+  url: string;
+  /** Text shown instead of the address */
+  title?: string;
+}
+
+/**
+ * A file attached to an event
+ */
+export interface EventAttachment {
+  /** File name (e.g. "agenda.pdf") */
+  name: string;
+  /**
+   * Address the file opens from: a web address, or the object URL the
+   * details panel makes for a file attached there. Removing the file in the
+   * panel revokes its object URL; otherwise it's yours to revoke
+   * (`URL.revokeObjectURL`), e.g. when you delete the event or drop the
+   * change. Other schemes, like `javascript:` or `data:`, never open.
+   */
+  url: string;
+  /** Size in bytes */
+  size?: number;
+  /** MIME type (e.g. "application/pdf"), picks the file icon */
+  type?: string;
+}
+
+/**
+ * The fields the calendar needs to place and draw an event. Extend it with
+ * your own fields and pass that type to `CalendarProvider<TEvent>` and
+ * `useCalendar<TEvent>()` to get it back, fully typed, in every callback.
+ */
+export interface CalendarEvent {
+  /** Unique identifier for the event */
+  id: string;
+  /** Event title */
+  title: string;
+  /** Start date and time */
+  start: Date;
+  /** End date and time */
+  end: Date;
+  /** Whether this is an all-day event */
+  isAllDay?: boolean;
+  /**
+   * The event's own color. Without one it takes its calendar's color (the
+   * `CalendarInfo` its `calendarId` names), else blue.
+   */
+  color?: EventColor;
+  /** Whether drag and Alt+Arrow can move it. Defaults to true */
+  draggable?: boolean;
+  /** Whether its edges resize it. Defaults to true */
+  resizable?: boolean;
+}
+
+/**
+ * Event with the Notion Calendar-style details that the default event details
+ * (popover body and detail panel) and the context menu read and edit. Every
+ * detail is optional; a missing one shows a placeholder.
+ */
+export interface DetailedCalendarEvent extends CalendarEvent {
+  /** Kind picked in the header menu. Defaults to "event" */
+  kind?: EventKind;
+  /** Calendar ID this event belongs to */
+  calendarId?: string;
+  /**
+   * Account email of the event's calendar, shown when the calendar isn't
+   * listed. Moving the event to a listed calendar sets it to that calendar's
+   * `email`.
+   */
+  calendarEmail?: string;
+  /** Optional description */
+  description?: string;
+  /** Optional location */
+  location?: string;
+  /**
+   * IANA time zone the event is set in (e.g. "America/Sao_Paulo"), shown
+   * as "GMT-3 Sao Paulo". Defaults to the viewer's zone.
+   */
+  timeZone?: string;
+  /**
+   * Time zone label (e.g. "GMT-3 Sao Paulo"), shown when `timeZone` is not
+   * set.
+   * @deprecated Set `timeZone` to an IANA zone instead.
+   */
+  timezone?: string;
+  /**
+   * Repeat rule. Takes precedence over `recurrence`; `.ics` import fills it
+   * and export writes it as an RRULE
+   */
+  recurrenceRule?: RecurrenceRule;
+  /**
+   * Repeat rule as display text (e.g. "Every week on Thu") or an RFC 5545
+   * RRULE (`.ics` import keeps one here when `recurrenceRule` can't hold it,
+   * e.g. "FREQ=MONTHLY;BYMONTHDAY=1,15"). Used when `recurrenceRule` is not
+   * set; an RRULE the details can't read shows as "Custom repeat".
+   */
+  recurrence?: string;
+  /**
+   * Dates a repeating event skips (RFC 5545 EXDATE). Each is the start of
+   * an occurrence; the occurrence on that day, in the event's `timeZone`,
+   * is left out. `.ics` import fills it from EXDATE and from cancelled
+   * occurrences; export writes it as EXDATE
+   */
+  excludedDates?: Date[];
+  /**
+   * On an occurrence of a repeating event: the id of the series' event.
+   * The views generate occurrences with it, and an edited occurrence is
+   * stored with it (in `.ics`, the series' UID)
+   */
+  seriesId?: string;
+  /**
+   * On an occurrence of a repeating event: its start in the series, before
+   * any edit (RFC 5545 RECURRENCE-ID). It says which date an edited
+   * occurrence stands for
+   */
+  originalStart?: Date;
+  /** People invited, the organizer included */
+  participants?: EventParticipant[];
+  /** Meeting rooms booked */
+  rooms?: EventRoom[];
+  /** Video call */
+  conference?: EventConference;
+  /** Whether AI meeting notes are taken during the event */
+  aiMeetingNotes?: boolean;
+  /** Links attached to the event */
+  links?: EventLink[];
+  /** Files attached to the event */
+  attachments?: EventAttachment[];
+  /** Reminders list */
+  reminders?: EventReminder[];
+  /** Busy/Free status */
+  status?: "busy" | "free";
+  /** Visibility setting */
+  visibility?: "default" | "public" | "private";
+}
+
+/**
+ * Predefined event colors
+ */
+export type EventColor =
+  | "red"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "blue"
+  | "purple"
+  | "gray";
+
+/**
+ * Represents a positioned event for rendering in the grid
+ */
+export interface PositionedEvent {
+  /** The original event */
+  event: CalendarEvent;
+  /** Top position as percentage from the day start */
+  top: number;
+  /** Height as percentage of the day */
+  height: number;
+  /** Left position as percentage (for overlap handling) */
+  left: number;
+  /** Width as percentage (for overlap handling) */
+  width: number;
+  /** Column index when events overlap */
+  column: number;
+  /** Total columns when events overlap */
+  totalColumns: number;
+  /** Segment position for multi-day timed events (controls corner rounding) */
+  segmentPosition?: "start" | "middle" | "end" | "full";
+}
+
+/**
+ * An event as listed under one day of the agenda. An event that spans
+ * several days is listed under each of them.
+ */
+export interface AgendaEntry {
+  /** The original event */
+  event: CalendarEvent;
+  /** Which of the event's days this is, counting from 1 */
+  dayIndex: number;
+  /** How many days the event spans (1 for a single-day event) */
+  dayCount: number;
+  /**
+   * Whether the event fills this whole day: an all-day event, or a day
+   * between the first and last of a multi-day timed event
+   */
+  isAllDayOnThisDay: boolean;
+}
+
+/**
+ * A day in the agenda and the events listed under it
+ */
+export interface AgendaDay {
+  /** Start of the day */
+  date: Date;
+  /** Its events: whole-day entries first, then by start time */
+  entries: AgendaEntry[];
+}
+
+/**
+ * Drag variant for rendering events in different visual states during drag
+ */
+export type EventDragVariant = "default" | "ghost" | "dragging" | "placeholder";
+
+/**
+ * State of an in-progress event drag operation
+ */
+export interface EventDragState {
+  /** ID of the event being dragged */
+  eventId: string;
+  /** The original event being dragged (preserved across week navigations) */
+  event: CalendarEvent;
+  /** Original start time before drag */
+  originalStart: Date;
+  /** Original end time before drag */
+  originalEnd: Date;
+  /** Current snapped start time during drag */
+  currentStart: Date;
+  /** Current snapped end time during drag */
+  currentEnd: Date;
+  /** Target day for the placeholder (decoupled from currentStart for cross-column drag) */
+  currentDate: Date;
+  /** Whether the drag threshold has been met */
+  isDragging: boolean;
+  /** Raw cursor Y position in px (unsnapped, for smooth dragging copy) */
+  cursorY: number;
+  /** Raw cursor X position in px relative to grid container */
+  cursorX: number;
+  /** Viewport clientX for fixed-position dragging copy */
+  clientX: number;
+  /** Viewport clientY for fixed-position dragging copy */
+  clientY: number;
+}
+
+/**
+ * State of an in-progress event resize operation
+ */
+export interface EventResizeState {
+  /** ID of the event being resized */
+  eventId: string;
+  /** The original event being resized */
+  event: CalendarEvent;
+  /** Original start time before resize */
+  originalStart: Date;
+  /** Original end time before resize */
+  originalEnd: Date;
+  /** Current snapped start time during resize */
+  currentStart: Date;
+  /** Current snapped end time during resize */
+  currentEnd: Date;
+  /** Which edge was originally grabbed */
+  edge: "top" | "bottom";
+  /** Which edge the cursor is effectively on (flips when crossing anchor) */
+  effectiveEdge: "top" | "bottom";
+  /** Whether the drag threshold has been met */
+  isResizing: boolean;
+  /** Target day column for the end during cross-day bottom resize */
+  currentEndDate: Date;
+  /** Target day column for the start during cross-day top resize */
+  currentStartDate: Date;
+}
+
+/**
+ * State of an in-progress all-day event resize operation
+ */
+export interface AllDayResizeState {
+  /** ID of the event being resized */
+  eventId: string;
+  /** The original event being resized */
+  event: CalendarEvent;
+  /** Original start column index in the buffered days array */
+  originalStartColumn: number;
+  /** Original end column index in the buffered days array */
+  originalEndColumn: number;
+  /** Current start column index during resize */
+  currentStartColumn: number;
+  /** Current end column index during resize */
+  currentEndColumn: number;
+  /** Which edge is being dragged, or "move" for drag-and-drop */
+  edge: "left" | "right" | "move";
+  /** Whether the drag threshold has been met */
+  isResizing: boolean;
+  /** Viewport-relative cursor X during move (for floating copy) */
+  clientX?: number;
+  /** Viewport-relative cursor Y during move (for floating copy) */
+  clientY?: number;
+  /** Offset from cursor to event left edge at mousedown (px) */
+  cursorOffsetX?: number;
+  /** Offset from cursor to event top edge at mousedown (px) */
+  cursorOffsetY?: number;
+}
+
+/**
+ * Where a press-to-drag gesture started: the pointerdown for mouse and pen,
+ * the point where the long press completed for touch
+ */
+export interface PointerGestureStart {
+  /** Viewport X of the pointer when the gesture started */
+  clientX: number;
+  /** Viewport Y of the pointer when the gesture started */
+  clientY: number;
+  /** Pointer that drives the gesture; events from other pointers are ignored */
+  pointerId: number;
+  /** "mouse", "pen" or "touch" */
+  pointerType: string;
+  /** Element the press began on (the pointerdown's `currentTarget`) */
+  element: HTMLElement;
+}
+
+/**
+ * Start and end of a new event created by clicking an empty time slot
+ */
+export interface NewEventRange {
+  /** Start of the clicked `snapMinutes` slot */
+  start: Date;
+  /**
+   * End time (start + NEW_EVENT_DURATION_MINUTES, kept inside the visible
+   * hours and the clicked day)
+   */
+  end: Date;
+}
+
+/**
+ * Dates a view draws, passed to `onVisibleRangeChange` and returned as
+ * `visibleRange` by `useCalendar()`. Both are local midnights and `end` is
+ * exclusive, so an event is in range when `event.start < end` and
+ * `event.end > start`.
+ */
+export interface VisibleRange {
+  /** Midnight that starts the first visible day */
+  start: Date;
+  /** Midnight after the last visible day (exclusive) */
+  end: Date;
+}
+
+/**
+ * Where `pasteEvent()` puts the next paste: the time slot (day and week
+ * view) or the day (month view) a view last had the mouse over
+ */
+export interface EventPasteTarget {
+  /** The slot's start, or any time on the day */
+  date: Date;
+  /**
+   * Whether `date` is a time slot to start at. False for a day: the copy
+   * keeps its own time of day
+   */
+  hasTime: boolean;
+}
+
+/** What one undo step did, named in its undo and redo announcements */
+export type EventHistoryAction =
+  | "create"
+  | "edit"
+  | "delete"
+  | "cut"
+  | "duplicate"
+  | "paste";
+
+/**
+ * One event's part of an undo step: the event before and after it. A `null`
+ * `before` means the step added the event; a `null` `after` that it removed it.
+ */
+export interface EventHistoryChange<
+  TEvent extends CalendarEvent = CalendarEvent,
+> {
+  before: TEvent | null;
+  after: TEvent | null;
+  /**
+   * The event's place in the events list: where an added event went, or
+   * where a removed one was (undoing the removal puts it back there)
+   */
+  index: number;
+}
+
+/** One undo step: the changes one action made, each to a different event */
+export interface EventHistoryEntry<
+  TEvent extends CalendarEvent = CalendarEvent,
+> {
+  action: EventHistoryAction;
+  changes: EventHistoryChange<TEvent>[];
+  /** When it was recorded, in milliseconds since the epoch, to merge quick edits */
+  time: number;
+}
+
+/** The steps `undo` and `redo` walk through */
+export interface EventHistory<TEvent extends CalendarEvent = CalendarEvent> {
+  /** Steps `undo` takes back, the latest last */
+  past: EventHistoryEntry<TEvent>[];
+  /** Steps `redo` does again, the latest undone last */
+  future: EventHistoryEntry<TEvent>[];
+}
+
+/**
+ * A short message the calendar shows after an action, as Notion Calendar's
+ * toasts do: "Event deleted", "Event cut", "Event copied to clipboard".
+ * `CalendarToaster` draws it; `useCalendarNotice()` returns it.
+ */
+export interface CalendarNotice {
+  /** Counts up with every notice shown, so a repeated message is a new toast */
+  id: number;
+  /** The first line, e.g. "Event deleted" */
+  message: string;
+  /**
+   * The second line: an event's title, which `CalendarToaster` shows in
+   * curly quotes. No second line without it
+   */
+  title?: string;
+  /** Takes the action back. `CalendarToaster` shows an Undo button only with it */
+  onUndo?: () => void;
+}
+
+/** What `showNotice` takes: a notice without its `id` */
+export type CalendarNoticeInput = Omit<CalendarNotice, "id">;
+
+/** What `useCalendarNotice()` returns */
+export interface CalendarNoticeValue {
+  /** The notice to show now, or `null`. One at a time: a new one replaces it */
+  notice: CalendarNotice | null;
+  /**
+   * Shows a notice of your own in place of the one on screen, and reads it
+   * out in the provider's live region
+   */
+  showNotice: (notice: CalendarNoticeInput) => void;
+  /** Closes the notice with this id. Does nothing once a newer one replaced it */
+  dismissNotice: (id: number) => void;
+}
+
+/**
+ * A calendar events can belong to (e.g. "Work"), listed by the details
+ * panel's calendar picker and the event context menu's "Block on calendar"
+ * submenu
+ */
+export interface CalendarInfo {
+  /** Stored in the event's `calendarId` when picked */
+  id: string;
+  /** Display name */
+  name: string;
+  /**
+   * The calendar's color. Its events take it until they are given their own
+   * `color`.
+   */
+  color: EventColor;
+  /** Account the calendar belongs to; calendars are grouped under it */
+  email?: string;
+  /**
+   * A calendar followed rather than owned, like a holidays feed. The calendar
+   * list marks it with a feed icon.
+   */
+  isSubscribed?: boolean;
+  /**
+   * Reminders an event gets on this calendar. Only moving an event applies
+   * them: one moved here that still has its previous calendar's defaults
+   * takes these instead, and reminders edited by hand are kept. Creating an
+   * event never adds them; give new events reminders in `createEvent`.
+   */
+  defaultReminders?: EventReminder[];
+}
+
+/**
+ * Calendars that share an account, listed under its email by the calendar
+ * pickers (`groupCalendarsByEmail()`)
+ */
+export interface CalendarGroup {
+  /** Account email shown above the group; absent for calendars without one */
+  email?: string;
+  calendars: CalendarInfo[];
+}
+
+/**
+ * Display and interaction settings set on CalendarProvider, read with
+ * `useCalendarConfig()`. Every field has a default, listed on the matching
+ * provider prop.
+ */
+export interface CalendarConfig {
+  /** Minute step that timed-event drag, resize and click-to-create snap to */
+  snapMinutes: number;
+  /** First hour (0-23) the time grid shows */
+  dayStartHour: number;
+  /** Hour (1-24) the time grid ends at; the last row is `dayEndHour - 1` */
+  dayEndHour: number;
+  /** Clock style for every time label */
+  hourCycle: HourCycle;
+  /** date-fns locale for day names, month names and dates */
+  locale: Locale;
+  /**
+   * IANA zone whose hours the day and week views show in a second column
+   * beside the time axis. Unset when there is none, or when the provider's
+   * `secondaryTimeZone` is a zone the runtime doesn't know.
+   */
+  secondaryTimeZone?: string;
+  /**
+   * Day the week starts on, for date pickers. Unset outside a
+   * CalendarProvider, where the locale's first day applies.
+   */
+  weekStartsOn?: WeekStartsOn;
+  /** Calendars offered by the details panel's calendar picker and the event context menu */
+  calendars: CalendarInfo[];
+  /** People the details' participants field suggests */
+  contacts: EventContact[];
+  /** Meeting rooms the details' participants field offers */
+  rooms: EventRoom[];
+  /** Conferencing services the details offer; none hides the row */
+  conferenceProviders: ConferenceProviderOption[];
+  /** Places the details' location field suggests */
+  locationSuggestions: LocationSuggestion[];
+}
+
+/**
+ * Where an event's content is drawn. Each placement gives it a different
+ * amount of room:
+ * - "time-grid": a timed block in the day/week hour grid, as tall as the event
+ * - "all-day": a 24px bar in the day/week all-day row
+ * - "month-item": a 20px line for a timed event in a month cell
+ * - "month-bar": a 20px bar for an all-day or multi-day event in month view
+ * - "agenda": a row in the agenda list, as wide as the list
+ */
+export type EventContentPlacement =
+  | "time-grid"
+  | "all-day"
+  | "month-item"
+  | "month-bar"
+  | "agenda";
+
+/**
+ * Props passed to `renderEventContent`. The calendar keeps drawing the
+ * event's box (position, color, selection, drag and resize handles); the
+ * returned content fills its inside.
+ */
+export interface EventContentProps<
+  TEvent extends CalendarEvent = CalendarEvent,
+> {
+  /** The event, with its in-progress start and end while dragged or resized */
+  event: TEvent;
+  /** View the event is drawn in */
+  view: ViewType;
+  /** Where the content is drawn, which sets how much room it has */
+  placement: EventContentPlacement;
+  /** Whether the event is selected */
+  isSelected: boolean;
+  /** Whether the event has already ended */
+  isPast: boolean;
+  /** Whether this is the copy that follows the pointer while the event is dragged */
+  isDragging: boolean;
+  /** Whether the event is being resized */
+  isResizing: boolean;
+  /**
+   * Whether there is room for one line only: true for time-grid blocks
+   * under 40px tall, and always true for the single-line all-day and month
+   * placements
+   */
+  isCompact: boolean;
+  /**
+   * Time the default content shows: the range in the time grid and the
+   * agenda ("10–11 AM"), the start in month cells and for all-day events
+   * that have one ("9 AM"). Empty where the default content shows no time.
+   */
+  timeLabel: string;
+}
+
+/**
+ * Props passed to `renderEventDetails`
+ */
+export interface EventDetailsRenderProps<
+  TEvent extends CalendarEvent = CalendarEvent,
+> {
+  /** The selected event */
+  event: TEvent;
+  /** Closes the popover (clears the selection) */
+  close: () => void;
+  /**
+   * Whether the event was just created by clicking an empty slot, so its
+   * title should be focused. True on the first render after creation only.
+   */
+  isNew: boolean;
+}
+
+/**
+ * Props every section of the event details panel takes (time, time zone,
+ * repeat, participants, and so on). A section reads its fields from `event`
+ * and calls `onEventChange` with the whole event and its edit applied,
+ * keeping the app's other fields.
+ */
+export interface EventDetailSectionProps<
+  TEvent extends DetailedCalendarEvent = DetailedCalendarEvent,
+> {
+  /** The event shown */
+  event: TEvent;
+  /**
+   * Called with the edited event. Without it a section renders read-only:
+   * no menus, no inputs that accept typing.
+   */
+  onEventChange?: (event: TEvent) => void;
+}
+
+/**
+ * Custom renderers set on CalendarProvider. Each replaces only the content
+ * it names; leave it out to keep the default.
+ */
+export interface CalendarRenderSlots<
+  TEvent extends CalendarEvent = CalendarEvent,
+> {
+  /**
+   * Renders the inside of an event in the time grid, the all-day row,
+   * month view and the agenda. Defaults to the title and time.
+   */
+  renderEventContent?: (props: EventContentProps<TEvent>) => React.ReactNode;
+  /**
+   * Renders the body of the event details popover. Defaults to the
+   * Notion-style detail panel, which reads `DetailedCalendarEvent` fields.
+   */
+  renderEventDetails?: (
+    props: EventDetailsRenderProps<TEvent>,
+  ) => React.ReactNode;
+  /**
+   * Renders the items of an event's right-click menu, in place of the
+   * default color, cut, copy, duplicate and delete items.
+   */
+  renderEventContextMenu?: (props: {
+    event: TEvent;
+    close: () => void;
+  }) => React.ReactNode;
+}
+
+/**
+ * The `createEvent` prop. Optional while the default event (id, title,
+ * start, end) is a valid `TEvent`; required once `TEvent` adds required
+ * fields, since only the app knows how to fill them.
+ */
+type CalendarCreateEventProps<TEvent extends CalendarEvent> =
+  CalendarEvent extends TEvent
+    ? {
+        /**
+         * Builds the event created by clicking an empty time slot. Return
+         * `null` to create nothing. Defaults to a "New event" with a random UUID.
+         */
+        createEvent?: (range: NewEventRange) => TEvent | null;
+      }
+    : {
+        /**
+         * Builds the event created by clicking an empty time slot. Return
+         * `null` to create nothing. Required because `TEvent` has required
+         * fields the default "New event" can't fill.
+         */
+        createEvent: (range: NewEventRange) => TEvent | null;
+      };
+
+/**
+ * CalendarProvider props other than `createEvent`
+ */
+interface CalendarProviderBaseProps<
+  TEvent extends CalendarEvent,
+> extends CalendarRenderSlots<TEvent> {
+  /** Events to display (controlled) */
+  events?: TEvent[];
+  /** Initial events when `events` is not controlled. Defaults to none */
+  defaultEvents?: TEvent[];
+  /**
+   * Called with the full next list whenever events change (drag, resize,
+   * create, edit, delete, duplicate, cut, paste, undo, redo). A repeating
+   * event stays one event in it; an edited occurrence is added as an event of
+   * its own
+   */
+  onEventsChange?: (events: TEvent[]) => void;
+  /** Active view (controlled) */
+  view?: ViewType;
+  /** Initial view when `view` is not controlled. Defaults to "week" */
+  defaultView?: ViewType;
+  /** Called when the view changes */
+  onViewChange?: (view: ViewType) => void;
+  /** First day of the displayed period (controlled) */
+  date?: Date;
+  /**
+   * Initial first day when `date` is not controlled. Defaults to the start of
+   * today's period (today in day and agenda views, January 1 in year view,
+   * the start of this week otherwise).
+   * Today is unknown during server rendering and hydration, so without
+   * `date` or `defaultDate` the provider renders nothing until hydration ends.
+   */
+  defaultDate?: Date;
+  /** Called when the displayed date changes (navigation or scroll) */
+  onDateChange?: (date: Date) => void;
+  /** Day the week starts on. Defaults to 0 (Sunday) */
+  weekStartsOn?: WeekStartsOn;
+  /**
+   * Number of days the week view shows (controlled). Below 7, the columns
+   * start on the current day and prev/next move by that many days; from 7
+   * up they start on the week's first day and prev/next move by a week.
+   */
+  numberOfDays?: number;
+  /** Initial number of days when `numberOfDays` is not controlled. Defaults to 7 */
+  defaultNumberOfDays?: number;
+  /** Called when the number of days changes */
+  onNumberOfDaysChange?: (numberOfDays: number) => void;
+  /**
+   * Initial display preferences. Unset fields default to showing weekends
+   * and declined events, and hiding week numbers.
+   */
+  defaultViewSettings?: Partial<ViewSettings>;
+  /** Minute step that timed-event drag, resize and click-to-create snap to. Defaults to 15 */
+  snapMinutes?: number;
+  /**
+   * First hour (0-23) the day and week views show. Events before it are
+   * clipped at the top edge (hidden when they end before it), and drag,
+   * resize and click-to-create stay inside the range. Defaults to 0
+   */
+  dayStartHour?: number;
+  /**
+   * Hour (1-24) the day and week views end at, after `dayStartHour`. Events
+   * after it are clipped at the bottom edge (hidden when they start after
+   * it). Defaults to 24
+   */
+  dayEndHour?: number;
+  /** Clock style for time labels: 12 ("3 PM") or 24 ("15:00"). Defaults to 12 */
+  hourCycle?: HourCycle;
+  /**
+   * date-fns locale for day names, month names, dates and week numbers.
+   * Defaults to `enUS`
+   */
+  locale?: Locale;
+  /**
+   * IANA time zone (e.g. "Asia/Kolkata") whose hours the day and week views
+   * show in a second column, left of the time axis, as Notion Calendar's
+   * additional time zone. Each column gets its zone's short label at the
+   * top, and the current-time line keeps its one badge, in the viewer's column. A zone the runtime
+   * doesn't know is ignored. Defaults to none
+   */
+  secondaryTimeZone?: string;
+  /**
+   * Calendars the details panel's calendar picker offers, grouped by `email`,
+   * and the event context menu under "Block on calendar" (hidden when
+   * empty). Both move the event with `moveEventToCalendar()`. An event
+   * without its own `color` is drawn in its calendar's. Defaults to none
+   */
+  calendars?: CalendarInfo[];
+  /**
+   * People the details' participants field suggests: recent ones before
+   * typing, the matches while typing. Defaults to none (a typed email can
+   * still be invited)
+   */
+  contacts?: EventContact[];
+  /**
+   * Meeting rooms the details' participants field lists under "Rooms and
+   * resources". Defaults to none, which hides that list
+   */
+  rooms?: EventRoom[];
+  /**
+   * Conferencing services the details' "Conferencing" menu offers, each
+   * creating its calls with its own `createConference`. Defaults to none,
+   * which hides the row (an event's existing call still shows)
+   */
+  conferenceProviders?: ConferenceProviderOption[];
+  /**
+   * Places the details' location field suggests while typing. Defaults to
+   * none (the typed text is kept as the location)
+   */
+  locationSuggestions?: LocationSuggestion[];
+  /**
+   * Called after an event is added: one created by clicking an empty slot,
+   * a duplicate or a paste, an occurrence of a repeating event stored on its
+   * first edit (with `seriesId` and `originalStart`), or one `undo` or `redo`
+   * brings back
+   */
+  onEventCreate?: (event: TEvent) => void;
+  /**
+   * Called after an event is changed (drag, resize, an edit in the details,
+   * or `undo` or `redo` changing it back)
+   */
+  onEventUpdate?: (event: TEvent) => void;
+  /**
+   * Called after an event is removed: deleted, cut, or taken away again by
+   * `undo` or `redo` (an undone create, duplicate or paste)
+   */
+  onEventDelete?: (event: TEvent) => void;
+  /** Called whenever an event is selected (clicked, or just created) */
+  onEventSelect?: (eventId: string) => void;
+  /**
+   * Called with the dates the view draws: once after it mounts, then each
+   * time they change (navigation, a view switch, a settled scroll). Never
+   * twice in a row for the same range. Use it to fetch events by range.
+   */
+  onVisibleRangeChange?: (range: VisibleRange) => void;
+  /**
+   * Shows a thin progress bar under the day headers of every view, e.g.
+   * while events for a new range load. The calendar stays usable.
+   * Defaults to false
+   */
+  loading?: boolean;
+  children?: React.ReactNode;
+}
+
+/**
+ * Props for CalendarProvider. Stateful values come in shadcn/Radix-style
+ * pairs: pass `value` + `onValueChange` to control them, or `defaultValue`
+ * (or nothing) to let the provider own them. `TEvent` is the app's event
+ * type (`CalendarEvent` plus its own fields); callbacks receive it as-is.
+ */
+export type CalendarProviderProps<
+  TEvent extends CalendarEvent = CalendarEvent,
+> = CalendarProviderBaseProps<TEvent> & CalendarCreateEventProps<TEvent>;
+
+/**
+ * Calendar state and actions returned by `useCalendar<TEvent>()`
+ */
+export interface CalendarContextValue<
+  TEvent extends CalendarEvent = CalendarEvent,
+> {
+  /**
+   * The stored events. A repeating event is one event here; the views
+   * draw its occurrences with `expandRecurringEvents`
+   */
+  events: TEvent[];
+  /** Active view */
+  view: ViewType;
+  /** First day of the displayed period */
+  currentDate: Date;
+  /** Day the week starts on */
+  weekStartsOn: WeekStartsOn;
+  /** Number of days the week view shows */
+  numberOfDays: number;
+  /** Display preferences toggled from the view menu */
+  viewSettings: ViewSettings;
+  /**
+   * Days the day/week view currently shows, updated live while it scrolls
+   * horizontally, or the days the agenda covers. Empty in month and year
+   * view.
+   */
+  visibleDays: Date[];
+  /**
+   * First day of the month the month view shows (follows its vertical
+   * scroll), or `null` before month view has rendered
+   */
+  displayMonth: Date | null;
+  /**
+   * Dates the view draws (end exclusive): the visible days in day and week
+   * view, the whole six-week grid in month view, trimmed to the first and
+   * last weekday when month view hides weekends. Follows settled
+   * navigation, so a horizontal scroll moves it once it snaps. Year view
+   * spans its year, January 1 to the next January 1.
+   */
+  visibleRange: VisibleRange;
+  /** Whether the provider's `loading` prop is set */
+  loading: boolean;
+  /** ID of the selected event, or `null` */
+  selectedEventId: string | null;
+  /**
+   * The selected event: a stored one, or the generated occurrence its id
+   * names. `null` when nothing (or a missing event) is selected
+   */
+  selectedEvent: TEvent | null;
+  /**
+   * The selected event's previous occurrence in its repeating series (see
+   * `findSeriesOccurrence`): the event stored for that date or the one
+   * generated for it. `null`: nothing selected, the event doesn't repeat,
+   * or it is the series' first
+   */
+  previousInSeries: SeriesOccurrence<TEvent> | null;
+  /**
+   * The selected event's next occurrence in its repeating series, or `null`:
+   * nothing selected, the event doesn't repeat, or the series ends with it
+   */
+  nextInSeries: SeriesOccurrence<TEvent> | null;
+  /**
+   * Selects an occurrence of the selected event's series
+   * (`previousInSeries` or `nextInSeries`) and shows it, moving to its
+   * period when it is off screen. Nothing is added: a generated occurrence
+   * is selected as it is.
+   */
+  showSeriesOccurrence: (occurrence: SeriesOccurrence<TEvent>) => void;
+  /** Day briefly highlighted after `showDay`, or `null` */
+  highlightedDate: Date | null;
+  /** Month name for the header (e.g. "October"). Empty in year view, where the header names the year alone */
+  monthName: string;
+  /** Four-digit year for the header (e.g. "2026") */
+  year: string;
+  /** Week number of the displayed week */
+  weekNumber: number;
+  /** Goes to the period that contains today */
+  goToToday: () => void;
+  /** Goes back one period (day, week, month, year or agenda range, by view) */
+  goToPrev: () => void;
+  /** Goes forward one period (day, week, month, year or agenda range, by view) */
+  goToNext: () => void;
+  /** Sets the first displayed day as given (no snapping to a week start) */
+  goToDate: (date: Date) => void;
+  /** Switches the view, snapping the date to the new view's period. Year view opens on the year the header shows */
+  switchView: (view: ViewType) => void;
+  /** Sets how many days the week view shows */
+  setNumberOfDays: (numberOfDays: number) => void;
+  /** Selects an event */
+  selectEvent: (eventId: string) => void;
+  /** Clears the selection (closes the event popover) */
+  clearSelection: () => void;
+  /**
+   * Creates an event for a clicked slot via `createEvent`, selects it and
+   * focuses its title
+   */
+  addEventFromRange: (range: NewEventRange) => void;
+  /**
+   * Replaces the event with the same id. A generated occurrence of a
+   * repeating event (not in `events`) is added instead, as the stored event
+   * for its date, through `onEventsChange` and `onEventCreate`
+   */
+  updateEvent: (event: TEvent) => void;
+  /**
+   * Deletes the event through `onEventsChange` and `onEventDelete`, and
+   * clears the selection when it was selected. Undoable
+   */
+  deleteEvent: (eventId: string) => void;
+  /**
+   * Adds a copy of the event at the same time, with a new id from
+   * `crypto.randomUUID()`, through `onEventsChange` and `onEventCreate`, and
+   * selects it. Undoable
+   */
+  duplicateEvent: (eventId: string) => void;
+  /** Keeps a copy of the event for `pasteEvent`. Changes no event */
+  copyEvent: (eventId: string) => void;
+  /** Keeps a copy of the event for `pasteEvent`, then deletes it. Undoable */
+  cutEvent: (eventId: string) => void;
+  /**
+   * Adds a copy of the cut or copied event, with a new id, and selects it:
+   * at the time slot under the mouse in day and week view, on the day under
+   * it in month view at the event's own time of day, else today or the
+   * first day on screen. All-day events stay all-day. Does nothing when
+   * nothing was cut or copied. Undoable
+   */
+  pasteEvent: () => void;
+  /**
+   * Undoes the latest create, move, resize, edit, delete, duplicate, cut or
+   * paste: reports it through `onEventsChange` and `onEventCreate`,
+   * `onEventUpdate` or `onEventDelete`, and selects the event it brings
+   * back or changes
+   */
+  undo: () => void;
+  /** Does again the latest step `undo` took back */
+  redo: () => void;
+  /**
+   * Whether `undo` has a step to take back: false with none, or once the
+   * app replaced or removed one of that step's events itself
+   */
+  canUndo: boolean;
+  /** Whether `redo` has a step to do again. Any new change clears them */
+  canRedo: boolean;
+  /** Toggles weekend columns */
+  toggleWeekends: () => void;
+  /** Flips `viewSettings.showDeclinedEvents`. No view filters by it yet */
+  toggleDeclinedEvents: () => void;
+  /** Toggles week numbers */
+  toggleWeekNumbers: () => void;
+  /** Opens the week containing `date` and briefly highlights that day */
+  showDay: (date: Date) => void;
+}

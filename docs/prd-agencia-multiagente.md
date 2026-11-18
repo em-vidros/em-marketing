@@ -1,5 +1,7 @@
 # PRD: Agência multiagente de marketing da EM Vidros
 
+> Nota de 17/11/2026: a integração com o Linear saiu do produto. As menções a ele neste documento são históricas.
+
 **Produto:** `em-marketing`
 **Data:** 25/08/2026
 **Status:** Rascunho para revisão
@@ -39,7 +41,7 @@ plano de controle será o único dono do estado. Cada agente receberá uma taref
 um pacote de contexto imutável e apenas as ferramentas necessárias.
 
 O DeepSeek V4 Pro cuidará da direção criativa, do texto e, em versões futuras,
-do código. O Gemini Nano Banana 2 cuidará da geração e da edição das imagens. Um
+do código. O `gpt-image-2.6-sunburst` da OpenAI cuidará da geração e da edição das imagens. Um
 modelo multimodal separado fará o controle visual. Código determinístico cuidará
 da aprovação, dos arquivos, do Linear e da entrega manual.
 
@@ -105,7 +107,7 @@ quando um administrador registrar uma delegação com início e fim.
 2. O diretor criativo lê a versão atual do brandbook, dos tokens e dos estilos.
 3. O diretor criativo cria três direções visuais distintas.
 4. O redator define o headline e o apoio de cada direção.
-5. O designer gera três protótipos com o Nano Banana 2.
+5. O designer gera três protótipos com o `gpt-image-2.6-sunburst`.
 6. O diretor de arte revisa marca, texto, composição, logo e zonas seguras.
 7. Ricardo vê os três protótipos no site.
 8. Ricardo aceita uma opção, pede ajustes ou recusa todas.
@@ -356,12 +358,12 @@ Estes itens ficam fora da primeira versão:
 |---|---|---|---|
 | Diretor criativo | `deepseek-v4-pro` | Transformar tema e marca em direções visuais | Não |
 | Redator | `deepseek-v4-pro` | Headline, legenda, títulos e artigos | Não |
-| Designer visual | `gemini-3.1-flash-image` | Gerar e editar imagens | Não |
+| Designer visual | `gpt-image-2.6-sunburst` | Gerar e editar imagens | Não |
 | Diretor de arte | Modelo multimodal separado | Revisar marca, texto, logo e composição | Não |
 | Plano de controle | Sem LLM | Controlar estado, tarefas, aprovações e orçamento | Não |
 | Operações | Sem LLM | Entregar arquivos e arquivar no Linear | Não |
 
-O Nano Banana 2 não controla ferramentas. O worker de design recebe um contrato
+O modelo de imagem não controla ferramentas. O worker de design recebe um contrato
 validado, chama o modelo e devolve artefatos. O plano de controle decide a próxima
 etapa.
 
@@ -372,8 +374,8 @@ Referências:
 
 - DeepSeek models and pricing: <https://api-docs.deepseek.com/quick_start/pricing>
 - DeepSeek tool calls: <https://api-docs.deepseek.com/guides/tool_calls>
-- Nano Banana 2: <https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image>
-- Gemini image generation: <https://ai.google.dev/gemini-api/docs/image-generation>
+- Introducing Images 2.6: <https://openai.com/index/introducing-images-2-6/>
+- OpenAI image prompting: <https://developers.openai.com/api/docs/guides/image-prompting>
 
 ### 3.2 Ferramentas permitidas
 
@@ -381,7 +383,7 @@ Referências:
 |---|---|
 | Diretor criativo | Ler brandbook, tokens, estilos, calendário e brief |
 | Redator | Ler guia de voz, catálogo aprovado, fontes e versões anteriores |
-| Designer visual | Ler referências de marca, chamar Nano Banana 2 e enviar artefatos |
+| Designer visual | Ler referências de marca, chamar o `gpt-image-2.6-sunburst` e enviar artefatos |
 | Diretor de arte | Ler imagem, tokens, headline, formato e rubrica de qualidade |
 | Operações | Site, Linear e armazenamento de artefatos |
 
@@ -521,7 +523,7 @@ Control Plane
    |
    +--> Worker de direção criativa --> DeepSeek V4 Pro
    +--> Worker de redação ---------> DeepSeek V4 Pro
-   +--> Worker de design ----------> Nano Banana 2
+   +--> Worker de design ----------> GPT Image 2.6
    +--> Worker de revisão visual --> Modelo multimodal
    +--> Worker de operações -------> Linear e arquivos
    |
@@ -691,7 +693,7 @@ Para o blog, a tela mostra o artigo legível e os arquivos `.md` e `.txt` para b
 |---|---|---|
 | Telegram Bot API | Desativada, o código sai da árvore | Nenhum |
 | DeepSeek API | Direção e texto | Devbot e análise |
-| Gemini API | Geração e revisão visual | Imagens de entrada para motion |
+| OpenAI Images API | Geração e revisão visual | Imagens de entrada para motion |
 | Linear API | Arquivo e histórico | Planejamento de campanhas |
 | Instagram Graph API | Desativada | Agendamento e publicação automáticos |
 | CMS do blog | Desativado | Rascunho ou publicação automáticos |
@@ -958,14 +960,14 @@ deve aprovar qualquer nova regra de marca.
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Nano Banana altera a composição durante um ajuste | Ricardo recebe uma peça diferente | Usar a imagem aprovada como referência e pedir uma edição localizada |
+| O modelo de imagem altera a composição durante um ajuste | Ricardo recebe uma peça diferente | Usar a imagem aprovada como referência e pedir uma edição localizada |
 | O modelo redesenha o logo | Violação da marca | Usar o logo oficial como referência e bloquear o QA reprovado |
 | O navegador ou o proxy altera o arquivo baixado | Menor qualidade de publicação | Servir o mestre como download binário e conferir o SHA-256 |
 | O artigo inventa fatos de produto | Informação pública incorreta | Exigir fontes aprovadas e marcar dados ausentes como pendência |
 | Dois workers atualizam o mesmo trabalho | Estado duplicado ou inválido | Manter o plano de controle como único escritor e usar leases |
 | Um processo para depois de uma entrega externa | Entrega duplicada após reinício | Usar chaves de idempotência e reconciliar recibos do provedor |
 | Ajustes repetidos aumentam o custo dos modelos | Esgotamento dos créditos | Aplicar orçamento por pedido e perguntar antes de continuar |
-| DeepSeek ou Gemini altera a API | Workers quebrados | Manter adaptadores atrás de contratos estáveis |
+| DeepSeek ou OpenAI altera a API | Workers quebrados | Manter adaptadores atrás de contratos estáveis |
 | Ricardo fica indisponível | Trabalho pendente | Permitir substituto temporário e nunca aprovar automaticamente |
 | Site público com conta fraca | Alguém de fora pede ou aprova | Conta criada só pelo Henrique, senha com hash, barra por tentativa e sessão curta |
 | Ninguém abre o site e o pedido dorme | Pedido parado sem ninguém saber | Lista de pendências em destaque na entrada, e aviso externo entra na fase seguinte se doer |
@@ -974,7 +976,7 @@ deve aprovar qualquer nova regra de marca.
 ### 5.3 Dependências
 
 - Chave da API da DeepSeek com créditos.
-- Projeto da API do Gemini com cobrança ativa para Nano Banana 2.
+- Projeto da API da OpenAI com cobrança ativa para o `gpt-image-2.6-sunburst`.
 - Endereço público com HTTPS para o site.
 - Contas de quem usa, criadas pelo Henrique.
 - Chave da API do Linear e etiqueta `Instagram Post`.

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, spyOn, test } from "bun:test";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, isToolUIPart, simulateReadableStream, type LanguageModel, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { AINDA_RESPONDENDO, abrirConversaDoUsuario, apagarMensagem, conversaDoUsuario, mensagensDaConversa } from "../agent/conversas";
@@ -31,17 +31,16 @@ const chefeQueAgenda = () => {
   });
 };
 
-/** Uma conversa com um post já registrado no Linear, pronto para agendar. */
+/** Uma conversa com um post com arte escolhida e legenda, pronto para agendar. */
 function conversaComPost(): string {
   const id = `chat-${crypto.randomUUID()}`;
   abrirConversaDoUsuario(usuario.id, id, "chefe", "Post de teste");
-  const arte = { variant: 1, style: "tecnico-poppins", path: "v1.jpg", interactionId: "i1", problemas: [] };
+  const arte = { variant: 1, style: "tecnico-poppins", path: "v1.jpg", problemas: [] };
   const eventos: Evento[] = [
     { tipo: "headline", headline: { headline: "O temperado quebra em grãos.", apoio: "" } },
     { tipo: "artes", artes: [arte] },
     { tipo: "escolha", variante: 1 },
     { tipo: "legenda", legenda: "Legenda." },
-    { tipo: "registro", linearId: "EMV-1" },
   ];
   const post = eventos.reduce<EtapaPost>((p, e) => {
     const r = transicionar(p, e);
@@ -214,43 +213,45 @@ describe("conversa direta com um especialista", () => {
   });
 });
 
-/** Um Gemini falso que responde o que o caso pedir. retry-after-ms: 0 faz as novas tentativas do SDK saírem na hora. */
+/** Uma OpenAI falsa que responde o que o caso pedir. retry-after-ms: 0 faz as novas tentativas do SDK saírem na hora. */
 let resposta = { status: 200, corpo: {} as unknown };
-const gemini = Bun.serve({
+const servidor = Bun.serve({
   port: 0,
   fetch: () => Response.json(resposta.corpo, { status: resposta.status, headers: { "retry-after-ms": "0" } }),
 });
-afterAll(() => gemini.stop(true));
+const chaveDaOpenAI = process.env.OPENAI_API_KEY;
+afterAll(() => {
+  servidor.stop(true);
+  if (chaveDaOpenAI !== undefined) process.env.OPENAI_API_KEY = chaveDaOpenAI;
+});
 
-const erroDoGoogle = (code: number, status: string, message: string, details: unknown[] = []) => ({ error: { code, message, status, details } });
+const erroDaOpenAI = (type: string, code: string | null, message: string) => ({ error: { message, type, param: null, code } });
 
 describe("erro do provedor", () => {
   const casos: { nome: string; status?: number; corpo?: unknown; modelo?: () => LanguageModel; espera: string; original: string }[] = [
     {
       nome: "cota esgotada",
       status: 429,
-      corpo: erroDoGoogle(429, "RESOURCE_EXHAUSTED", "You exceeded your current quota, please check your plan and billing details."),
+      corpo: erroDaOpenAI("insufficient_quota", "insufficient_quota", "You exceeded your current quota, please check your plan and billing details."),
       espera: "limite de uso",
       original: "You exceeded your current quota",
     },
     {
       nome: "chave inválida",
-      status: 400,
-      corpo: erroDoGoogle(400, "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.", [
-        { "@type": "type.googleapis.com/google.rpc.ErrorInfo", reason: "API_KEY_INVALID" },
-      ]),
+      status: 401,
+      corpo: erroDaOpenAI("invalid_request_error", "invalid_api_key", "Incorrect API key provided: chave."),
       espera: "chave do modelo",
-      original: "API key not valid",
+      original: "Incorrect API key provided",
     },
     {
       nome: "modelo sobrecarregado",
       status: 503,
-      corpo: erroDoGoogle(503, "UNAVAILABLE", "The model is overloaded. Please try again later."),
+      corpo: erroDaOpenAI("server_error", null, "The model is overloaded. Please try again later."),
       espera: "sobrecarregado",
       original: "The model is overloaded",
     },
     {
-      // O que o @ai-sdk/google lança com a porta fechada, sem as novas tentativas com espera de 2 s e 4 s.
+      // O que o @ai-sdk/openai lança com a porta fechada, sem as novas tentativas com espera de 2 s e 4 s.
       nome: "sem rede",
       modelo: () =>
         new MockLanguageModelV4({
@@ -264,8 +265,8 @@ describe("erro do provedor", () => {
     {
       nome: "sem chave",
       modelo: () => {
-        delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-        return createGoogleGenerativeAI({ apiKey: undefined })("gemini-3.6-flash");
+        delete process.env.OPENAI_API_KEY;
+        return createOpenAI({ apiKey: undefined })("gpt-6-luna");
       },
       espera: "chave do modelo",
       original: "API key is missing",
@@ -285,11 +286,11 @@ describe("erro do provedor", () => {
 
   test.each(casos)("$nome chega em português e o original fica no log", async ({ status, corpo, modelo, espera, original }) => {
     resposta = { status: status ?? 200, corpo };
-    const doGemini = () => createGoogleGenerativeAI({ apiKey: "chave", baseURL: `${gemini.url}v1beta` })("gemini-3.6-flash");
+    const daOpenAI = () => createOpenAI({ apiKey: "chave", baseURL: `${servidor.url}v1` })("gpt-6-luna");
     const log = spyOn(console, "error").mockImplementation(() => {});
     const id = `erro-${crypto.randomUUID()}`;
 
-    const chunks = await postar(rotaDeChat({ resolverModelo: modelo ?? doGemini }), id, {
+    const chunks = await postar(rotaDeChat({ resolverModelo: modelo ?? daOpenAI }), id, {
       id: "u1",
       role: "user",
       parts: [{ type: "text", text: "Oi" }],

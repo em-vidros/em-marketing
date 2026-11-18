@@ -13,13 +13,12 @@ data
 **/*.test.ts
 
 # brand/ é a fonte de verdade da marca e mora no repo inteiro, mas o runtime
-# só lê BRANDBOOK.md, tokens.json e assets/logo/. O resto é material humano
-# (PDF, manual, cards) ou de produção gráfica (texturas, fontes) e só faria a
+# só lê BRANDBOOK.md, tokens.json, assets/logo/ e assets/fonts/ (o render da arte). O resto é material humano
+# (PDF, manual, cards) ou de produção gráfica (texturas) e só faria a
 # imagem crescer ~7 MB.
 brand/pdf
 brand/manual
 brand/cards
 brand/assets/texturas
-brand/assets/fonts
 brand/build-pdf.py
 brand/auditoria-privada.md

@@ -6,5 +6,5 @@ export const casa = (id: AtalhoId, e: Tecla, mac = ehMac) => {
   return ATALHOS[id].teclas.some((t) => sequencia(t).join(" ") === c);
 };
 
-/** ↑ no composer vazio edita a sua última mensagem, como no Slack e no Linear. Com texto, ↑ só move o cursor. */
+/** ↑ no composer vazio edita a sua última mensagem, como no Slack. Com texto, ↑ só move o cursor. */
 export const editaAoSubir = (e: Tecla, texto: string, mac = ehMac) => texto.length === 0 && casa("mensagem-editar-ultima", e, mac);

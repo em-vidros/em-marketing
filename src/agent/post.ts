@@ -36,8 +36,7 @@ export type EtapaPost =
   | (Base & { etapa: "headline"; formato: Formato; headline: Headline })
   | (Base & { etapa: "artes"; formato: Formato; headline: Headline; artes: Arte[] })
   | (ComPeca & { etapa: "escolhida" })
-  | (ComPeca & { etapa: "legenda"; legenda: string })
-  | (ComPeca & { etapa: "registrado"; legenda: string | null; linearId: string });
+  | (ComPeca & { etapa: "legenda"; legenda: string });
 
 export type Etapa = EtapaPost["etapa"];
 
@@ -48,8 +47,7 @@ export type Evento =
   | { tipo: "escolha"; variante: number }
   | { tipo: "foto"; arte: Arte; storyPath: string | null }
   | { tipo: "story"; path: string }
-  | { tipo: "legenda"; legenda: string }
-  | { tipo: "registro"; linearId: string };
+  | { tipo: "legenda"; legenda: string };
 
 export type TipoEvento = Evento["tipo"];
 
@@ -62,7 +60,6 @@ const ORIGEM = {
   foto: ["formato", "headline", "artes", "escolhida"],
   story: ["escolhida", "legenda"],
   legenda: ["escolhida", "legenda"],
-  registro: ["escolhida", "legenda"],
 } as const satisfies Record<TipoEvento, readonly Etapa[]>;
 
 export type Origem<T extends TipoEvento> = Extract<EtapaPost, { etapa: (typeof ORIGEM)[T][number] }>;
@@ -77,6 +74,8 @@ const formatoDe = (p: EtapaPost): Formato | null => (p.etapa === "brief" ? null 
 
 const precisaStory = (p: ComPeca) => p.formato === "ambos" && p.storyPath === null;
 
+const PRONTO = "o Chefe publica com publicar_agora ou agenda com agendar_publicacao, com aprovação humana";
+
 /** O que o fluxo pede agora. Vai para o modelo nas recusas e no resumo do estado. */
 export function proximoPasso(p: EtapaPost): string {
   switch (p.etapa) {
@@ -89,12 +88,10 @@ export function proximoPasso(p: EtapaPost): string {
     case "artes":
       return "escolher_arte";
     case "escolhida":
-      if (p.formato === "stories") return "salvar_linear";
+      if (p.formato === "stories") return PRONTO;
       return precisaStory(p) && p.peca.origem === "gerada" ? "derivar_story e depois escrever_legenda" : "escrever_legenda";
     case "legenda":
-      return precisaStory(p) ? "derivar_story" : "salvar_linear";
-    case "registrado":
-      return "o Chefe publica com publicar_agora ou agenda com agendar_publicacao, com aprovação humana";
+      return precisaStory(p) ? "derivar_story" : PRONTO;
   }
 }
 
@@ -127,12 +124,6 @@ export function exigir<T extends TipoEvento>(post: EtapaPost | null, tipo: T): P
       if (formato !== "ambos") return nao("derivar_story só existe no formato ambos.");
       if ("peca" in post && post.peca.origem === "foto")
         return nao("§8.2: a arte escolhida é uma foto real e não pode ser regenerada em 9:16. A versão vertical já saiu da própria foto.");
-      break;
-    case "registro":
-      if (post.etapa === "escolhida" && post.formato !== "stories")
-        return nao("Post com feed leva legenda antes do Linear. Chame escrever_legenda.");
-      if ((post.etapa === "escolhida" || post.etapa === "legenda") && precisaStory(post))
-        return nao("No formato ambos falta a versão stories. Chame derivar_story.");
       break;
   }
 
@@ -194,24 +185,18 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
       if (!r.ok) return r;
       return ok({ ...r.post, etapa: "legenda", legenda: evento.legenda });
     }
-    case "registro": {
-      const r = exigir(post, "registro");
-      if (!r.ok) return r;
-      const legenda = r.post.etapa === "legenda" ? r.post.legenda : null;
-      return ok({ ...r.post, etapa: "registrado", legenda, linearId: evento.linearId });
-    }
   }
 }
 
-/** O JPEG e a legenda de uma publicação. Só sai post registrado no Linear, no formato que ele tem. */
+/** O JPEG e a legenda de uma publicação. Sai post com a peça escolhida, no formato que ele tem. */
 export function midiaParaPublicar(
   post: EtapaPost | null,
   mediaType: MediaType,
 ): Permissao<{ postId: number; path: string; legenda: string | undefined }> {
   if (!post) return { ok: false, motivo: "Não há post em andamento nesta conversa." };
-  if (post.etapa !== "registrado")
-    return { ok: false, motivo: `O post precisa estar salvo no Linear antes de publicar. Próximo passo: ${proximoPasso(post)}.` };
-  const { postId, formato, peca, storyPath, legenda } = post;
+  if (!("peca" in post)) return { ok: false, motivo: `O post ainda não tem a peça escolhida. Próximo passo: ${proximoPasso(post)}.` };
+  const { postId, formato, peca, storyPath } = post;
+  const legenda = post.etapa === "escolhida" ? null : post.legenda;
   if (mediaType === "IMAGE") {
     if (formato === "stories") return { ok: false, motivo: "Este post é só stories; não há peça de feed." };
     return { ok: true, post: { postId, path: peca.arte.path, legenda: legenda ?? undefined } };
@@ -244,7 +229,6 @@ interface PostRow {
   chosen: number | null;
   story_path: string | null;
   legenda: string | null;
-  linear_issue_id: string | null;
 }
 
 function lerLinha(row: PostRow): EtapaPost {
@@ -258,7 +242,6 @@ function lerLinha(row: PostRow): EtapaPost {
   if (arte) {
     const peca: Peca = arte.style === "foto-real" || !headline ? { origem: "foto", arte } : { origem: "gerada", headline, arte };
     const comPeca: ComPeca = { ...base, formato, peca, storyPath: row.story_path };
-    if (row.linear_issue_id) return { ...comPeca, etapa: "registrado", legenda: row.legenda, linearId: row.linear_issue_id };
     if (row.legenda) return { ...comPeca, etapa: "legenda", legenda: row.legenda };
     return { ...comPeca, etapa: "escolhida" };
   }
@@ -274,7 +257,6 @@ const STATUS: Record<Etapa, string> = {
   artes: "generated",
   escolhida: "chosen",
   legenda: "chosen",
-  registrado: "archived",
 };
 
 export function postDaConversa(conversaId: string): EtapaPost | null {
@@ -311,7 +293,6 @@ export function gravarPost(post: EtapaPost): void {
   let chosen: number | null = null;
   let storyPath: string | null = null;
   let legenda: string | null = null;
-  let linearId: string | null = null;
 
   switch (post.etapa) {
     case "brief":
@@ -326,18 +307,16 @@ export function gravarPost(post: EtapaPost): void {
       break;
     case "escolhida":
     case "legenda":
-    case "registrado":
       headline = post.peca.origem === "gerada" ? post.peca.headline : null;
       artes = [post.peca.arte];
       chosen = post.peca.arte.variant;
       storyPath = post.storyPath;
-      if (post.etapa !== "escolhida") legenda = post.legenda;
-      if (post.etapa === "registrado") linearId = post.linearId;
+      if (post.etapa === "legenda") legenda = post.legenda;
       break;
   }
 
   db.query(
-    `UPDATE posts SET formato = ?, headline = ?, arts = ?, chosen = ?, story_path = ?, legenda = ?, linear_issue_id = ?, status = ?
+    `UPDATE posts SET formato = ?, headline = ?, arts = ?, chosen = ?, story_path = ?, legenda = ?, status = ?
       WHERE id = ?`,
   ).run(
     formato,
@@ -346,7 +325,6 @@ export function gravarPost(post: EtapaPost): void {
     chosen,
     storyPath,
     legenda,
-    linearId,
     STATUS[post.etapa],
     post.postId,
   );

@@ -160,10 +160,10 @@ export function Barra({
   return (
     <nav aria-label="Navegação" className="flex h-full flex-col gap-5 overflow-hidden bg-painel py-3.5">
       <div className="flex flex-col gap-5 px-2.5">
-        <div className="flex items-center gap-2.5 px-2.5 py-1">
+        <a href="/" onClick={(e) => (aoClicarLink(e), aoNavegar())} className="flex items-center gap-2.5 self-start rounded-md px-2.5 py-1">
           <img src="/logo/em-simbolo.svg" alt="" width={26} height={14} className="h-3.5 w-auto" />
           <span className="text-[15px] font-semibold tracking-[-0.015em]">EM Marketing</span>
-        </div>
+        </a>
 
         <div className="flex items-center gap-1.5">
           <button
@@ -245,7 +245,7 @@ export function Barra({
                   strokeWidth="1.5"
                   strokeLinecap="round"
                   strokeLinejoin="round"
-                  className={`transition-transform duration-150 ${mostrarArquivadas ? "rotate-90" : ""}`}
+                  className={`transition-transform duration-300 ease-(--ease-saida) motion-reduce:transition-none ${mostrarArquivadas ? "rotate-90" : ""}`}
                 >
                   <path d="M3.5 2l3 3-3 3" />
                 </svg>
@@ -278,6 +278,15 @@ export function Barra({
             onClick={(e) => (aoClicarLink(e), aoNavegar())}
             className={linkDe(telaAtual === "/biblioteca")}>
             Biblioteca
+          </a>
+        </Dica>
+        <Dica rotulo="Artes">
+          <a
+            href="/artes"
+            aria-current={telaAtual.startsWith("/artes") ? "page" : undefined}
+            onClick={(e) => (aoClicarLink(e), aoNavegar())}
+            className={linkDe(telaAtual.startsWith("/artes"))}>
+            Artes
           </a>
         </Dica>
         <Dica rotulo="Calendário" atalho="ir-calendario">

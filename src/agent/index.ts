@@ -3,7 +3,7 @@ import { BOTS, type BotId } from "./bots";
 import { configDoBot, instrucoesDe, type ConfigBot } from "./config";
 import { modelo } from "./models";
 import { abrirConversa, postDaConversa, resumoDoPost } from "./post";
-import { APROVACAO, catalogo, type RodarEspecialista } from "./tools";
+import { APROVACAO, catalogo, type Inspiracoes, type RodarEspecialista } from "./tools";
 
 export type ResolverModelo = (bot: ConfigBot) => LanguageModel;
 
@@ -15,6 +15,7 @@ export interface Opcoes {
   delegada?: boolean;
   /** Assina cada pedido de aprovação; uma aprovação forjada pelo cliente não executa a tool. */
   segredoAprovacao?: string;
+  inspiracoes?: Inspiracoes;
 }
 
 const doRegistry: ResolverModelo = (bot) => modelo(bot.modelo);
@@ -28,17 +29,17 @@ const DELEGADA =
  * O especialista de uma tarefa roda na conversa do Chefe, então lê e grava o mesmo post.
  */
 export function executar(botId: BotId, conversaId: string, messages: ModelMessage[], opcoes: Opcoes = {}) {
-  const { resolverModelo = doRegistry, abortSignal, delegada = false, segredoAprovacao } = opcoes;
+  const { resolverModelo = doRegistry, abortSignal, delegada = false, segredoAprovacao, inspiracoes } = opcoes;
   const bot = configDoBot(botId);
   abrirConversa(conversaId, botId);
   const instrucoes = [instrucoesDe(bot), ...(delegada ? [DELEGADA] : [])].join("\n\n");
   const rodar: RodarEspecialista = (especialista, pedido, sinal) =>
-    executar(especialista, conversaId, [{ role: "user", content: pedido }], { resolverModelo, abortSignal: sinal, delegada: true });
+    executar(especialista, conversaId, [{ role: "user", content: pedido }], { resolverModelo, abortSignal: sinal, delegada: true, inspiracoes });
   return streamText({
     model: resolverModelo(bot),
     instructions: `${instrucoes}\n\n--- ESTADO DO POST DESTA CONVERSA ---\n${resumoDoPost(postDaConversa(conversaId))}`,
     messages,
-    tools: catalogo(conversaId, rodar),
+    tools: catalogo(conversaId, rodar, inspiracoes),
     activeTools: [...BOTS[botId].tools],
     toolApproval: APROVACAO,
     experimental_toolApprovalSecret: segredoAprovacao,

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://ui.shadcn.com/schema.json",
+  "style": "base-nova",
+  "rsc": false,
+  "tsx": true,
+  "tailwind": {
+    "config": "",
+    "css": "src/web/estilo.css",
+    "baseColor": "neutral",
+    "cssVariables": true,
+    "prefix": ""
+  },
+  "iconLibrary": "lucide",
+  "aliases": {
+    "components": "@/shadcn",
+    "ui": "@/shadcn/ui",
+    "lib": "@/shadcn/lib",
+    "utils": "@/shadcn/lib/utils",
+    "hooks": "@/shadcn/hooks"
+  },
+  "registries": {
+    "@calendarcn": "https://calendarcn.xyz/r/{name}.json"
+  }
+}

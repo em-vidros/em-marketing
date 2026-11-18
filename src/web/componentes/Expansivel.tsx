@@ -1,8 +1,6 @@
-import { AnimatePresence, motion, useReducedMotion, type Transition } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
-import { MOLA } from "../movimento";
-
-const SAIDA: Transition = { duration: 0.2, ease: [0.23, 1, 0.32, 1] };
+import { MOLA, SAIDA } from "../movimento";
 
 /**
  * Abre e fecha na altura, de 0 até a do conteúdo, para o que vem embaixo descer junto em vez

@@ -1,8 +1,7 @@
 import sharp from "sharp";
 import { mkdirSync, writeFileSync } from "node:fs";
-import { GoogleGenAI } from "@google/genai";
 import { db } from "../../db";
-import { TEXT_MODEL } from "../caption";
+import { MODELO_DE_TEXTO, openai } from "../../openai";
 import { tokens } from "../brand";
 import type { Formato } from "../art/generate";
 
@@ -18,9 +17,6 @@ import type { Formato } from "../art/generate";
  * A catalogação é automática de propósito: banco que depende de alguém preencher
  * campo na hora do upload fica sem tags em duas semanas e deixa de ser buscável.
  */
-
-let _ai: GoogleGenAI | null = null;
-const ai = () => (_ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }));
 
 export interface Foto {
   id: number;
@@ -53,17 +49,6 @@ export async function salvarFoto(buffer: Buffer): Promise<{ id: number; path: st
   return { id: row.id, path, largura: width, altura: height };
 }
 
-function extrairTexto(interaction: any): string {
-  let texto = "";
-  const scan = (n: any) => {
-    if (!n || typeof n !== "object") return;
-    if (n.type === "text" && typeof n.text === "string") texto += n.text;
-    for (const v of Array.isArray(n) ? n : Object.values(n)) scan(v);
-  };
-  scan(interaction.steps ?? interaction);
-  return texto;
-}
-
 /**
  * Descreve a foto com o modelo de visão e grava os campos de busca.
  * A unidade vem da legenda do usuário, nunca da imagem: nenhum modelo sabe olhar
@@ -77,28 +62,33 @@ export async function catalogarFoto(id: number, legendaDoUsuario?: string): Prom
     "base64",
   );
 
-  const interaction: any = await ai().interactions.create({
-    model: TEXT_MODEL,
+  const resposta = await openai().responses.create({
+    model: MODELO_DE_TEXTO,
     input: [
-      { type: "image", data, mime_type: "image/jpeg" },
       {
-        type: "text",
-        text: [
-          "Você cataloga o banco de fotos de uma vidraçaria industrial (EM Vidros, Maranhão/Pará/Piauí).",
-          "Descreva SOMENTE o que está visível. Não deduza marca, cidade nem cliente.",
-          legendaDoUsuario ? `O usuário escreveu junto: "${legendaDoUsuario}" — use isso para unidade e produto.` : "",
-          "Responda só com JSON, sem cercas de código:",
-          `{"descricao": "uma frase em português", "produto": "box|guarda-corpo|espelho|fachada|janela|porta|ACM|vidro temperado|vidro laminado|outro|", "unidade": "", "contexto": "${CONTEXTOS.join("|")}", "tags": ["até 6 palavras-chave em português"]}`,
-          'Campo que você não sabe fica como string vazia. Nunca invente.',
-        ]
-          .filter(Boolean)
-          .join("\n"),
+        role: "user",
+        content: [
+          { type: "input_image", detail: "auto", image_url: `data:image/jpeg;base64,${data}` },
+          {
+            type: "input_text",
+            text: [
+              "Você cataloga o banco de fotos de uma vidraçaria industrial (EM Vidros, Maranhão/Pará/Piauí).",
+              "Descreva SOMENTE o que está visível. Não deduza marca, cidade nem cliente.",
+              legendaDoUsuario ? `O usuário escreveu junto: "${legendaDoUsuario}" — use isso para unidade e produto.` : "",
+              "Responda só com JSON, sem cercas de código:",
+              `{"descricao": "uma frase em português", "produto": "box|guarda-corpo|espelho|fachada|janela|porta|ACM|vidro temperado|vidro laminado|outro|", "unidade": "", "contexto": "${CONTEXTOS.join("|")}", "tags": ["até 6 palavras-chave em português"]}`,
+              "Campo que você não sabe fica como string vazia. Nunca invente.",
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          },
+        ],
       },
-    ] as any,
+    ],
     store: false,
   });
 
-  const bruto = extrairTexto(interaction).replace(/^```(?:json)?|```$/gm, "").trim();
+  const bruto = resposta.output_text.replace(/^```(?:json)?|```$/gm, "").trim();
   let j: any = {};
   try {
     j = JSON.parse(bruto.slice(bruto.indexOf("{"), bruto.lastIndexOf("}") + 1));
@@ -143,8 +133,8 @@ export function contarFotos(): number {
 
 /**
  * Recorta a foto para o formato do post. Mesmo tratamento das artes geradas
- * (cover + position attention → JPEG q90 sRGB), para que tudo a jusante — Linear,
- * Instagram, media group — funcione sem saber que a origem foi uma foto.
+ * (cover + position attention → JPEG q90 sRGB), para que o Instagram e o resto
+ * do fluxo funcionem sem saber que a origem foi uma foto.
  */
 export async function prepararFoto(opts: {
   fotoId: number;

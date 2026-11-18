@@ -1,8 +1,9 @@
-import { db, newMediaId } from "../../db";
+import { colunasDaFonte, db, newMediaId, type Fonte, type TipoMidia } from "../../db";
+import { credenciais } from "./meta-login";
 
 const GRAPH = "https://graph.facebook.com/v23.0";
-const IG_USER = () => process.env.IG_USER_ID!;
-const TOKEN = () => process.env.IG_PAGE_TOKEN!;
+const IG_USER = () => credenciais().igUserId;
+const TOKEN = () => credenciais().pageToken;
 const PUBLIC_BASE = () => process.env.PUBLIC_BASE_URL ?? "https://mkt.emvidros.com.br";
 
 async function graph(path: string, params: Record<string, string>): Promise<any> {
@@ -35,14 +36,14 @@ async function permalink(igMediaId: string): Promise<string | null> {
  * Publica uma imagem AGORA (o container expira em 24h — nunca criar no agendamento).
  * mediaType IMAGE leva caption; STORIES nunca (a API rejeita).
  *
- * `postId` é obrigatório de propósito: o registro em `publicacoes` acontece aqui,
+ * `fonte` é obrigatória de propósito: o registro em `publicacoes` acontece aqui,
  * na única função que conhece o id da mídia, para que não exista caminho de
  * publicação que esqueça de gravá-lo.
  */
 export async function publishImage(opts: {
-  postId: number;
+  fonte: Fonte;
   jpegPath: string;
-  mediaType: "IMAGE" | "STORIES";
+  mediaType: TipoMidia;
   caption?: string;
 }): Promise<string> {
   const mediaId = newMediaId(opts.jpegPath);
@@ -71,7 +72,7 @@ export async function publishImage(opts: {
 
   db.query("UPDATE media SET expired = 1 WHERE id = ?").run(mediaId);
   db.query(
-    "INSERT INTO publicacoes (post_id, media_type, ig_media_id, permalink) VALUES (?, ?, ?, ?)",
-  ).run(opts.postId, opts.mediaType, igMediaId, await permalink(igMediaId));
+    "INSERT INTO publicacoes (post_id, arte_id, media_type, ig_media_id, permalink) VALUES (?, ?, ?, ?, ?)",
+  ).run(...colunasDaFonte(opts.fonte), opts.mediaType, igMediaId, await permalink(igMediaId));
   return igMediaId;
 }

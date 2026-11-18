@@ -5,7 +5,7 @@ const detalhe: DetalheBot = {
   id: "post",
   nome: "Post",
   descricao: "Brief, headline e artes",
-  modelo: "google:gemini-3.6-flash",
+  modelo: "openai:gpt-6-luna",
   prompt: "Você monta o post.",
   sugestoes: [],
   versaoId: null,

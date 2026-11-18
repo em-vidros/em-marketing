@@ -69,7 +69,7 @@ describe("delegação do Chefe", () => {
     const chefe = chefeQueDelega();
     const quebrado = new MockLanguageModelV4({
       doStream: async () => {
-        throw new APICallError({ message: "You exceeded your current quota", url: "https://gemini", requestBodyValues: {}, statusCode: 429, isRetryable: false });
+        throw new APICallError({ message: "You exceeded your current quota", url: "https://api.openai.com", requestBodyValues: {}, statusCode: 429, isRetryable: false });
       },
     });
     const { tarefa } = await conversar(chefe, quebrado);

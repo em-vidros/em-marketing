@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import { useEffect, useId, useReducer } from "react";
 import type { Agora } from "../../db";
 import type { Modelo } from "../../agent/models";
@@ -132,14 +131,11 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
         />
         </div>
 
-        <motion.div
+        <div
           key={aba}
           id={painel}
           role="tabpanel"
           aria-label={ABAS.find((a) => a.valor === aba)!.rotulo}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.12, ease: "easeOut" }}
           className={aba === "config" ? "grid gap-8 lg:grid-cols-[176px_minmax(0,1fr)]" : "pb-12"}
         >
           {aba === "trabalho" ? (
@@ -180,7 +176,7 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
               </div>
             </>
           )}
-        </motion.div>
+        </div>
       </div>
     </main>
   );

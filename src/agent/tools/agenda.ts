@@ -21,7 +21,7 @@ function statusDoMes(mes: string) {
       `SELECT COALESCE(pilar,'(sem pilar)') AS pilar, COUNT(*) AS n
          FROM posts
         WHERE strftime('%Y-%m', created_at, '-3 hours') = ?
-          AND status IN ('archived','scheduled','published')
+          AND status IN ('scheduled','published')
         GROUP BY 1`,
     )
     .all(mes) as { pilar: string; n: number }[];

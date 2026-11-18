@@ -6,6 +6,7 @@ import { abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa, type Conv
 import type { Modelo } from "../agent/models";
 import { tarefasDaConversa, type TrabalhoDoBot } from "../agent/tarefas";
 import { db, newMediaId, type Agendamento, type Agora, type Historico, type Peca } from "../db";
+import { estudioDeTeste } from "../../test/estudio";
 import { rotas } from "./rotas";
 
 /** Modelo que falha o teste se for chamado: nenhuma destas rotas deve chegar ao bot. */
@@ -15,7 +16,7 @@ const semModelo = new MockLanguageModelV4({
   },
 });
 
-const server = Bun.serve({ port: 0, routes: rotas({ resolverModelo: () => semModelo }) });
+const server = Bun.serve({ port: 0, routes: rotas({ resolverModelo: () => semModelo, estudio: await estudioDeTeste() }) });
 afterAll(() => server.stop(true));
 
 const ORIGEM = process.env.BETTER_AUTH_URL!;
@@ -79,8 +80,8 @@ async function sessao(email: string) {
 }
 
 const ARTES = JSON.stringify([
-  { variant: 1, style: "a", path: "/tmp/arte-v1.jpg", interactionId: "i1" },
-  { variant: 2, style: "b", path: "/tmp/arte-v2.jpg", interactionId: "i2" },
+  { variant: 1, style: "a", path: "/tmp/arte-v1.jpg" },
+  { variant: 2, style: "b", path: "/tmp/arte-v2.jpg" },
 ]);
 
 /** headline vai como agent/post.ts grava: o JSON {headline, apoio}. */
@@ -147,14 +148,14 @@ describe("leituras de Atividade e Biblioteca", () => {
   test("GET /api/atividade/agendado lista a fila pendente com horário ISO em UTC", async () => {
     const { cookie } = await sessao("ana@emvidros.com.br");
     const postId = semearPost("Espelho bisotado", "scheduled");
-    db.query("INSERT INTO queue (post_id, media_type, publish_at, status) VALUES (?, 'IMAGE', '2026-10-16 21:00:00', 'pending')").run(postId);
-    db.query("INSERT INTO queue (post_id, media_type, publish_at, status) VALUES (?, 'STORIES', '2026-10-17 21:00:00', 'done')").run(postId);
+    db.query("INSERT INTO queue (post_id, media_type, publish_at, status, jpeg_path) VALUES (?, 'IMAGE', '2026-10-16 21:00:00', 'pending', '/tmp/arte-v2.jpg')").run(postId);
+    db.query("INSERT INTO queue (post_id, media_type, publish_at, status, jpeg_path) VALUES (?, 'STORIES', '2026-10-17 21:00:00', 'done', '/tmp/arte-v2.jpg')").run(postId);
 
     const corpo = await comCookie<Agendamento[]>("/api/atividade/agendado", cookie);
 
     expect(await semSessao("/api/atividade/agendado")).toBe(401);
-    expect(corpo.filter((a) => a.postId === postId).map(({ id, capa, ...resto }) => resto)).toEqual([
-      { postId, headline: "Espelho bisotado", pilar: "PROVA", tipo: "IMAGE", publicarEm: "2026-10-16T21:00:00Z", status: "pending", erro: null },
+    expect(corpo.filter((a) => a.fonte.tipo === "post" && a.fonte.postId === postId).map(({ id, capa, ...resto }) => resto)).toEqual([
+      { fonte: { tipo: "post", postId }, headline: "Espelho bisotado", pilar: "PROVA", tipo: "IMAGE", publicarEm: "2026-10-16T21:00:00Z", status: "pending", erro: null },
     ]);
   });
 
@@ -170,7 +171,7 @@ describe("leituras de Atividade e Biblioteca", () => {
 
     expect(await semSessao("/api/atividade/historico")).toBe(401);
     expect(corpo.tarefas.map((t) => t.id)).toEqual(["hist-ontem"]);
-    expect(corpo.publicacoes.find((p) => p.postId === postId)).toMatchObject({ headline: "Dia do Vidraceiro", tipo: "IMAGE", permalink: "https://instagram.com/p/x" });
+    expect(corpo.publicacoes.find((p) => p.fonte.tipo === "post" && p.fonte.postId === postId)).toMatchObject({ headline: "Dia do Vidraceiro", tipo: "IMAGE", permalink: "https://instagram.com/p/x" });
   });
 
   test("GET /api/pecas põe a arte escolhida primeiro, reaproveita o id de mídia e só liga a conversa do dono", async () => {

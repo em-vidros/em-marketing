@@ -1,7 +1,6 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import type { ReactNode } from "react";
-
-const TEMPO = { duration: 0.15, ease: [0.23, 1, 0.32, 1] } as const;
+import { TROCA } from "../movimento";
 
 /**
  * Troca o conteúdo de um botão (ícone, rótulo) num crossfade curto. O desfoque junta os dois
@@ -17,7 +16,7 @@ export function Troca({ chave, children, className = "" }: { chave: string; chil
         initial={fora}
         animate={reduzir ? { opacity: 1 } : { opacity: 1, transform: "scale(1)", filter: "blur(0px)" }}
         exit={fora}
-        transition={TEMPO}
+        transition={TROCA}
         className={className}
       >
         {children}

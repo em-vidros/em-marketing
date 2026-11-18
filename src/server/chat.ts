@@ -11,6 +11,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
+import type { Inspiracoes } from "../agent/tools";
 import { ehBotId } from "../agent/bots";
 import { configDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
@@ -27,6 +28,7 @@ import type { Usuario } from "./auth";
 export interface OpcoesChat {
   resolverModelo?: ResolverModelo;
   segredoAprovacao?: string;
+  inspiracoes?: Inspiracoes;
 }
 
 /** O corpo do DefaultChatTransport do useChat, mais o botId que o front manda em `body`. */
@@ -95,7 +97,7 @@ function fecharAprovacoesNoErro(ultima: UIMessage) {
   });
 }
 
-export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
+export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: OpcoesChat) {
   return async (req: Request, usuario: Usuario): Promise<Response> => {
     const corpo = Corpo.safeParse(await req.json().catch(() => null));
     if (!corpo.success) return erro(400, z.prettifyError(corpo.error));
@@ -117,7 +119,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao }: OpcoesChat) {
         return erro(juntada.status, juntada.erro);
       }
       const { historico } = juntada;
-      const result = executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao });
+      const result = executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao, inspiracoes });
       // Sem backpressure do cliente: o turno termina e é salvo mesmo se a aba fechar no meio.
       result.consumeStream();
 

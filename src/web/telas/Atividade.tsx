@@ -1,4 +1,3 @@
-import { motion } from "motion/react";
 import { useEffect, useId, useState, type ReactNode } from "react";
 import type { Agendamento, Agora, AprovacaoPendente, Historico, Publicacao, TarefaEmCurso, TarefaFeita } from "../../db";
 import { useApi, useNomesDosBots, type Carga } from "../api";
@@ -35,18 +34,15 @@ export function Atividade({ abrirMenu }: { abrirMenu: () => void }) {
           <h1 className="mr-auto text-2xl/tight font-semibold tracking-[-0.02em]">Atividade</h1>
           <Segmentado tipo="abas" rotulo="Mostrar" opcoes={ABAS} valor={aba} aoMudar={setAba} idDoPainel={painel} />
         </header>
-        <motion.div
+        <div
           key={aba}
           id={painel}
           role="tabpanel"
           aria-label={ABAS.find((a) => a.valor === aba)!.rotulo}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.12, ease: "easeOut" }}
           className="flex flex-col gap-8"
         >
           {aba === "agora" ? <PainelAgora /> : aba === "agendado" ? <PainelAgendado /> : <PainelHistorico />}
-        </motion.div>
+        </div>
       </div>
     </main>
   );

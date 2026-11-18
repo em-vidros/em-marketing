@@ -4,25 +4,28 @@ O Henrique pediu uma visão de calendário igual ao Calendário da Apple, para v
 
 ## Forma dos dados
 
-Os tipos moram em `src/agent/calendario.ts` (`Dia`, `ItemCalendario` e cada membro) e `src/agent/fila.ts` (`PostPronto`, `Reagendado`). A web importa com `import type`.
+Os tipos moram em `src/agent/calendario.ts` (`Dia`, `ItemCalendario` e cada membro) e `src/agent/fila.ts` (`Pronto`, `PedidoDeAgendamento`, `Reagendado`). `Fonte` mora em `src/db/index.ts`. A web importa com `import type`.
 
 ```ts
 type Dia = `${number}-${number}-${number}`;            // AAAA-MM-DD em America/Sao_Paulo
 
 // O que o calendário mostra. Cada tipo vem de uma fonte e tem as próprias regras de edição.
+// De onde sai a publicação: um post do fluxo antigo ou uma arte do estúdio (src/v2).
+type Fonte = { tipo: "post"; postId: number } | { tipo: "arte"; arteId: string };
+
 type ItemCalendario =
   | { tipo: "pauta"; id: number; dia: Dia; hora: string | null; titulo: string; pilar: Pilar | null; nota: string; conversaId: string | null }
-  | { tipo: "agendado"; filaId: number; postId: number; publicaEm: number; midia: "IMAGE" | "STORIES"; headline: string | null; pilar: Pilar | null; capa: string | null; status: "pending" | "publishing" | "failed"; erro: string | null }
-  | { tipo: "publicado"; publicacaoId: number; postId: number; publicadoEm: number; midia: "IMAGE" | "STORIES"; headline: string | null; pilar: Pilar | null; capa: string | null; link: string | null }
+  | { tipo: "agendado"; filaId: number; fonte: Fonte; publicaEm: number; midia: "IMAGE" | "STORIES"; titulo: string; pilar: Pilar | null; capa: string | null; status: "pending" | "publishing" | "failed"; erro: string | null }
+  | { tipo: "publicado"; publicacaoId: number; fonte: Fonte; publicadoEm: number; midia: "IMAGE" | "STORIES"; titulo: string; pilar: Pilar | null; capa: string | null; link: string | null }
   | { tipo: "data"; dia: Dia; nome: string };          // datas do calendário editorial (scheduler/calendar.ts), só leitura
 ```
 
-`headline` e `pilar` podem vir null porque a coluna do post pode estar vazia (peça de foto real não tem headline). `publicaEm` e `publicadoEm` são epoch ms. `conversaId` da pauta só vem para quem é dono da conversa, e só enquanto ela não foi apagada.
+`titulo` de post é o headline, ou "Post sem headline (id)" na peça de foto real; de arte é a primeira camada de texto, que é o título impresso nela, ou o pedido quando não há texto. `pilar` vem null em arte e em post sem pilar. A capa de uma arte agendada é o JPEG fixado na fila. `publicaEm` e `publicadoEm` são epoch ms. `conversaId` da pauta só vem para quem é dono da conversa, e só enquanto ela não foi apagada.
 
 - Pauta é nova: a ideia do que postar num dia, antes de existir post. Tabela `pautas`, criada por quem está logado, visível para a equipe como a agenda e a Biblioteca;
 - "Criar com o Chefe" numa pauta abre uma conversa com o Chefe já com o pedido escrito e liga a pauta à conversa. Repetir devolve a mesma conversa. A pauta é da equipe e a conversa é de uma pessoa: se outra pessoa clica, ela ganha uma conversa dela e a pauta passa a apontar para a nova;
 - Arrastar um agendado muda o horário na fila, só enquanto está `pending` e só para um horário no futuro. Publicando, publicado ou falho não se arrasta. Um falho pode ser dispensado, e o Desfazer devolve ele a falho sem tentar de novo;
-- Agendar um post pronto direto do calendário é uma ação humana na tela e vale como aprovação, mas sempre passa por uma confirmação com data, hora e mídia antes de gravar. A gravação usa a mesma função do `agendar_publicacao` do Chefe (`agendar` em `src/agent/fila.ts`): post registrado no Linear, peça da mídia pedida, horário no futuro e nenhum outro agendamento ativo nem publicação do mesmo post na mesma mídia;
+- Agendar direto do calendário é uma ação humana na tela e vale como aprovação, mas sempre passa por uma confirmação com data, hora, mídia e a legenda do feed antes de gravar. Post usa a mesma função do `agendar_publicacao` do Chefe (`agendarPost` em `src/agent/fila.ts`): peça escolhida, peça da mídia pedida, horário no futuro e nenhum outro agendamento ativo nem publicação do mesmo post na mesma mídia. Arte do estúdio vai para a mídia do formato (feed é IMAGE, story é STORIES), com a mesma regra de duplicado, e é renderizada em JPEG na hora de agendar: sai o que estava na tela, mesmo que a arte mude depois. A linha da fila guarda o caminho do JPEG e a legenda;
 - Cancelar um agendado só vale para `pending`. Restaurar volta para `pending` enquanto o horário não passou, com as mesmas regras de agendar;
 - Publicado e datas do calendário editorial são só leitura;
 - Toda mudança feita pelo calendário mostra o aviso de Desfazer da pilha única do app.
@@ -39,8 +42,8 @@ Todas pedem sessão (401 `{erro}` sem ela). Recusas vêm como `{erro}` em portug
 | `DELETE /api/pautas/:id` | | 204, apaga sem perder (some do calendário) |
 | `POST /api/pautas/:id/restaurar` | | `ItemPauta` |
 | `POST /api/pautas/:id/conversa` | | `{conversaId, pedido, vazia}`; a tela manda `pedido` como primeira mensagem só quando `vazia` |
-| `GET /api/posts/prontos` | | `PostPronto[]`: `{postId, headline, pilar, capa, midias}`, com as mídias que ainda dá para agendar |
-| `POST /api/fila` | `{postId, midia, publicaEm}` | 201 `ItemAgendado` |
+| `GET /api/prontos` | | `Pronto[]`: `{fonte, titulo, capa, pilar, midias, legenda}`, artes primeiro, com as mídias que ainda dá para agendar |
+| `POST /api/fila` | `{fonte, midia, publicaEm, legenda?}`; sem `legenda`, o feed de um post leva a do post; stories não aceitam legenda | 201 `ItemAgendado` |
 | `PATCH /api/fila/:id` | `{publicaEm}` | `{item, anterior}`; desfazer é o mesmo PATCH com `anterior` |
 | `DELETE /api/fila/:id` | | 204, status `cancelled`; vale para pendente e para falho |
 | `POST /api/fila/:id/restaurar` | | `ItemAgendado` |

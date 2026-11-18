@@ -10,7 +10,7 @@ const normalizar = (s: string) =>
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase();
 
-/** A folha do "?": todos os atalhos da tabela, por grupo, com busca. Painel à direita, como no Linear. */
+/** A folha do "?": todos os atalhos da tabela, por grupo, com busca. Painel à direita. */
 export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar: () => void; bots: NomesDosBots }) {
   const [busca, setBusca] = useState("");
   const campo = useRef<HTMLInputElement>(null);

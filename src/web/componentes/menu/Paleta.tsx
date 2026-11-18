@@ -14,7 +14,7 @@ import { Teclas } from "./Teclas";
 export type ModoPaleta = "tudo" | "conversas";
 
 /**
- * A paleta ⌘K. Os grupos seguem o Linear: primeiro o que vale para a tela aberta, depois
+ * A paleta ⌘K. Os grupos vêm nesta ordem: primeiro o que vale para a tela aberta, depois
  * ações, bots, conversas e navegação. Cada linha mostra a tecla da tabela de atalhos.
  * Abre sem animação: é a ação mais repetida do app e nasce do teclado.
  */

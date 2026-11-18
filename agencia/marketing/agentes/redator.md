@@ -9,5 +9,5 @@ abertura → corpo → CTA, 5–10 hashtags com `#EMVidros` sempre primeira, cor
 teal como assinatura. Stories não têm legenda; a mensagem já está na arte.
 
 - Ferramentas: `definir_headline`, `escrever_legenda` (`src/caption/`)
-- Modelo: `gemini-3.6-flash`
+- Modelo: `gpt-6-luna`
 - Status: implementado e validado contra os gates do PRD §3.4

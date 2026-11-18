@@ -1,5 +1,4 @@
 import type { ItemAgendado, ItemCalendario, ItemPauta } from "../../../agent/calendario";
-import type { Pilar } from "../../../db";
 import { diaDe, epochDe, minutosDaHora, minutosDe, textoDaHora, type Dia } from "./datas";
 
 export type { ItemAgendado, ItemCalendario, ItemPauta };
@@ -43,8 +42,6 @@ export function lugarDe(i: ItemCalendario): Lugar {
 export type AgendadoPendente = ItemAgendado & { status: "pending" };
 export type Movel = ItemPauta | AgendadoPendente;
 
-export const ehMovel = (i: ItemCalendario): i is Movel => i.tipo === "pauta" || (i.tipo === "agendado" && i.status === "pending");
-
 /** Um agendado não tem dia inteiro: no dia inteiro ele leva a hora que já tinha. */
 export function noLugar<I extends Movel>(i: I, lugar: Lugar): I {
   if (i.tipo === "pauta") return { ...i, dia: lugar.dia, hora: lugar.minutos === null ? null : textoDaHora(lugar.minutos) };
@@ -67,72 +64,18 @@ export function ordem(a: ItemCalendario, b: ItemCalendario): number {
   return (la.minutos ?? 0) - (lb.minutos ?? 0) || PESO[a.tipo] - PESO[b.tipo] || tituloDe(a).localeCompare(tituloDe(b), "pt-BR", { numeric: true });
 }
 
-/** Peça de foto real não tem headline: o número do post a identifica. */
-export const tituloDoPost = (headline: string | null, postId: number) => headline ?? `Post sem headline (${postId})`;
-
 export function tituloDe(i: ItemCalendario): string {
   switch (i.tipo) {
     case "pauta":
       return i.titulo;
     case "agendado":
     case "publicado":
-      return tituloDoPost(i.headline, i.postId);
+      return i.titulo;
     case "data":
       return i.nome;
   }
 }
 
-export const pilarDe = (i: ItemCalendario): Pilar | null => (i.tipo === "data" ? null : i.pilar);
-
-const NOME_DO_TIPO = { pauta: "Pauta", agendado: "Agendado", publicado: "Publicado", data: "Data do calendário editorial" } as const;
-
-/** O nome acessível: tipo, título, hora e o estado que a cor sozinha não diz. */
-export function rotuloDe(i: ItemCalendario): string {
-  const { minutos } = lugarDe(i);
-  const partes = [`${NOME_DO_TIPO[i.tipo]}: ${tituloDe(i)}`, minutos === null ? "dia inteiro" : textoDaHora(minutos)];
-  if (i.tipo === "agendado") partes.push(i.status === "failed" ? "falhou" : i.status === "publishing" ? "publicando agora" : i.midia === "STORIES" ? "stories" : "feed");
-  const pilar = pilarDe(i);
-  if (pilar) partes.push(`pilar ${pilar.charAt(0)}${pilar.slice(1).toLowerCase()}`);
-  return partes.join(", ");
-}
-
 /** Na grade de horas um item ocupa meia hora: post e pauta têm hora, não duração. */
 export const DURACAO = 30;
 
-/** Colunas lado a lado num grupo de itens que se cruzam; acima disso, o resto vira "+N". */
-export const MAX_FAIXAS = 4;
-
-export interface Faixa {
-  faixa: number;
-  faixas: number;
-  /** O grupo de itens que se cruzam, para juntar os que passam de MAX_FAIXAS num "+N". */
-  grupo: number;
-}
-
-/**
- * Lado a lado, como no Calendário da Apple: cada grupo de itens que se cruzam divide a largura
- * em faixas, e cada item vai para a primeira faixa livre. A entrada vem em ordem de início.
- */
-export function faixas(itens: readonly { chave: string; minutos: number }[]): Map<string, Faixa> {
-  const saida = new Map<string, Faixa>();
-  let grupo: { chave: string; faixa: number }[] = [];
-  let fins: number[] = [];
-  let fimDoGrupo = -1;
-  let n = 0;
-  const fechar = () => {
-    for (const g of grupo) saida.set(g.chave, { faixa: g.faixa, faixas: fins.length, grupo: n });
-    if (grupo.length) n++;
-    grupo = [];
-    fins = [];
-  };
-  for (const { chave, minutos } of itens) {
-    if (minutos >= fimDoGrupo) fechar();
-    let faixa = fins.findIndex((fim) => fim <= minutos);
-    if (faixa < 0) faixa = fins.push(0) - 1;
-    fins[faixa] = minutos + DURACAO;
-    fimDoGrupo = Math.max(fimDoGrupo, minutos + DURACAO);
-    grupo.push({ chave, faixa });
-  }
-  fechar();
-  return saida;
-}

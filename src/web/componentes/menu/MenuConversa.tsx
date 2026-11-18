@@ -26,8 +26,8 @@ const itensDe = (c: Conversa, acoes: AcoesConversa): Item[] => [
 ];
 
 /**
- * O conteúdo do menu. Apertar a tecla de um item com o menu aberto roda o item, como no
- * Linear; sem isto a busca por letra do menu só destacaria o item.
+ * O conteúdo do menu. Apertar a tecla de um item com o menu aberto roda o item; sem isto a
+ * busca por letra do menu só destacaria o item.
  */
 function Itens({ itens, rodar, focoFinal }: { itens: Item[]; rodar: (i: Item) => void; focoFinal: () => boolean }) {
   return (

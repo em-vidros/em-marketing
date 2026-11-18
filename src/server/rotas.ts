@@ -28,9 +28,8 @@ import {
   restaurarMensagens,
   type Recusa,
 } from "../agent/conversas";
-import { agendar, cancelar, postsProntos, reagendar, restaurar, type RecusaDaFila } from "../agent/fila";
+import { agendar, cancelar, prontos, reagendar, restaurar, type EstudioDaFila, type RecusaDaFila } from "../agent/fila";
 import { ehModelId, modelos, problemaDoModelo, type ModelId } from "../agent/models";
-import { postPorId } from "../agent/post";
 import { pegarTarefa, tarefasAtivas, tarefasDaConversa, trabalhoDoBot } from "../agent/tarefas";
 import {
   agendamentos,
@@ -45,6 +44,8 @@ import {
   type Historico,
 } from "../db";
 import { PILARES } from "../domain/art/pipeline";
+import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
+import { listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
 
@@ -180,22 +181,40 @@ const EdicaoPauta = z
 
 const PublicaEm = z.number({ error: "publicaEm precisa ser um número em epoch ms." }).int("publicaEm precisa ser inteiro, em epoch ms.");
 
-/** POST /api/fila */
-const NovoAgendamento = z.object(
-  {
-    postId: z.number({ error: "postId precisa ser um número." }).int("postId precisa ser inteiro."),
-    midia: z.enum(["IMAGE", "STORIES"], { error: "midia precisa ser IMAGE ou STORIES." }),
-    publicaEm: PublicaEm,
-  },
-  { error: "Mande um objeto JSON." },
+const FonteDoAgendamento = z.discriminatedUnion(
+  "tipo",
+  [
+    z.object({ tipo: z.literal("post"), postId: z.number({ error: "postId precisa ser um número." }).int("postId precisa ser inteiro.") }),
+    z.object({ tipo: z.literal("arte"), arteId: z.uuid({ error: "arteId precisa ser um uuid." }) }),
+  ],
+  { error: 'fonte precisa ser {tipo: "post", postId} ou {tipo: "arte", arteId}.' },
 );
+
+/** POST /api/fila. Sem legenda, o feed de um post leva a legenda do post; legenda vazia sai sem. */
+const NovoAgendamento = z
+  .object(
+    {
+      fonte: FonteDoAgendamento,
+      midia: z.enum(["IMAGE", "STORIES"], { error: "midia precisa ser IMAGE ou STORIES." }),
+      publicaEm: PublicaEm,
+      legenda: z.string({ error: "A legenda precisa ser texto." }).trim().max(2200, "A legenda passa de 2.200 caracteres, o limite do Instagram.").optional(),
+    },
+    { error: "Mande um objeto JSON." },
+  )
+  .refine((a) => a.midia === "IMAGE" || a.legenda === undefined, "Stories não levam legenda.");
 
 /** PATCH /api/fila/:id */
 const Reagendamento = z.object({ publicaEm: PublicaEm }, { error: "Mande um objeto JSON." });
 
 const BOT_IDS = Object.keys(BOTS) as BotId[];
 
-export function rotas(opcoes: OpcoesChat = {}) {
+export interface OpcoesDasRotas extends OpcoesChat {
+  /** O estúdio de src/v2: as artes que a fila agenda e que o calendário mostra. */
+  estudio: EstudioDaFila;
+}
+
+export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
+  const lerArtes = (ids: readonly string[]) => resumosDasArtes(estudio.banco, ids);
   return {
     ...marca,
     "/health": () => Response.json({ ok: true, ts: new Date().toISOString() }),
@@ -299,10 +318,10 @@ export function rotas(opcoes: OpcoesChat = {}) {
     },
     "/api/pecas": { GET: comSessao((_, u) => Response.json(pecasDoUsuario(u.id))) },
     "/api/calendario": {
-      GET: comSessao((req, u) => {
+      GET: comSessao(async (req, u) => {
         const janela = Janela.safeParse(Object.fromEntries(new URL(req.url).searchParams));
         if (!janela.success) return invalido(janela.error.issues[0]?.message ?? "Janela inválida.");
-        return Response.json(itensDoCalendario(u.id, janela.data.de, janela.data.ate));
+        return Response.json(await itensDoCalendario(u.id, janela.data.de, janela.data.ate, lerArtes));
       }),
     },
     "/api/pautas": {
@@ -339,16 +358,13 @@ export function rotas(opcoes: OpcoesChat = {}) {
         return conversa ? Response.json(conversa) : naoEncontrado();
       }),
     },
-    "/api/posts/prontos": { GET: comSessao(() => Response.json(postsProntos())) },
+    "/api/prontos": { GET: comSessao(async () => Response.json(prontos((await listarArtes(estudio.banco)).map(resumoDaArte)))) },
     "/api/fila": {
       POST: comSessao(async (req) => {
         const corpo = await lerCorpo(req, NovoAgendamento);
         if ("resposta" in corpo) return corpo.resposta;
-        const { postId, midia, publicaEm } = corpo.dados;
-        const post = postPorId(postId);
-        if (!post) return Response.json({ erro: "Post não encontrado." }, { status: 404 });
-        const r = agendar(post, midia, publicaEm);
-        return r.ok ? Response.json(agendadoPorId(r.filaId), { status: 201 }) : recusarNaFila(r);
+        const r = await agendar(estudio, corpo.dados);
+        return r.ok ? Response.json(await agendadoPorId(r.filaId, lerArtes), { status: 201 }) : recusarNaFila(r);
       }),
     },
     "/api/fila/:id": {
@@ -358,7 +374,7 @@ export function rotas(opcoes: OpcoesChat = {}) {
         const corpo = await lerCorpo(req, Reagendamento);
         if ("resposta" in corpo) return corpo.resposta;
         const r = reagendar(id, corpo.dados.publicaEm);
-        return r.ok ? Response.json({ item: r.item, anterior: r.anterior }) : recusarNaFila(r);
+        return r.ok ? Response.json({ item: await agendadoPorId(id, lerArtes), anterior: r.anterior }) : recusarNaFila(r);
       }),
       DELETE: comSessao<"/api/fila/:id">((req) => {
         const id = idDa(req.params.id);
@@ -368,14 +384,39 @@ export function rotas(opcoes: OpcoesChat = {}) {
       }),
     },
     "/api/fila/:id/restaurar": {
-      POST: comSessao<"/api/fila/:id/restaurar">((req) => {
+      POST: comSessao<"/api/fila/:id/restaurar">(async (req) => {
         const id = idDa(req.params.id);
         if (id === null) return naoEncontrado();
         const r = restaurar(id);
-        return r.ok ? Response.json(r.item) : recusarNaFila(r);
+        return r.ok ? Response.json(await agendadoPorId(id, lerArtes)) : recusarNaFila(r);
       }),
     },
     "/api/*": naoEncontrado,
+
+    // Login da Meta para publicar no Instagram. Atrás da sessão: quem chega aqui troca o token de publicação.
+    "/auth/meta": comSessao((req) => {
+      const state = crypto.randomUUID();
+      return new Response(null, {
+        status: 302,
+        headers: {
+          location: urlDeLogin(new URL(req.url).origin, state),
+          "set-cookie": `meta_state=${state}; HttpOnly; SameSite=Lax; Path=/auth/meta; Max-Age=600`,
+        },
+      });
+    }),
+    "/auth/meta/callback": comSessao(async (req) => {
+      const url = new URL(req.url);
+      const esperado = /(?:^|;\s*)meta_state=([^;]+)/.exec(req.headers.get("cookie") ?? "")?.[1];
+      if (!esperado || esperado !== url.searchParams.get("state")) return invalido("Login da Meta com state inválido. Comece de novo em /auth/meta.");
+      const codigo = url.searchParams.get("code");
+      if (!codigo) return invalido(url.searchParams.get("error_description") ?? "A Meta não devolveu o código de login.");
+      try {
+        const salvas = await concluirLogin(codigo, url.origin);
+        return Response.json({ ok: true, pagina: salvas.pagina, igUserId: salvas.igUserId });
+      } catch (erro) {
+        return Response.json({ erro: erro instanceof Error ? erro.message : String(erro) }, { status: 502 });
+      }
+    }),
 
     // Público de propósito: a Meta baixa a imagem por esta URL na hora de publicar, sem sessão.
     // O id é aleatório de 128 bits e expira depois da publicação.

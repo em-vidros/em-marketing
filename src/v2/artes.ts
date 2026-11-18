@@ -1,0 +1,86 @@
+import { desc, eq, inArray } from "drizzle-orm";
+import type { Arquivos } from "./arquivos";
+import type { Banco } from "./banco";
+import { camadasIniciais, type Camada, type Formato } from "./camadas";
+import type { Ia } from "./ia";
+import { escolherReferencias, listarReferencias } from "./referencias";
+import { artes, type Arte } from "./schema";
+
+export interface Estudio {
+  banco: Banco;
+  ia: Ia;
+  arquivos: Arquivos;
+}
+
+/** Quantas referências entram em cada arte, e quantas artes recentes a escolha evita repetir. */
+const REFERENCIAS_POR_ARTE = 3;
+const ARTES_QUE_A_ROTACAO_OLHA = 5;
+
+export const listarArtes = (banco: Banco) => banco.select().from(artes).orderBy(desc(artes.criadaEm)).limit(50);
+
+/** O que o calendário e a fila mostram de uma arte. */
+export interface ResumoDaArte {
+  id: string;
+  /** A primeira camada de texto, que é o título impresso na arte; sem texto, o pedido. */
+  titulo: string;
+  /** O PNG da arte como está agora, com a versão na query como em apiArtes.png. */
+  capa: string;
+  formato: Formato;
+}
+
+export function resumoDaArte(arte: Arte): ResumoDaArte {
+  const texto = arte.camadas.find((c): c is Extract<Camada, { tipo: "texto" }> => c.tipo === "texto");
+  return { id: arte.id, titulo: texto?.texto ?? arte.pedido, capa: `/api/artes/${arte.id}/png?v=${arte.atualizadaEm.getTime()}`, formato: arte.formato };
+}
+
+export async function resumosDasArtes(banco: Banco, ids: readonly string[]): Promise<Map<string, ResumoDaArte>> {
+  if (ids.length === 0) return new Map();
+  const achadas = await banco.select().from(artes).where(inArray(artes.id, [...ids]));
+  return new Map(achadas.map((a) => [a.id, resumoDaArte(a)]));
+}
+
+export async function pegarArte(banco: Banco, id: string): Promise<Arte | null> {
+  const [arte] = await banco.select().from(artes).where(eq(artes.id, id));
+  return arte ?? null;
+}
+
+/** Escolhe as referências, pede o plano, gera a cena e grava a arte com as camadas de partida. */
+export async function criarArte({ banco, ia, arquivos }: Estudio, pedido: { texto: string; formato: Formato; criadaPor: string }): Promise<Arte> {
+  const ativas = await listarReferencias(banco);
+  const recentes = await banco.select({ referencias: artes.referencias }).from(artes).orderBy(desc(artes.criadaEm)).limit(ARTES_QUE_A_ROTACAO_OLHA);
+  const escolhidas = escolherReferencias(
+    ativas.map((r) => r.id),
+    recentes.map((a) => a.referencias),
+    REFERENCIAS_POR_ARTE,
+  );
+  const leituras = escolhidas.map((id) => ativas.find((r) => r.id === id)!.leitura);
+  const plano = await ia.planejarArte(pedido.texto, pedido.formato, leituras);
+  const cena = await arquivos.salvar(await ia.gerarCena(plano.cena, pedido.formato), "jpg");
+  const [arte] = await banco
+    .insert(artes)
+    .values({
+      pedido: pedido.texto,
+      formato: pedido.formato,
+      cena,
+      promptDaCena: plano.cena,
+      referencias: escolhidas,
+      camadas: camadasIniciais(pedido.formato, plano),
+      criadaPor: pedido.criadaPor,
+    })
+    .returning();
+  return arte!;
+}
+
+export async function trocarCamadas(banco: Banco, id: string, camadas: Camada[]): Promise<Arte | null> {
+  const [arte] = await banco.update(artes).set({ camadas, atualizadaEm: new Date() }).where(eq(artes.id, id)).returning();
+  return arte ?? null;
+}
+
+/** O botão "Nova cena": gera outra cena com o mesmo prompt e mantém as camadas. */
+export async function novaCena({ banco, ia, arquivos }: Estudio, id: string): Promise<Arte | null> {
+  const atual = await pegarArte(banco, id);
+  if (!atual) return null;
+  const cena = await arquivos.salvar(await ia.gerarCena(atual.promptDaCena, atual.formato), "jpg");
+  const [arte] = await banco.update(artes).set({ cena, atualizadaEm: new Date() }).where(eq(artes.id, id)).returning();
+  return arte!;
+}

@@ -1,4 +1,5 @@
-import { capaDo, db, headlineDo, isoDoSqlite, sqliteDe, type ColunasDoPost, type Pilar, type TipoMidia } from "../db";
+import { capaDo, db, fonteDa, headlineDo, isoDoSqlite, sqliteDe, urlDaMidia, type ColunasDaFonte, type ColunasDoPost, type Fonte, type Pilar, type TipoMidia } from "../db";
+import type { ResumoDaArte } from "../v2/artes";
 import { datasEntre } from "../domain/scheduler/calendar";
 import { abrirConversaDoUsuario, mensagensDaConversa } from "./conversas";
 
@@ -29,12 +30,13 @@ export type StatusAgendado = "pending" | "publishing" | "failed";
 export interface ItemAgendado {
   tipo: "agendado";
   filaId: number;
-  postId: number;
+  fonte: Fonte;
   /** epoch ms */
   publicaEm: number;
   midia: TipoMidia;
-  headline: string | null;
+  titulo: string;
   pilar: Pilar | null;
+  /** Do post, a arte escolhida; da arte do estúdio, o JPEG fixado no agendamento. */
   capa: string | null;
   status: StatusAgendado;
   /** O erro da Meta quando status é failed. */
@@ -44,11 +46,11 @@ export interface ItemAgendado {
 export interface ItemPublicado {
   tipo: "publicado";
   publicacaoId: number;
-  postId: number;
+  fonte: Fonte;
   /** epoch ms */
   publicadoEm: number;
   midia: TipoMidia;
-  headline: string | null;
+  titulo: string;
   pilar: Pilar | null;
   capa: string | null;
   link: string | null;
@@ -191,80 +193,92 @@ export const conversaDaPauta = db.transaction((userId: string, id: number): Conv
 
 // --- fila e publicações ---
 
-type LinhaAgendado = ColunasDoPost & {
+/**
+ * O resumo de cada arte pedida. As artes moram no Postgres do estúdio e a fila no SQLite: a rota
+ * busca e passa. Uma arte que não existe mais fica de fora do mapa.
+ */
+export type LerArtes = (ids: readonly string[]) => Promise<ReadonlyMap<string, ResumoDaArte>>;
+
+/** Peça de foto real não tem headline: o número do post a identifica. */
+export const tituloDoPost = (headline: string | null, postId: number) => headline ?? `Post sem headline (${postId})`;
+
+const ARTE_SUMIDA = "Arte que não está mais no estúdio";
+
+type LinhaDaFonte = ColunasDoPost & ColunasDaFonte & { headline: string | null; pilar: Pilar | null };
+
+type LinhaAgendado = LinhaDaFonte & {
   id: number;
-  post_id: number;
   media_type: TipoMidia;
   publish_at: string;
   status: StatusAgendado;
   error: string | null;
-  headline: string | null;
-  pilar: Pilar | null;
+  jpeg_path: string;
 };
 
-const SELECT_AGENDADO = `SELECT q.id, q.post_id, q.media_type, q.publish_at, q.status, q.error, p.headline, p.pilar, p.arts, p.chosen
-  FROM queue q JOIN posts p ON p.id = q.post_id WHERE q.status IN ('pending', 'publishing', 'failed')`;
+type LinhaPublicado = LinhaDaFonte & {
+  id: number;
+  media_type: TipoMidia;
+  permalink: string | null;
+  published_at: string;
+};
 
-const doAgendado = (r: LinhaAgendado): ItemAgendado => ({
+const SELECT_AGENDADO = `SELECT q.id, q.post_id, q.arte_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, p.pilar, p.arts, p.chosen
+  FROM queue q LEFT JOIN posts p ON p.id = q.post_id WHERE q.status IN ('pending', 'publishing', 'failed')`;
+
+const idsDeArte = (linhas: readonly ColunasDaFonte[]) => [...new Set(linhas.flatMap((l) => (l.arte_id === null ? [] : [l.arte_id])))];
+
+const tituloDa = (r: LinhaDaFonte, artes: ReadonlyMap<string, ResumoDaArte>) =>
+  r.arte_id === null ? tituloDoPost(headlineDo(r.headline), r.post_id) : (artes.get(r.arte_id)?.titulo ?? ARTE_SUMIDA);
+
+const doAgendado = (r: LinhaAgendado, artes: ReadonlyMap<string, ResumoDaArte>): ItemAgendado => ({
   tipo: "agendado",
   filaId: r.id,
-  postId: r.post_id,
+  fonte: fonteDa(r),
   publicaEm: Date.parse(isoDoSqlite(r.publish_at)),
   midia: r.media_type,
-  headline: headlineDo(r.headline),
+  titulo: tituloDa(r, artes),
   pilar: r.pilar,
-  capa: capaDo(r),
+  capa: r.arte_id === null ? capaDo(r) : urlDaMidia(r.jpeg_path),
   status: r.status,
   erro: r.error,
 });
 
+const doPublicado = (r: LinhaPublicado, artes: ReadonlyMap<string, ResumoDaArte>): ItemPublicado => ({
+  tipo: "publicado",
+  publicacaoId: r.id,
+  fonte: fonteDa(r),
+  publicadoEm: Date.parse(isoDoSqlite(r.published_at)),
+  midia: r.media_type,
+  titulo: tituloDa(r, artes),
+  pilar: r.pilar,
+  capa: r.arte_id === null ? capaDo(r) : (artes.get(r.arte_id)?.capa ?? null),
+  link: r.permalink,
+});
+
 /** A linha da fila como o calendário a mostra; null se não existe, já saiu ou foi cancelada. */
-export function agendadoPorId(filaId: number): ItemAgendado | null {
+export async function agendadoPorId(filaId: number, lerArtes: LerArtes): Promise<ItemAgendado | null> {
   const r = db.query(`${SELECT_AGENDADO} AND q.id = ?`).get(filaId) as LinhaAgendado | null;
-  return r ? doAgendado(r) : null;
-}
-
-/** inicio e fim no formato do SQLite; o intervalo é [inicio, fim). */
-function agendadosEntre(inicio: string, fim: string): ItemAgendado[] {
-  return (db.query(`${SELECT_AGENDADO} AND q.publish_at >= ? AND q.publish_at < ? ORDER BY q.publish_at`).all(inicio, fim) as LinhaAgendado[]).map(doAgendado);
-}
-
-function publicadosEntre(inicio: string, fim: string): ItemPublicado[] {
-  const linhas = db
-    .query(
-      `SELECT u.id, u.post_id, u.media_type, u.permalink, u.published_at, p.headline, p.pilar, p.arts, p.chosen
-       FROM publicacoes u JOIN posts p ON p.id = u.post_id
-       WHERE u.published_at >= ? AND u.published_at < ? ORDER BY u.published_at`,
-    )
-    .all(inicio, fim) as (ColunasDoPost & {
-    id: number;
-    post_id: number;
-    media_type: TipoMidia;
-    permalink: string | null;
-    published_at: string;
-    headline: string | null;
-    pilar: Pilar | null;
-  })[];
-  return linhas.map((r) => ({
-    tipo: "publicado",
-    publicacaoId: r.id,
-    postId: r.post_id,
-    publicadoEm: Date.parse(isoDoSqlite(r.published_at)),
-    midia: r.media_type,
-    headline: headlineDo(r.headline),
-    pilar: r.pilar,
-    capa: capaDo(r),
-    link: r.permalink,
-  }));
+  return r ? doAgendado(r, await lerArtes(idsDeArte([r]))) : null;
 }
 
 /** GET /api/calendario: tudo de `de` a `ate`, inclusive, com os dias de São Paulo. Agrupado por tipo, cada grupo em ordem. */
-export function itensDoCalendario(userId: string, de: Dia, ate: Dia): ItemCalendario[] {
+export async function itensDoCalendario(userId: string, de: Dia, ate: Dia, lerArtes: LerArtes): Promise<ItemCalendario[]> {
   const inicio = sqliteDe(inicioDoDiaSP(de));
   const fim = sqliteDe(inicioDoDiaSP(ate) + DIA_MS);
   const pautas = (
     db.query(`SELECT ${COLUNAS_PAUTA} FROM pautas WHERE dia BETWEEN ? AND ? AND apagada_em IS NULL ORDER BY dia, hora`).all(userId, de, ate) as LinhaPauta[]
   ).map(daPauta);
   const datas = datasEntre(de, ate).map((d): ItemData => ({ tipo: "data", dia: d.dia as Dia, nome: d.ocasiao }));
-  return [...datas, ...pautas, ...agendadosEntre(inicio, fim), ...publicadosEntre(inicio, fim)];
+
+  const agendados = db.query(`${SELECT_AGENDADO} AND q.publish_at >= ? AND q.publish_at < ? ORDER BY q.publish_at`).all(inicio, fim) as LinhaAgendado[];
+  const publicados = db
+    .query(
+      `SELECT u.id, u.post_id, u.arte_id, u.media_type, u.permalink, u.published_at, p.headline, p.pilar, p.arts, p.chosen
+       FROM publicacoes u LEFT JOIN posts p ON p.id = u.post_id
+       WHERE u.published_at >= ? AND u.published_at < ? ORDER BY u.published_at`,
+    )
+    .all(inicio, fim) as LinhaPublicado[];
+  const artes = await lerArtes(idsDeArte([...agendados, ...publicados]));
+
+  return [...datas, ...pautas, ...agendados.map((r) => doAgendado(r, artes)), ...publicados.map((r) => doPublicado(r, artes))];
 }

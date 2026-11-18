@@ -1,83 +1,57 @@
-import { GoogleGenAI } from "@google/genai";
+import { toFile } from "openai";
 import sharp from "sharp";
 import { readFileSync } from "node:fs";
 import { tokens } from "../brand";
+import { MODELO_DE_IMAGEM, openai } from "../../openai";
 
 export type Formato = "feed" | "stories";
 
+/** Tamanho pedido ao modelo: a proporção exata do formato, lados múltiplos de 16, um pouco acima do final. */
 const FORMATS = {
-  feed: { ar: "4:5" as const, w: 1080, h: 1350 },
-  stories: { ar: "9:16" as const, w: 1080, h: 1920 },
+  feed: { tamanho: "1088x1360" as const, w: 1080, h: 1350 },
+  stories: { tamanho: "1152x2048" as const, w: 1080, h: 1920 },
 };
 
-export const IMAGE_MODEL = "gemini-3.1-flash-image";
-
-let _ai: GoogleGenAI | null = null;
-function ai() {
-  if (!_ai) _ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  return _ai;
-}
-
-/** Arquivos oficiais do §3.5. O logo entra como reference image — fiel, nunca redesenhado. */
+/** Arquivos oficiais do §3.5. O logo entra como imagem de referência, fiel, nunca redesenhado. */
 const LOGO_FILE = { cor: "emvidros-oficial.png", branco: "emvidros-branca.png" } as const;
 
-function logoBase64(variant: "cor" | "branco"): { data: string; mime: string } {
-  const path = new URL(`../../../brand/assets/logo/${LOGO_FILE[variant]}`, import.meta.url).pathname;
-  return { data: readFileSync(path).toString("base64"), mime: "image/png" };
-}
-
-function extractImage(interaction: any): Buffer {
-  const scan = (node: any): string | undefined => {
-    if (!node || typeof node !== "object") return;
-    if (node.type === "image" && typeof node.data === "string" && node.data.length > 1000) return node.data;
-    for (const v of Array.isArray(node) ? node : Object.values(node)) {
-      const hit = scan(v);
-      if (hit) return hit;
-    }
-  };
-  const data = scan(interaction.outputs ?? interaction.steps ?? interaction);
-  if (!data) throw new Error("Nenhuma imagem na resposta da Interactions API");
-  return Buffer.from(data, "base64");
-}
-
-export interface ArtResult {
-  jpeg: Buffer;
-  interactionId: string;
-}
+const logo = (variant: "cor" | "branco") =>
+  toFile(readFileSync(new URL(`../../../brand/assets/logo/${LOGO_FILE[variant]}`, import.meta.url).pathname), "logo.png", {
+    type: "image/png",
+  });
 
 /**
  * Gera uma arte no formato pedido e normaliza para a dimensão exata
- * (resize cover + crop → JPEG q90 sRGB), conforme PRD §3.3.
+ * (resize cover + crop, JPEG q90 sRGB), conforme PRD §3.3.
+ * `base` é o caminho de uma arte aprovada que a nova deve seguir.
  */
 export async function generateArt(opts: {
   prompt: string;
   formato: Formato;
   logoVariant?: "cor" | "branco";
-  previousInteractionId?: string;
-}): Promise<ArtResult> {
+  base?: string;
+}): Promise<Buffer> {
   const f = FORMATS[opts.formato];
-  const logo = logoBase64(opts.logoVariant ?? "cor");
+  const imagens = [await logo(opts.logoVariant ?? "cor")];
+  if (opts.base) imagens.push(await toFile(readFileSync(opts.base), "base.jpg", { type: "image/jpeg" }));
 
-  const interaction: any = await ai().interactions.create({
-    model: IMAGE_MODEL,
-    input: [
-      { type: "image", data: logo.data, mime_type: logo.mime },
-      { type: "text", text: opts.prompt },
-    ] as any,
-    response_format: { type: "image", aspect_ratio: f.ar, image_size: "2K" } as any,
-    previous_interaction_id: opts.previousInteractionId,
-    store: true,
+  const resposta = await openai().images.edit({
+    model: MODELO_DE_IMAGEM,
+    image: imagens,
+    prompt: opts.prompt,
+    size: f.tamanho,
+    quality: "high",
+    output_format: "png",
   });
+  const base64 = resposta.data?.[0]?.b64_json;
+  if (!base64) throw new Error("O modelo de imagem não devolveu a arte.");
 
-  const raw = extractImage(interaction);
-  const jpeg = await sharp(raw)
+  const jpeg = await sharp(Buffer.from(base64, "base64"))
     .resize(f.w, f.h, { fit: "cover", position: "attention" })
     .jpeg({ quality: tokens.output.quality })
     .toColorspace("srgb")
     .toBuffer();
 
-  if (jpeg.byteLength > tokens.output.maxBytes)
-    throw new Error(`JPEG acima de 8 MB: ${jpeg.byteLength}`);
-
-  return { jpeg, interactionId: interaction.id };
+  if (jpeg.byteLength > tokens.output.maxBytes) throw new Error(`JPEG acima de 8 MB: ${jpeg.byteLength}`);
+  return jpeg;
 }

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
 import type { ConfigBot } from "../agent/config";
-import type { PostPronto, Reagendado } from "../agent/fila";
-import type { TipoMidia } from "../db";
+import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
+import type { Camada } from "../v2/camadas";
+import type { Arte, Referencia } from "../v2/schema";
 import { BOT_IDS, BOTS, type BotId } from "./bots";
 import type { ApiConversas } from "./componentes/menu/conversas";
 import { navegar } from "./rota";
@@ -18,7 +19,7 @@ export class ErroDeApi extends Error {
 }
 
 async function pedir(caminho: string, init: RequestInit): Promise<Response> {
-  const res = await fetch(caminho, { ...init, headers: { accept: "application/json", ...(init.body ? { "content-type": "application/json" } : {}) } });
+  const res = await fetch(caminho, { ...init, headers: { accept: "application/json", ...(typeof init.body === "string" ? { "content-type": "application/json" } : {}) } });
   if (res.status === 401) navegar("/entrar", { substituir: true });
   if (!res.ok) {
     const corpo = (await res.json().catch(() => null)) as { erro?: string } | null;
@@ -53,14 +54,39 @@ export const apiCalendario = {
   apagarPauta: (id: number) => semCorpo(`/api/pautas/${id}`, "DELETE"),
   restaurarPauta: (id: number) => comCorpo<ItemPauta>(`/api/pautas/${id}/restaurar`, "POST"),
   conversaDaPauta: (id: number) => comCorpo<ConversaDaPauta>(`/api/pautas/${id}/conversa`, "POST"),
-  prontos: () => pegar<PostPronto[]>("/api/posts/prontos"),
-  agendar: (postId: number, midia: TipoMidia, publicaEm: number) => comCorpo<ItemAgendado>("/api/fila", "POST", { postId, midia, publicaEm }),
+  prontos: () => pegar<Pronto[]>("/api/prontos"),
+  agendar: (pedido: PedidoDeAgendamento) => comCorpo<ItemAgendado>("/api/fila", "POST", pedido),
   reagendar: (filaId: number, publicaEm: number) => comCorpo<Reagendado>(`/api/fila/${filaId}`, "PATCH", { publicaEm }),
   cancelar: (filaId: number) => semCorpo(`/api/fila/${filaId}`, "DELETE"),
   restaurarAgendado: (filaId: number) => comCorpo<ItemAgendado>(`/api/fila/${filaId}/restaurar`, "POST"),
 };
 
 export type ApiCalendario = typeof apiCalendario;
+
+/** Uma arte como chega pela API: as datas vêm em texto ISO. */
+export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: string; atualizadaEm: string };
+
+/** As rotas de artes do backend novo (src/v2/api.ts). */
+export const apiArtes = {
+  trocarCamadas: (id: string, camadas: Camada[]) => comCorpo<ArteDaApi>(`/api/artes/${id}/camadas`, "PUT", { camadas }),
+  novaCena: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}/cena`, "POST"),
+  /** O PNG final. A versão na query troca a URL a cada gravação, para o navegador não mostrar o render velho. */
+  png: (arte: ArteDaApi) => `/api/artes/${arte.id}/png?v=${Date.parse(arte.atualizadaEm)}`,
+};
+
+export type ReferenciaDaApi = Omit<Referencia, "criadaEm" | "removidaEm"> & { criadaEm: string; removidaEm: string | null };
+
+/** As imagens de inspiração da Biblioteca (src/v2/api.ts). Enviar espera a IA ler a imagem, uns segundos. */
+export const apiReferencias = {
+  enviar: async (arquivo: File) => {
+    const form = new FormData();
+    form.set("arquivo", arquivo);
+    return (await pedir("/api/referencias", { method: "POST", body: form })).json() as Promise<ReferenciaDaApi>;
+  },
+  remover: (id: string) => semCorpo(`/api/referencias/${id}`, "DELETE"),
+  restaurar: (id: string) => comCorpo<ReferenciaDaApi>(`/api/referencias/${id}/restaurar`, "POST"),
+  imagem: (r: ReferenciaDaApi) => `/api/arquivos/${r.arquivo}`,
+};
 
 export type Carga<T> = { estado: "carregando" } | { estado: "pronto"; dados: T } | { estado: "erro"; erro: ErroDeApi | Error };
 

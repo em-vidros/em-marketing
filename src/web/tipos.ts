@@ -41,7 +41,6 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
   redigir_legenda: { fazendo: "Escrevendo a legenda", feito: "Legenda escrita" },
   validar_texto: { fazendo: "Conferindo o texto", feito: "Texto conferido" },
   derivar_story: { fazendo: "Gerando o story", feito: "Story gerado" },
-  salvar_linear: { fazendo: "Registrando no Linear", feito: "Registrado no Linear" },
   listar_agenda: { fazendo: "Lendo a agenda", feito: "Agenda lida" },
   status_do_mes: { fazendo: "Conferindo a cota do mês", feito: "Cota do mês conferida" },
   cancelar_agendamento: { fazendo: "Cancelando o agendamento", feito: "Agendamento cancelado" },

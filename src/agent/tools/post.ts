@@ -6,7 +6,6 @@ import { deriveStory, generate3Arts, PILARES, type Brief } from "../../domain/ar
 import { temErro } from "../../domain/brand/validate";
 import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
-import { attachJpeg, commentOnIssue, createIssue, moveIssueState } from "../../domain/linear";
 import {
   criarPost,
   exigir,
@@ -19,7 +18,7 @@ import {
   type Evento,
   type EtapaPost,
 } from "../post";
-import { agendar } from "../fila";
+import { agendarPost } from "../fila";
 import { fotoPublica } from "./fotos";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
@@ -40,7 +39,10 @@ const artePublica = (a: { variant: number; style: string; path: string; problema
   problemas: a.problemas,
 });
 
-export function toolsDePost(conversaId: string) {
+/** Lê as leituras das referências da Biblioteca na hora de gerar. */
+export type Inspiracoes = () => Promise<string[]>;
+
+export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
   const atual = (): EtapaPost | null => postDaConversa(conversaId);
 
   return {
@@ -93,7 +95,9 @@ export function toolsDePost(conversaId: string) {
         if (!headline) return { ok: false as const, motivo: "Sem headline para gerar." };
         // "ambos": feed primeiro, o stories sai depois por derivar_story (PRD US-2).
         const alvo = p.formato === "ambos" ? "feed" : p.formato;
-        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline });
+        // Referência é conveniência: sem elas, ou com o banco fora, a arte sai do estilo puro.
+        const lidas = (await inspiracoes?.().catch(() => [])) ?? [];
+        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, inspiracoes: lidas });
         const estado = aplicar(conversaId, { tipo: "artes", artes });
         return { ...estado, artes: artes.map(artePublica) };
       },
@@ -120,7 +124,7 @@ export function toolsDePost(conversaId: string) {
         const principal = formato === "ambos" ? "feed" : formato;
         const path = await prepararFoto({ fotoId: foto.id, postId, formato: principal });
         const storyPath = formato === "ambos" ? await prepararFoto({ fotoId: foto.id, postId, formato: "stories" }) : null;
-        const arte = { variant: 1, style: "foto-real", path, interactionId: "", problemas: [] };
+        const arte = { variant: 1, style: "foto-real", path, problemas: [] };
         const estado = aplicar(conversaId, { tipo: "foto", arte, storyPath });
         return {
           ...estado,
@@ -165,30 +169,6 @@ export function toolsDePost(conversaId: string) {
       },
     }),
 
-    salvar_linear: tool({
-      description: "Cria a issue no Linear com os JPEGs finais e a legenda ou o brief.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const r = exigir(atual(), "registro");
-        if (!r.ok) return r;
-        const p = r.post;
-        const issue = await createIssue({
-          title: `Post IG: ${p.brief.tema}`,
-          description: `Brief:\n\`\`\`json\n${JSON.stringify(p.brief, null, 2)}\n\`\`\``,
-        });
-        await attachJpeg(issue.id, p.peca.arte.path, `feed-v${p.peca.arte.variant}.jpg`);
-        if (p.storyPath) await attachJpeg(issue.id, p.storyPath, "story.jpg");
-        const headline = p.peca.origem === "gerada" ? p.peca.headline.headline : "";
-        await commentOnIssue(
-          issue.id,
-          p.etapa === "legenda" ? `**Legenda aprovada:**\n\n${p.legenda}` : `**Headline na arte:** ${headline}`,
-        );
-        await moveIssueState(issue.id, "In Review");
-        const estado = aplicar(conversaId, { tipo: "registro", linearId: issue.id });
-        return { ...estado, linearId: issue.id, url: issue.url };
-      },
-    }),
-
     agendar_publicacao: tool({
       description: "Agenda a publicação no Instagram.",
       inputSchema: z.object({
@@ -196,7 +176,7 @@ export function toolsDePost(conversaId: string) {
         media_type: mediaType,
       }),
       execute: async ({ publish_at, media_type }) => {
-        const r = agendar(atual(), media_type, Date.parse(publish_at));
+        const r = agendarPost(atual(), media_type, Date.parse(publish_at));
         if (!r.ok) return { ok: false as const, motivo: r.motivo };
         return { ok: true as const, postId: r.postId, mediaType: media_type, publishAt: publish_at };
       },
@@ -209,7 +189,7 @@ export function toolsDePost(conversaId: string) {
         const r = midiaParaPublicar(atual(), media_type);
         if (!r.ok) return r;
         const igMediaId = await publishImage({
-          postId: r.post.postId,
+          fonte: { tipo: "post", postId: r.post.postId },
           jpegPath: r.post.path,
           mediaType: media_type,
           caption: r.post.legenda,

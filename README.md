@@ -1,6 +1,6 @@
 # em-marketing
 
-Agente de marketing da EM Vidros: gera 3 variações de arte (Gemini Nano Banana 2), escreve legenda no tom da marca, registra no Linear e publica/agenda no Instagram @emvidros.
+Agente de marketing da EM Vidros: gera 3 variações de arte (OpenAI `gpt-image-2.6-sunburst`), escreve legenda no tom da marca e publica/agenda no Instagram @emvidros.
 
 - **Requisitos:** `docs/prd.md` · **Setup manual:** `docs/setup.md` · **Estado do projeto:** `.specs/project/`
 - **Rodar:** `bun install && bun start` (variáveis em `.env.example`)

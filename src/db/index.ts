@@ -6,6 +6,30 @@ import type { BotId } from "../agent/bots";
 mkdirSync("data", { recursive: true });
 export const db = new Database(process.env.DB_PATH ?? "data/em-marketing.db");
 
+// queue e publicacoes apontam para exatamente uma fonte: um post do fluxo antigo ou uma arte do
+// estúdio (uuid de artes no Postgres de src/v2, por isso sem REFERENCES).
+const COLUNAS_QUEUE = `
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER REFERENCES posts(id),
+  arte_id TEXT,
+  media_type TEXT NOT NULL CHECK (media_type IN ('IMAGE','STORIES')),
+  publish_at TEXT NOT NULL,       -- "AAAA-MM-DD HH:MM:SS" em UTC (sqliteDe)
+  status TEXT DEFAULT 'pending',  -- pending|publishing|done|failed|cancelled
+  error TEXT,
+  jpeg_path TEXT NOT NULL,        -- o JPEG que sai, fixado no agendamento
+  legenda TEXT,                   -- só IMAGE; a API rejeita legenda em STORIES
+  CHECK ((post_id IS NULL) <> (arte_id IS NULL))`;
+
+const COLUNAS_PUBLICACOES = `
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  post_id INTEGER REFERENCES posts(id),
+  arte_id TEXT,
+  media_type TEXT NOT NULL CHECK (media_type IN ('IMAGE','STORIES')),
+  ig_media_id TEXT NOT NULL,
+  permalink TEXT,
+  published_at TEXT DEFAULT (datetime('now')),
+  CHECK ((post_id IS NULL) <> (arte_id IS NULL))`;
+
 db.run(`
 PRAGMA journal_mode = WAL;
 
@@ -16,11 +40,10 @@ CREATE TABLE IF NOT EXISTS posts (
   formato TEXT CHECK (formato IN ('feed','stories','ambos')),
   headline TEXT,
   legenda TEXT,
-  arts TEXT,                      -- JSON [{variant, style, path, interactionId}]
+  arts TEXT,                      -- JSON [{variant, style, path, problemas}]
   chosen INTEGER,                 -- 1..3
   story_path TEXT,
-  linear_issue_id TEXT,
-  status TEXT DEFAULT 'draft',    -- draft|generated|chosen|archived|scheduled|published|failed
+  status TEXT DEFAULT 'draft',    -- draft|generated|chosen|scheduled|published|failed
   created_at TEXT DEFAULT (datetime('now'))
 );
 
@@ -55,14 +78,7 @@ CREATE TABLE IF NOT EXISTS tarefas (
 CREATE INDEX IF NOT EXISTS tarefas_conversa ON tarefas(conversa_id, criada_em);
 CREATE INDEX IF NOT EXISTS tarefas_status ON tarefas(status);
 
-CREATE TABLE IF NOT EXISTS queue (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  post_id INTEGER NOT NULL REFERENCES posts(id),
-  media_type TEXT NOT NULL CHECK (media_type IN ('IMAGE','STORIES')),
-  publish_at TEXT NOT NULL,       -- ISO UTC
-  status TEXT DEFAULT 'pending',  -- pending|publishing|done|failed|cancelled
-  error TEXT
-);
+CREATE TABLE IF NOT EXISTS queue (${COLUNAS_QUEUE});
 
 CREATE TABLE IF NOT EXISTS media (
   id TEXT PRIMARY KEY,            -- opaco (crypto random)
@@ -91,15 +107,7 @@ CREATE INDEX IF NOT EXISTS versoes_bot_bot ON versoes_bot(bot_id, id);
 -- devolve "qual das minhas mídias veio deste brief".
 -- Um post pode gerar duas publicações (IMAGE do feed + STORIES), por isso a
 -- tabela é separada de posts em vez de uma coluna.
-CREATE TABLE IF NOT EXISTS publicacoes (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  post_id INTEGER NOT NULL REFERENCES posts(id),
-  media_type TEXT NOT NULL CHECK (media_type IN ('IMAGE','STORIES')),
-  ig_media_id TEXT NOT NULL,
-  permalink TEXT,
-  published_at TEXT DEFAULT (datetime('now'))
-);
-CREATE UNIQUE INDEX IF NOT EXISTS publicacoes_ig_media_id ON publicacoes(ig_media_id);
+CREATE TABLE IF NOT EXISTS publicacoes (${COLUNAS_PUBLICACOES});
 
 -- Banco de fotos reais (§8.2). A política proíbe gerar produto, obra, fábrica e
 -- pessoas — sem um lugar para as fotos de verdade, a proibição vira paralisia e
@@ -139,9 +147,10 @@ CREATE INDEX IF NOT EXISTS pautas_dia ON pautas(dia);
 
 // Migrações para bancos criados antes destas colunas.
 // CREATE TABLE IF NOT EXISTS não altera tabela existente.
+const temColuna = (tabela: string, coluna: string) => (db.query(`PRAGMA table_info(${tabela})`).all() as { name: string }[]).some((c) => c.name === coluna);
+
 function addColumn(tabela: string, coluna: string, ddl: string) {
-  const cols = db.query(`PRAGMA table_info(${tabela})`).all() as { name: string }[];
-  if (!cols.some((c) => c.name === coluna)) db.run(`ALTER TABLE ${tabela} ADD COLUMN ${ddl}`);
+  if (!temColuna(tabela, coluna)) db.run(`ALTER TABLE ${tabela} ADD COLUMN ${ddl}`);
 }
 addColumn("posts", "pilar", "pilar TEXT"); // §12.1, cota do mês
 addColumn("conversas", "user_id", "user_id TEXT");
@@ -153,8 +162,7 @@ addColumn("media", "mtime", "mtime INTEGER");
 db.run("CREATE INDEX IF NOT EXISTS conversas_usuario ON conversas(user_id, updated_at)");
 
 function dropColumn(tabela: string, coluna: string) {
-  const cols = db.query(`PRAGMA table_info(${tabela})`).all() as { name: string }[];
-  if (cols.some((c) => c.name === coluna)) db.run(`ALTER TABLE ${tabela} DROP COLUMN ${coluna}`);
+  if (temColuna(tabela, coluna)) db.run(`ALTER TABLE ${tabela} DROP COLUMN ${coluna}`);
 }
 // O Telegram saiu: chat_id e file_id não têm mais origem, e conversations era a
 // memória do bot por chat_id.
@@ -162,6 +170,53 @@ dropColumn("posts", "chat_id");
 dropColumn("fotos", "chat_id");
 dropColumn("fotos", "file_id");
 db.run("DROP TABLE IF EXISTS conversations");
+// O Linear saiu: linear_issue_id não tem mais origem, e archived era o status do post registrado lá.
+dropColumn("posts", "linear_issue_id");
+db.run("UPDATE posts SET status = 'chosen' WHERE status = 'archived'");
+
+/**
+ * SQLite não tira NOT NULL nem põe CHECK numa tabela que existe: cria a nova, copia as linhas com os
+ * mesmos ids e troca, tudo numa transação. O contador do AUTOINCREMENT volta ao que era, para um id
+ * já usado nunca voltar.
+ */
+function recriar(tabela: string, colunas: string, copia: string) {
+  db.transaction(() => {
+    const contador = db.query("SELECT seq FROM sqlite_sequence WHERE name = ?").get(tabela) as { seq: number } | null;
+    db.run(`CREATE TABLE ${tabela}_nova (${colunas})`);
+    db.run(`INSERT INTO ${tabela}_nova ${copia}`);
+    db.run(`DROP TABLE ${tabela}`);
+    db.run(`ALTER TABLE ${tabela}_nova RENAME TO ${tabela}`);
+
+    db.query("DELETE FROM sqlite_sequence WHERE name = ?").run(tabela);
+    if (contador) db.query("INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)").run(tabela, contador.seq);
+  })();
+}
+
+// A fila passou a publicar arte do estúdio além de post, e a fixar o JPEG e a legenda no agendamento.
+// A linha antiga recebe o caminho e a legenda que o tick leria do post; sem arte escolhida fica com ''
+// e falha no tick como já falharia.
+if (!temColuna("queue", "arte_id")) {
+  recriar(
+    "queue",
+    COLUNAS_QUEUE,
+    `(id, post_id, media_type, publish_at, status, error, jpeg_path, legenda)
+     SELECT q.id, q.post_id, q.media_type, q.publish_at, q.status, q.error,
+       COALESCE(
+         CASE WHEN q.media_type = 'STORIES' THEN p.story_path END,
+         (SELECT json_extract(a.value, '$.path') FROM json_each(CASE WHEN json_valid(p.arts) THEN p.arts END) a WHERE json_extract(a.value, '$.variant') = p.chosen),
+         ''),
+       CASE WHEN q.media_type = 'IMAGE' THEN p.legenda END
+     FROM queue q LEFT JOIN posts p ON p.id = q.post_id`,
+  );
+}
+if (!temColuna("publicacoes", "arte_id")) {
+  recriar(
+    "publicacoes",
+    COLUNAS_PUBLICACOES,
+    "(id, post_id, media_type, ig_media_id, permalink, published_at) SELECT id, post_id, media_type, ig_media_id, permalink, published_at FROM publicacoes",
+  );
+}
+db.run("CREATE UNIQUE INDEX IF NOT EXISTS publicacoes_ig_media_id ON publicacoes(ig_media_id)");
 
 export function newMediaId(path: string): string {
   const id = crypto.randomUUID().replace(/-/g, "");
@@ -186,9 +241,20 @@ export function urlDaMidia(path: string): string {
 // Leituras das telas Atividade e Biblioteca (server/rotas.ts).
 
 export type Pilar = "PROVA" | "AUTORIDADE" | "GENTE" | "MARCA";
-export type StatusPost = "draft" | "generated" | "chosen" | "archived" | "scheduled" | "published" | "failed";
+export type StatusPost = "draft" | "generated" | "chosen" | "scheduled" | "published" | "failed";
 export type Formato = "feed" | "stories" | "ambos";
 export type TipoMidia = "IMAGE" | "STORIES";
+
+/** De onde sai o que a fila publica: um post do fluxo antigo ou uma arte do estúdio (src/v2). */
+export type Fonte = { tipo: "post"; postId: number } | { tipo: "arte"; arteId: string };
+
+/** post_id e arte_id de uma linha de queue ou publicacoes: o CHECK da tabela garante exatamente uma. */
+export type ColunasDaFonte = { post_id: number; arte_id: null } | { post_id: null; arte_id: string };
+
+/** Os valores de post_id e arte_id, nesta ordem, para gravar. */
+export const colunasDaFonte = (f: Fonte): [number | null, string | null] => (f.tipo === "post" ? [f.postId, null] : [null, f.arteId]);
+
+export const fonteDa = (r: ColunasDaFonte): Fonte => (r.arte_id === null ? { tipo: "post", postId: r.post_id } : { tipo: "arte", arteId: r.arte_id });
 
 export interface ColunasDoPost {
   arts: string | null;
@@ -275,7 +341,7 @@ export type StatusFila = "pending" | "publishing" | "done" | "failed" | "cancell
 /** Uma linha da fila de publicação que ainda não saiu. */
 export interface Agendamento {
   id: number;
-  postId: number;
+  fonte: Fonte;
   headline: string | null;
   pilar: Pilar | null;
   tipo: TipoMidia;
@@ -285,40 +351,42 @@ export interface Agendamento {
   capa: string | null;
 }
 
+/** Arte do estúdio não tem headline nem pilar aqui; a capa é o JPEG que vai sair. */
 export function agendamentos(): Agendamento[] {
   const linhas = db
     .query(
-      `SELECT q.id, q.post_id, q.media_type, q.publish_at, q.status, q.error, p.headline, p.pilar, p.arts, p.chosen
-       FROM queue q JOIN posts p ON p.id = q.post_id
+      `SELECT q.id, q.post_id, q.arte_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, p.pilar, p.arts, p.chosen
+       FROM queue q LEFT JOIN posts p ON p.id = q.post_id
        WHERE q.status IN ('pending', 'publishing', 'failed') ORDER BY q.publish_at`,
     )
-    .all() as (ColunasDoPost & {
-    id: number;
-    post_id: number;
-    media_type: TipoMidia;
-    publish_at: string;
-    status: Agendamento["status"];
-    error: string | null;
-    headline: string | null;
-    pilar: Pilar | null;
-  })[];
+    .all() as (ColunasDoPost &
+    ColunasDaFonte & {
+      id: number;
+      media_type: TipoMidia;
+      publish_at: string;
+      status: Agendamento["status"];
+      error: string | null;
+      jpeg_path: string;
+      headline: string | null;
+      pilar: Pilar | null;
+    })[];
   return linhas.map((r) => ({
     id: r.id,
-    postId: r.post_id,
+    fonte: fonteDa(r),
     headline: headlineDo(r.headline),
     pilar: r.pilar,
     tipo: r.media_type,
     publicarEm: isoDoSqlite(r.publish_at),
     status: r.status,
     erro: r.error,
-    capa: capaDo(r),
+    capa: r.arte_id === null ? capaDo(r) : urlDaMidia(r.jpeg_path),
   }));
 }
 
 /** Uma mídia que saiu no Instagram. */
 export interface Publicacao {
   id: number;
-  postId: number;
+  fonte: Fonte;
   headline: string | null;
   pilar: Pilar | null;
   tipo: TipoMidia;
@@ -330,21 +398,21 @@ export interface Publicacao {
 export function publicacoesRecentes(limite = 50): Publicacao[] {
   const linhas = db
     .query(
-      `SELECT u.id, u.post_id, u.media_type, u.permalink, u.published_at, p.headline, p.pilar, p.arts, p.chosen
-       FROM publicacoes u JOIN posts p ON p.id = u.post_id ORDER BY u.published_at DESC LIMIT ?`,
+      `SELECT u.id, u.post_id, u.arte_id, u.media_type, u.permalink, u.published_at, p.headline, p.pilar, p.arts, p.chosen
+       FROM publicacoes u LEFT JOIN posts p ON p.id = u.post_id ORDER BY u.published_at DESC LIMIT ?`,
     )
-    .all(limite) as (ColunasDoPost & {
-    id: number;
-    post_id: number;
-    media_type: TipoMidia;
-    permalink: string | null;
-    published_at: string;
-    headline: string | null;
-    pilar: Pilar | null;
-  })[];
+    .all(limite) as (ColunasDoPost &
+    ColunasDaFonte & {
+      id: number;
+      media_type: TipoMidia;
+      permalink: string | null;
+      published_at: string;
+      headline: string | null;
+      pilar: Pilar | null;
+    })[];
   return linhas.map((r) => ({
     id: r.id,
-    postId: r.post_id,
+    fonte: fonteDa(r),
     headline: headlineDo(r.headline),
     pilar: r.pilar,
     tipo: r.media_type,

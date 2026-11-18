@@ -6,6 +6,7 @@ import sharp from "sharp";
 import { executar } from ".";
 import { urlDaMidia } from "../db";
 import { salvarFoto } from "../domain/fotos";
+import { estudioDeTeste } from "../../test/estudio";
 import { rotas } from "../server/rotas";
 import { imagensEm } from "../web/tipos";
 import { abrirConversa, criarPost } from "./post";
@@ -20,7 +21,7 @@ const turno = (chunks: Chunk[], unified: "stop" | "tool-calls") => ({
   stream: simulateReadableStream<Chunk>({ chunks: [...chunks, { type: "finish", finishReason: { unified, raw: undefined }, usage: uso }] }),
 });
 
-const server = Bun.serve({ port: 0, routes: rotas() });
+const server = Bun.serve({ port: 0, routes: rotas({ estudio: await estudioDeTeste() }) });
 const criados: string[] = [];
 afterAll(() => {
   server.stop(true);

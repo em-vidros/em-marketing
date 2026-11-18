@@ -1,4 +1,5 @@
 import { defaultRehypePlugins, Streamdown, type Components } from "streamdown";
+import { CURVA_SAIDA } from "../movimento";
 
 /**
  * Sem o rehype-raw padrão do Streamdown: HTML que o modelo escrever aparece como texto e
@@ -66,7 +67,7 @@ const CURSOR = [
 ].join(" ");
 
 /** Cada palavra nova sai do desfoque (sd-rastro, em estilo.css), como o rastro do StreamText. */
-const RASTRO = { animation: "rastro", sep: "word", duration: 260, easing: "cubic-bezier(0.23, 1, 0.32, 1)" } as const;
+const RASTRO = { animation: "rastro", sep: "word", duration: 260, easing: `cubic-bezier(${CURVA_SAIDA.join(", ")})` } as const;
 
 /** Texto de um bot em Markdown. Aguenta o texto pela metade do streaming: negrito e código abertos já saem formatados. */
 export function Markdown({ texto, digitando = false, className = "" }: { texto: string; digitando?: boolean; className?: string }) {

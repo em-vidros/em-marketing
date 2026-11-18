@@ -1,23 +1,7 @@
-import { GoogleGenAI } from "@google/genai";
 import type { Brief } from "../art/pipeline";
 import { VOZ } from "../brand";
 import { validarLegenda, validarTextoDaArte, temErro, formatarProblemas, type Problema } from "../brand/validate";
-
-export const TEXT_MODEL = "gemini-3.6-flash";
-
-let _ai: GoogleGenAI | null = null;
-const ai = () => (_ai ??= new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY }));
-
-function textOf(interaction: any): string {
-  const parts: string[] = [];
-  const scan = (n: any) => {
-    if (!n || typeof n !== "object") return;
-    if (n.type === "text" && typeof n.text === "string") parts.push(n.text);
-    for (const v of Array.isArray(n) ? n : Object.values(n)) scan(v);
-  };
-  scan(interaction.outputs ?? interaction.steps ?? interaction);
-  return parts.join("").trim();
-}
+import { MODELO_DE_TEXTO, openai } from "../../openai";
 
 /**
  * Gera, valida contra o checklist do capítulo 16 e devolve para reescrita quando
@@ -35,18 +19,18 @@ async function gerarValidando(
   let problemas: Problema[] = [];
 
   for (let i = 0; i < tentativas; i++) {
-    const r: any = await ai().interactions.create({
-      model: TEXT_MODEL,
-      system_instruction: system,
+    const r = await openai().responses.create({
+      model: MODELO_DE_TEXTO,
+      instructions: system,
       input:
         i === 0
           ? prompt
           : `A versão anterior viola o brandbook:\n${formatarProblemas(problemas)}\n\nReescreva corrigindo TODOS os itens marcados como [erro]. Mesmo brief, mesma intenção. Responda só o texto final.`,
-      previous_interaction_id: previousId,
+      previous_response_id: previousId,
       store: true,
     });
     previousId = r.id;
-    texto = textOf(r);
+    texto = r.output_text.trim();
     problemas = validar(texto);
     if (!temErro(problemas)) break;
   }

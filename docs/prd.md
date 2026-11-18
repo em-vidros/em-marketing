@@ -1,5 +1,7 @@
 # PRD — Agente de Marketing EM Vidros no Telegram
 
+> Nota de 17/11/2026: a integração com o Linear saiu do produto. As menções a ele neste documento são históricas.
+
 **Produto:** `em-marketing`
 **Data:** 29/07/2026 · **Status:** Draft para aprovação · **Autor:** Henrique
 **Escopo deste documento:** requisitos. Nenhuma implementação.
@@ -17,7 +19,7 @@
 
 **Problema.** A produção de posts do Instagram da EM Vidros (@emvidros — 7.850 seguidores, 644 posts) depende hoje de uma skill do Claude Code que **está quebrada e parada desde 26/jun/2026**, e que só pode ser operada por quem usa terminal — o que exclui todo o time de marketing.
 
-**Solução.** Um agente de marketing no Telegram, com cérebro Gemini, que conhece a identidade da EM Vidros a fundo (brandbook versionado), pergunta o formato desejado (Feed, Stories ou os dois), gera **3 variações de arte por pedido** para o time escolher, escreve a legenda no tom de voz da marca (quando é Feed — em Stories a mensagem já está na arte), registra tudo no Linear e publica no Instagram.
+**Solução.** Um agente de marketing no Telegram, com cérebro GPT-6 Luna, que conhece a identidade da EM Vidros a fundo (brandbook versionado), pergunta o formato desejado (Feed, Stories ou os dois), gera **3 variações de arte por pedido** para o time escolher, escreve a legenda no tom de voz da marca (quando é Feed — em Stories a mensagem já está na arte), registra tudo no Linear e publica no Instagram.
 
 **Critérios de sucesso** (medidos 30 dias após o go-live):
 
@@ -156,15 +158,10 @@ Explicitamente **fora** do escopo, para proteger o prazo:
 
 | Papel | Modelo | Justificativa |
 |---|---|---|
-| Cérebro (conversa + tool calling) | **`gemini-3.6-flash`** | Stable, tem free tier, é o modelo dos exemplos oficiais de function calling |
-| Geração de arte | **`gemini-3.1-flash-image`** (Nano Banana 2) | Escolha do usuário. Doc oficial: "reliable text rendering", até 10 imagens de referência |
-| *Opcional, peça específica* | `gemini-3-pro-image` (Nano Banana Pro) | Doc oficial: "accurate brand consistency". US$ 0,134/img vs 0,101 |
+| Cérebro (conversa + tool calling) | **`gpt-6-luna`** | Mesmo modelo de texto do estúdio v2, via `@ai-sdk/openai` |
+| Geração de arte | **`gpt-image-2.6-sunburst`** | Variante de qualidade do GPT Image 2.6. Mantém detalhe e consistência entre edições, o que o story derivado do feed exige |
 
-⚠️ **Correções de premissa validadas na doc oficial:**
-- **Nano Banana 2 ≠ Nano Banana Pro.** NB2 = `gemini-3.1-flash-image`; Pro = `gemini-3-pro-image`.
-- `gemini-3-pro-image-preview` **não é** o ID atual. `gemini-3.1-pro-image` **não existe**.
-- O `generateContent` foi substituído pela **Interactions API** (`ai.interactions.create`), agora GA. SDK: `@google/genai@2.13.0`.
-- Imagen está descontinuado (desligamento em 17/08/2026).
+O GPT Image 2.6 saiu em 4/11/2026 em duas variantes com o mesmo preço por token. O Flare gera em até 6 s na qualidade baixa e perde detalhe. O Sunburst é o modelo base, mais lento e mais fiel. Arte de marca com texto e logo pede o Sunburst.
 
 ### 3.2 Tools expostas ao cérebro
 
@@ -174,7 +171,7 @@ Explicitamente **fora** do escopo, para proteger o prazo:
 | `perguntar_formato` | Apresenta os botões Feed / Stories / Os dois e trava o `formato` no brief |
 | `definir_headline` | Gera o texto que vai **dentro da arte** (headline + apoio), sempre — é pré-requisito da geração de imagem |
 | `escrever_legenda` | Gera a legenda de publicação a partir do brief + capítulos 1, 9, 10 e 11 do brandbook, e valida contra o checklist do capítulo 16. **Só é chamada quando o formato inclui Feed** |
-| `gerar_3_artes` | Dispara 3 chamadas paralelas ao Nano Banana 2, no aspect ratio do formato escolhido |
+| `gerar_3_artes` | Dispara 3 chamadas paralelas ao `gpt-image-2.6-sunburst`, no tamanho do formato escolhido |
 | `derivar_story` | Gera a versão 9:16 do conceito já escolhido (fluxo "Os dois") |
 | `salvar_linear` | Cria/atualiza issue, anexa os JPEGs, comenta a legenda |
 | `agendar_publicacao` | Grava na fila com `publish_at` e `media_type` |
@@ -188,34 +185,28 @@ Explicitamente **fora** do escopo, para proteger o prazo:
 
 ### 3.3 Pipeline de arte — requisitos técnicos
 
-**Regra de ordem, vinda da doc oficial do Google:**
-> "When generating text for an image, Gemini works best if you first generate the text and then ask for an image with the text."
+**Regra de ordem:** **o headline é gerado primeiro** e vai literal no prompt de imagem. Vale para os dois formatos — é o texto que aparece *dentro* da arte, e não se confunde com a legenda de publicação, que só existe em Feed (US-4).
 
-→ **O headline é gerado primeiro** e vai literal no prompt de imagem. Isso não é preferência, é a instrução oficial. Vale para os dois formatos — é o texto que aparece *dentro* da arte, e não se confunde com a legenda de publicação, que só existe em Feed (US-4).
-
-**Nano Banana 2 não entrega dimensões arbitrárias.** Os tamanhos são fixos por aspect ratio, e o "4:5" do Google (928×1152) nem é 4:5 exato (0,8056 vs 0,8). O mesmo vale para 9:16 (768/1376 = 0,558 vs 0,5625). Pipeline obrigatório em ambos os formatos:
+**O modelo aceita lados múltiplos de 16**, então o pedido já sai na proporção exata do formato, um pouco acima do tamanho final. Pipeline em ambos os formatos:
 
 ```
 FEED
-Nano Banana 2 · aspect_ratio "4:5" · image_size "2K"    →  1856×2304 PNG
+gpt-image-2.6-sunburst · size "1088x1360" · quality "high"  →  PNG
    ↓ resize cover + crop
 1080×1350  (4:5 exato, ≤ 1440px de largura)
    ↓ JPEG quality 90, sRGB
 arquivo final
 
 STORIES
-Nano Banana 2 · aspect_ratio "9:16" · image_size "2K"   →  1536×2752 PNG
+gpt-image-2.6-sunburst · size "1152x2048" · quality "high"  →  PNG
    ↓ resize cover + crop
 1080×1920  (9:16 exato)
    ↓ JPEG quality 90, sRGB
 arquivo final
 ```
 
-- `image_size` exige **"K" maiúsculo** — `1k` é rejeitado pela API
-- Toda imagem sai com watermark **SynthID**
-- O logo entra como **reference image** (`{type:"image", mime_type, data: base64}`) — NB2 aceita até 10 objetos de alta fidelidade
-- **pt-BR está na lista oficial de idiomas de melhor desempenho** para renderização de texto
-- No fluxo "Os dois", a versão Stories usa **`previous_interaction_id`** do conceito escolhido, para manter consistência visual sem reenviar as imagens de referência
+- A chamada é `images.edit`: o logo oficial entra como imagem de referência
+- No fluxo "Os dois", a arte escolhida entra como segunda imagem de referência, para o story manter o conceito
 
 **Zonas seguras por formato.** Não basta trocar o ratio — a composição precisa mudar:
 
@@ -240,7 +231,7 @@ arquivo final
 | Diversidade | inspeção visual | as 3 visivelmente diferentes |
 | Zonas seguras (Stories) | inspeção visual | nada crítico nos 250 px de topo/base |
 | Aderência à paleta | amostragem de pixel | só `#2F646A`, `#63B5AF`, `#414141` e as neutras; proporção próxima de 70/20/10 (§4.2) — peça que parece "muito verde" está errada |
-| Runtime | rodar o script | `@google/genai` funciona sob Bun |
+| Runtime | rodar o script | `openai` funciona sob Bun |
 
 **Benchmark contínuo.** Um conjunto de **10 briefs de referência** derivados de posts reais do feed (1 por tipo de conteúdo). Rodados a cada mudança de prompt ou de modelo. Critério de não-regressão: **≥ 8/10 com pelo menos uma das 3 variações aprovável sem refação**.
 
@@ -263,7 +254,7 @@ arquivo final
    │  GET  /media/:id           URL pública p/ a Meta   │
    │  GET  /health                                      │
    │                                                    │
-   │  ┌────────── cérebro: gemini-3.6-flash ─────────┐  │
+   │  ┌────────── cérebro: gpt-6-luna ───────────────┐  │
    │  │ system = BRANDBOOK.md caps. 1,9,10,11,12,13,16│ │
    │  │ function calling (tools da seção 3.2)        │  │
    │  └───────────────────────────────────────────────┘  │
@@ -273,11 +264,11 @@ arquivo final
    └───────────────────────────────────────────────────┘
        │                  │                  │
        ▼                  ▼                  ▼
-  Nano Banana 2      Linear API      Instagram Graph API
+  GPT Image 2.6      Linear API      Instagram Graph API
   3 artes ∥          (backlog)       (publicação)
 ```
 
-**Por que Bun + Elysia:** requisito do usuário — rápido para usuário e servidor. Latência de webhook em milissegundos e o processo cabe num container pequeno junto dos outros no servidor. O trabalho pesado (3 chamadas ao Nano Banana) é I/O paralelo, não CPU.
+**Por que Bun + Elysia:** requisito do usuário — rápido para usuário e servidor. Latência de webhook em milissegundos e o processo cabe num container pequeno junto dos outros no servidor. O trabalho pesado (3 chamadas ao modelo de imagem) é I/O paralelo, não CPU.
 
 **Restrições do Elysia validadas:**
 - `elysia@1.4.29` é o estável — a 2.0 está em `2.0.0-exp.60`, **não usar**
@@ -354,7 +345,7 @@ Para um agente rodando desassistido, trocar um passo de setup por eliminar a cla
 Time `EM Vidros` (`ec0c88f8-96c2-40b2-853c-98f62b4d98fa`) e labels `Instagram Post` (`5a33b4dc-…`) e `Marketing` **já existem** — não precisam ser criados.
 
 ### 4.5 Integração — Canva: descartada
-O conector está autenticado, mas `list-brand-kits` retorna **vazio**: Brand Kit e Brand Template são recursos do Canva Pro/Teams. Pelo critério do usuário ("se for de graça"), fica fora. Toda a arte vem do Nano Banana 2.
+O conector está autenticado, mas `list-brand-kits` retorna **vazio**: Brand Kit e Brand Template são recursos do Canva Pro/Teams. Pelo critério do usuário ("se for de graça"), fica fora. Toda a arte vem do `gpt-image-2.6-sunburst`.
 
 ### 4.6 Deploy
 
@@ -378,7 +369,7 @@ Isso entrega de uma vez o certificado válido que **o webhook do Telegram** e **
 ### 4.7 Segurança e privacidade
 
 - Segredos em `/etc/emvidros/em-marketing.env`, `chmod 600`, montado como `env_file` — mesmo padrão do watchtower e do agente-projetista. **Nunca** hardcoded em arquivo versionado.
-- Segredos necessários: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `GEMINI_API_KEY` (já existe no ecossistema), `LINEAR_API_KEY`, `IG_PAGE_TOKEN`, `IG_USER_ID`
+- Segredos necessários: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `OPENAI_API_KEY`, `LINEAR_API_KEY`, `IG_PAGE_TOKEN`, `IG_USER_ID`
 - **Allowlist de chat IDs** — o bot só responde a IDs autorizados. Sem isso, qualquer pessoa que descubra o bot publica no Instagram da empresa.
 - Validação do `X-Telegram-Bot-Api-Secret-Token` em todo webhook, comparado com `timingSafeEqual`
 - Publicação no Instagram **sempre exige confirmação humana explícita** — nunca automática, mesmo com agendamento (o agendamento executa uma escolha já aprovada)
@@ -409,8 +400,7 @@ Isso entrega de uma vez o certificado válido que **o webhook do Telegram** e **
 
 | Risco | Gravidade | Mitigação |
 |---|---|---|
-| **`@google/genai` não declara suporte a Bun** (`engines` diz só Node ≥20) | **Alta** | Testar na Fase 1, antes de tudo. Fallback: chamar a REST API direto com `fetch` — sob Bun fica até mais leve |
-| **Texto em português sai errado na arte** — falha crônica de todo gerador de imagem | **Alta** | pt-BR está na lista oficial de melhor desempenho; gerar o copy primeiro e passar literal; manter texto curto na arte (especialmente em Stories); o loop de aprovação humana com 3 opções existe justamente para absorver isso |
+| **Texto em português sai errado na arte** — falha crônica de todo gerador de imagem | **Alta** | gerar o copy primeiro e passar literal; manter texto curto na arte (especialmente em Stories); o loop de aprovação humana com 3 opções existe justamente para absorver isso |
 | **Specs de imagem para Stories não documentadas** — 1080×1920 fica fora do intervalo 4:5–1.91:1 que a doc declara para imagens | **Média** | Teste em sandbox na Fase 4, antes de fechar. Fallback documentado em 4.3 |
 | Container de mídia expira em 24h | Média | Criar o container **no momento da publicação** |
 | Publicação errada no ar (irreversível na prática) | Média | Confirmação humana obrigatória + allowlist de chat IDs + teste em sandbox antes |
@@ -463,7 +453,7 @@ O texto original está no git. As pendências abertas por essa reconciliação e
 # Anexo B — Fontes
 
 **Identidade:** feed @emvidros (≈30 posts, jan–jul/2026) · emvidros.com.br · logo oficial 2273×1889 · `.agents/workflows/post-emvidros.md` · @vivixvidrosplanos (referência de composição minimalista)
-**Gemini:** ai.google.dev/gemini-api/docs — image-generation, models, function-calling, interactions, pricing · registry npm `@google/genai@2.13.0`
+**OpenAI:** openai.com/index/introducing-images-2-6 · developers.openai.com/api/docs/guides/image-prompting · registry npm `openai@7.57.0`, `@ai-sdk/openai@4.0.93`
 **Instagram:** developers.facebook.com/docs/instagram-platform — content-publishing, overview, app-review, access-levels · docs/facebook-login/guides/access-tokens/get-long-lived
 **Elysia:** elysiajs.com — validation, plugin, life-cycle, handler, blog/elysia-14 · registry npm `elysia@1.4.29`
 **Infra:** `ssh emvidros` (srv-linx-01, 177.54.129.7) — docker ps, /etc/caddy/sites/, watchtower-prod, /opt/emvidros/agente-projetista/

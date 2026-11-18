@@ -9,3 +9,4 @@ data/
 *.db-shm
 .playwright-mcp/
 !.env.example
+*.local

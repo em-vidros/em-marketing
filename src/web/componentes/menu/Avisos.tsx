@@ -11,7 +11,7 @@ const DURACAO = 8000;
 export const fecharAviso = (chave: number) => toast.dismiss(`desfazer-${chave}`);
 
 /**
- * Faixa escura embaixo, no formato do Linear: o texto em cinza, o nome em branco, Desfazer
+ * Faixa escura embaixo: o texto em cinza, o nome em branco, Desfazer
  * em destaque com a tecla ao lado. Erros ficam até alguém fechar. O ⌘Z continua valendo
  * depois que o toast some, porque a entrada fica na pilha.
  */
