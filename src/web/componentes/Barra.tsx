@@ -8,6 +8,7 @@ import { ariaDe, atalhoDoBot, ehMac } from "../teclado/atalhos";
 import type { Conversa } from "../tipos";
 import { Avatar } from "./Avatar";
 import { Expansivel } from "./Expansivel";
+import { SaldoCompacto } from "./Saldo";
 import { type AcoesConversa, BotaoAcoes, MenuDeContexto } from "./menu/MenuConversa";
 import { Dica, Teclas } from "./menu/Teclas";
 
@@ -312,16 +313,17 @@ export function Barra({
           Atalhos de teclado
           <Teclas atalho="atalhos" />
         </button>
-        <div className="mt-2 flex items-center gap-2 border-t border-linha px-3 pt-3 text-xs text-tinta-3">
+        <a
+          href="/uso"
+          aria-label="Uso da API e crédito da OpenAI"
+          aria-current={telaAtual === "/uso" ? "page" : undefined}
+          onClick={(e) => (aoClicarLink(e), aoNavegar())}
+          className={`mt-2 flex rounded-item px-3 py-2.5 hover:bg-hover ${telaAtual === "/uso" ? "bg-ativo" : ""}`}
+        >
+          <SaldoCompacto />
+        </a>
+        <div className="flex items-center gap-2 border-t border-linha px-3 pt-3 text-xs text-tinta-3">
           <span className="min-w-0 flex-1 truncate">{email}</span>
-          <a
-            href="/uso"
-            aria-current={telaAtual === "/uso" ? "page" : undefined}
-            onClick={(e) => (aoClicarLink(e), aoNavegar())}
-            className={`flex h-8 items-center rounded-full px-2.5 whitespace-nowrap hover:bg-hover hover:text-tinta ${telaAtual === "/uso" ? "bg-ativo text-tinta" : "text-tinta-2"}`}
-          >
-            Uso da API
-          </a>
           <button type="button" onClick={() => auth.signOut()} className="h-8 cursor-pointer rounded-full px-2.5 text-tinta-2 hover:bg-hover hover:text-tinta">
             Sair
           </button>

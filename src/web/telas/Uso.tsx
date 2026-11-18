@@ -3,6 +3,7 @@ import type { ResumoDoUso } from "../../domain/uso";
 import { useApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Falha } from "../componentes/Falha";
+import { SaldoDetalhado } from "../componentes/Saldo";
 
 const numero = new Intl.NumberFormat("pt-BR");
 const compacto = new Intl.NumberFormat("pt-BR", { notation: "compact", maximumFractionDigits: 1 });
@@ -106,6 +107,8 @@ export function Uso({ abrirMenu }: { abrirMenu: () => void }) {
             .
           </p>
         </header>
+
+        <SaldoDetalhado />
 
         {carga.estado === "carregando" ? (
           <p className="text-tinta-3">Carregando…</p>

@@ -44,6 +44,7 @@ export async function rotasDoApp() {
     "/api/bots/:id/config": { ...base["/api/bots/:id/config"], PUT: soAdmin(base["/api/bots/:id/config"].PUT as Manipulador) },
     "/api/bots/:id/versoes/:versao/restaurar": { POST: soAdmin(base["/api/bots/:id/versoes/:versao/restaurar"].POST as Manipulador) },
     "/api/bots/:id/padrao": { POST: soAdmin(base["/api/bots/:id/padrao"].POST as Manipulador) },
+    "/api/saldo": { ...base["/api/saldo"], PUT: soAdmin(base["/api/saldo"].PUT as Manipulador) },
     "/auth/meta": soAdmin(base["/auth/meta"] as Manipulador),
     "/auth/meta/callback": soAdmin(base["/auth/meta/callback"] as Manipulador),
     "/api/eu": async (req: Request) => {

@@ -45,6 +45,7 @@ import {
   type Historico,
 } from "../db";
 import { PILARES } from "../domain/art/pipeline";
+import { gravarSaldo, saldo } from "../domain/saldo";
 import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
 import { listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
@@ -337,6 +338,15 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     },
     "/api/atividade": { GET: comSessao(async (_, u) => Response.json(await tarefasAtivas(u.id))) },
     "/api/uso": { GET: comSessao(async () => Response.json(await resumoDoUso())) },
+    "/api/saldo": {
+      GET: comSessao(async () => Response.json(await saldo())),
+      PUT: comSessao(async (req, u) => {
+        const corpo = await lerCorpo(req, z.object({ carregado: z.number({ error: "Mande o saldo em dólar." }).nonnegative().max(1_000_000) }));
+        if ("resposta" in corpo) return corpo.resposta;
+        await gravarSaldo(corpo.dados.carregado, u.email);
+        return Response.json(await saldo());
+      }),
+    },
     "/api/atividade/agora": {
       GET: comSessao(async (_, u) => {
         const hoje = inicioDoDia();
