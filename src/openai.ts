@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { fetchQueConta } from "./domain/uso";
 
 export const MODELO_DE_TEXTO = "gpt-6-luna";
 
@@ -8,4 +9,4 @@ export const MODELO_DE_IMAGEM = "gpt-image-2.6-sunburst";
 let cliente: OpenAI | null = null;
 
 /** Lê OPENAI_API_KEY na primeira chamada, para o processo subir sem a chave. */
-export const openai = () => (cliente ??= new OpenAI());
+export const openai = () => (cliente ??= new OpenAI({ fetch: fetchQueConta("Post: headline, legenda e arte", MODELO_DE_IMAGEM) }));

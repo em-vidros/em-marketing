@@ -45,6 +45,7 @@ import {
   type Historico,
 } from "../db";
 import { PILARES } from "../domain/art/pipeline";
+import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
 import { listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
 import { q } from "../v2/banco";
@@ -121,6 +122,35 @@ const EdicaoConversa = z
     { error: "Mande um objeto JSON." },
   )
   .refine(algumCampo, "Mande titulo ou arquivada.");
+
+const idDeBot = z.string().refine(ehBotId, "bot desconhecido") as unknown as z.ZodType<BotId>;
+
+/** POST /api/conversas/:id/restaurar: o corpo é a resposta do DELETE da conversa. */
+const Excluida = z.object({
+  conversa: z.object({
+    id: z.string().min(1).max(100),
+    botId: idDeBot,
+    titulo: z.string().max(200).nullable(),
+    postId: z.number().int().nullable(),
+    mensagens: z.string(),
+    criadaEm: z.string(),
+    atualizadaEm: z.string(),
+    arquivadaEm: z.number().nullable(),
+  }),
+  tarefas: z.array(
+    z.object({
+      id: z.string().min(1).max(100),
+      botId: idDeBot,
+      pedido: z.string(),
+      status: z.enum(["na_fila", "trabalhando", "concluida", "falhou"]),
+      mensagens: z.string(),
+      resumo: z.string().nullable(),
+      erro: z.string().nullable(),
+      criadaEm: z.number(),
+      atualizadaEm: z.number(),
+    }),
+  ),
+});
 
 /** POST /api/conversas/:id/mensagens/restaurar: o corpo é a resposta do DELETE da mensagem. */
 const Remocao = z.object(
@@ -264,11 +294,17 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         const conversa = await mudarConversa(u.id, req.params.id, corpo.dados);
         return conversa ? Response.json(conversa) : naoEncontrado();
       }),
-      DELETE: comSessao<"/api/conversas/:id">(async (req, u) => ((await apagarConversa(u.id, req.params.id)) ? new Response(null, { status: 204 }) : naoEncontrado())),
+      DELETE: comSessao<"/api/conversas/:id">(async (req, u) => {
+        const excluida = await apagarConversa(u.id, req.params.id);
+        return excluida ? Response.json(excluida) : naoEncontrado();
+      }),
     },
     "/api/conversas/:id/restaurar": {
       POST: comSessao<"/api/conversas/:id/restaurar">(async (req, u) => {
-        const conversa = await restaurarConversa(u.id, req.params.id);
+        const corpo = await lerCorpo(req, Excluida);
+        if ("resposta" in corpo) return corpo.resposta;
+        if (corpo.dados.conversa.id !== req.params.id) return invalido("O corpo é de outra conversa.");
+        const conversa = await restaurarConversa(u.id, corpo.dados);
         return conversa ? Response.json(conversa) : naoEncontrado();
       }),
     },
@@ -300,6 +336,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
       }),
     },
     "/api/atividade": { GET: comSessao(async (_, u) => Response.json(await tarefasAtivas(u.id))) },
+    "/api/uso": { GET: comSessao(async () => Response.json(await resumoDoUso())) },
     "/api/atividade/agora": {
       GET: comSessao(async (_, u) => {
         const hoje = inicioDoDia();

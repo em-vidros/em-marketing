@@ -1,4 +1,4 @@
-import type { MudancaConversa } from "../../../agent/conversas";
+import type { ConversaExcluida, MudancaConversa } from "../../../agent/conversas";
 import type { Conversa } from "../../tipos";
 import type { PilhaDeDesfazer } from "./desfazer";
 
@@ -6,8 +6,9 @@ import type { PilhaDeDesfazer } from "./desfazer";
 export interface ApiConversas {
   listar(arquivadas: boolean): Promise<Conversa[]>;
   mudar(id: string, mudanca: MudancaConversa): Promise<Conversa>;
-  apagar(id: string): Promise<void>;
-  restaurar(id: string): Promise<Conversa>;
+  /** Remove do banco e devolve o que saiu; restaurar recebe esse mesmo objeto. */
+  apagar(id: string): Promise<ConversaExcluida>;
+  restaurar(excluida: ConversaExcluida): Promise<Conversa>;
 }
 
 export interface Lista {
@@ -109,8 +110,7 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void, pi
       const d = pilha.empilhar(async () => {
         recolocar(antes);
         try {
-          await pedido;
-          recolocar(await api.restaurar(id));
+          recolocar(await api.restaurar(await pedido));
           aoDesfazer?.();
         } catch {
           tirar(id);

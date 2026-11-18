@@ -5,8 +5,7 @@ import type { BotId } from "./bots";
 
 /**
  * Uma conversa do site. Pertence a um usuário e a um bot; as mensagens ficam em `mensagens`.
- * Arquivada sai da lista principal e continua aberta. Apagada some de todas as rotas até ser
- * restaurada, e o boot a remove de vez depois de 30 dias (purgarConversasApagadas).
+ * Arquivada sai da lista principal e continua aberta. Apagada sai do banco na hora (apagarConversa).
  */
 export interface Conversa {
   id: string;
@@ -45,10 +44,10 @@ const daLinha = (r: Linha): Conversa => ({
   arquivadaEm: r.arquivada_em,
 });
 
-/** Só devolve a conversa se ela for do usuário e não estiver apagada. Os três casos dão o mesmo null. */
+/** Só devolve a conversa se ela for do usuário. Os dois casos dão o mesmo null. */
 export async function conversaDoUsuario(userId: string, id: string): Promise<Conversa | null> {
   const r = await primeira(
-    q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas WHERE id = ${id} AND user_id = ${userId} AND apagada_em IS NULL`,
+    q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas WHERE id = ${id} AND user_id = ${userId}`,
   );
   return r ? daLinha(r) : null;
 }
@@ -65,14 +64,14 @@ export async function abrirConversaDoUsuario(userId: string, id: string, botId: 
 /** As conversas vivas do usuário: as da lista principal, ou só as arquivadas. */
 export async function conversasDoUsuario(userId: string, arquivadas = false): Promise<Conversa[]> {
   const linhas = await q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas
-    WHERE user_id = ${userId} AND apagada_em IS NULL AND (arquivada_em IS NOT NULL) = ${arquivadas} ORDER BY updated_at DESC`;
+    WHERE user_id = ${userId} AND (arquivada_em IS NOT NULL) = ${arquivadas} ORDER BY updated_at DESC`;
   return linhas.map(daLinha);
 }
 
 /** As conversas vivas do usuário com um bot, arquivadas inclusive, da mais recente para trás. */
 export async function conversasDoBot(userId: string, botId: BotId, offset: number, limite: number): Promise<Conversa[]> {
   const linhas = await q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas
-    WHERE user_id = ${userId} AND bot_id = ${botId} AND apagada_em IS NULL ORDER BY updated_at DESC, id LIMIT ${limite} OFFSET ${offset}`;
+    WHERE user_id = ${userId} AND bot_id = ${botId} ORDER BY updated_at DESC, id LIMIT ${limite} OFFSET ${offset}`;
   return linhas.map(daLinha);
 }
 
@@ -85,26 +84,66 @@ export async function mudarConversa(userId: string, id: string, { titulo, arquiv
   return conversaDoUsuario(userId, id);
 }
 
-/** Marca como apagada. Apagar de novo mantém a data da primeira vez. false se a conversa não é do usuário. */
-export async function apagarConversa(userId: string, id: string): Promise<boolean> {
-  const r = await q`UPDATE conversas SET apagada_em = COALESCE(apagada_em, ${Date.now()}::double precision) WHERE id = ${id} AND user_id = ${userId} RETURNING id`;
-  return r.length > 0;
+/**
+ * O que DELETE /api/conversas/:id tirou do banco: a linha da conversa e as tarefas dela, como estavam.
+ * O Desfazer manda isto de volta para POST /api/conversas/:id/restaurar; o servidor não guarda cópia.
+ */
+export interface ConversaExcluida {
+  conversa: { id: string; botId: BotId; titulo: string | null; postId: number | null; mensagens: string; criadaEm: string; atualizadaEm: string; arquivadaEm: number | null };
+  tarefas: {
+    id: string;
+    botId: BotId;
+    pedido: string;
+    status: string;
+    mensagens: string;
+    resumo: string | null;
+    erro: string | null;
+    criadaEm: number;
+    atualizadaEm: number;
+  }[];
 }
 
-/** Desfaz o apagar. Restaurar uma conversa viva não muda nada. */
-export async function restaurarConversa(userId: string, id: string): Promise<Conversa | null> {
-  await q`UPDATE conversas SET apagada_em = NULL WHERE id = ${id} AND user_id = ${userId}`;
-  return conversaDoUsuario(userId, id);
-}
-
-export const PRAZO_DA_LIXEIRA = 30 * 86_400_000;
-
-/** Remove de vez as conversas apagadas há mais de 30 dias e as tarefas delas. Posts e artes ficam: são da Biblioteca. */
-export function purgarConversasApagadas(agora: number = Date.now()): Promise<number> {
-  const limite = agora - PRAZO_DA_LIXEIRA;
+/** Remove a conversa e as tarefas dela do banco. Posts e artes ficam: são da Biblioteca. null se a conversa não é do usuário. */
+export function apagarConversa(userId: string, id: string): Promise<ConversaExcluida | null> {
   return transacao(async () => {
-    await q`DELETE FROM tarefas WHERE conversa_id IN (SELECT id FROM conversas WHERE apagada_em < ${limite})`;
-    return (await q`DELETE FROM conversas WHERE apagada_em < ${limite} RETURNING id`).length;
+    const conversa = await primeira(
+      q<ConversaExcluida["conversa"]>`SELECT id, bot_id AS "botId", titulo, post_id AS "postId", mensagens, created_at AS "criadaEm",
+        updated_at AS "atualizadaEm", arquivada_em AS "arquivadaEm" FROM conversas WHERE id = ${id} AND user_id = ${userId} FOR UPDATE`,
+    );
+    if (!conversa) return null;
+    const tarefas = await q<ConversaExcluida["tarefas"][number]>`DELETE FROM tarefas WHERE conversa_id = ${id}
+      RETURNING id, bot_id AS "botId", pedido, status, mensagens, resumo, erro, criada_em AS "criadaEm", atualizada_em AS "atualizadaEm"`;
+    await q`DELETE FROM conversas WHERE id = ${id}`;
+    return { conversa, tarefas };
+  });
+}
+
+/**
+ * Desfaz o apagar: grava de volta o que apagarConversa devolveu, sempre como do usuário que pede.
+ * Se o id já existe (restaurar duas vezes), não muda nada e devolve a conversa se ela for dele.
+ */
+export function restaurarConversa(userId: string, { conversa: c, tarefas }: ConversaExcluida): Promise<Conversa | null> {
+  return transacao(async () => {
+    const criada = await q`INSERT INTO conversas (id, bot_id, post_id, user_id, titulo, mensagens, created_at, updated_at, arquivada_em)
+      VALUES (${c.id}, ${c.botId}, ${c.postId}, ${userId}, ${c.titulo}, ${c.mensagens}, ${c.criadaEm}, ${c.atualizadaEm}, ${c.arquivadaEm})
+      ON CONFLICT (id) DO NOTHING RETURNING id`;
+    if (criada.length > 0)
+      for (const t of tarefas)
+        await q`INSERT INTO tarefas (id, conversa_id, bot_id, pedido, status, mensagens, resumo, erro, criada_em, atualizada_em)
+          VALUES (${t.id}, ${c.id}, ${t.botId}, ${t.pedido}, ${t.status}, ${t.mensagens}, ${t.resumo}, ${t.erro}, ${t.criadaEm}, ${t.atualizadaEm})
+          ON CONFLICT (id) DO NOTHING`;
+    return conversaDoUsuario(userId, c.id);
+  });
+}
+
+/**
+ * Remove as conversas que a lixeira antiga só marcou como apagadas, e as tarefas delas.
+ * Hoje o apagar já remove na hora; isto limpa o que ficou de antes. Posts e artes ficam.
+ */
+export function purgarConversasApagadas(): Promise<number> {
+  return transacao(async () => {
+    await q`DELETE FROM tarefas WHERE conversa_id IN (SELECT id FROM conversas WHERE apagada_em IS NOT NULL)`;
+    return (await q`DELETE FROM conversas WHERE apagada_em IS NOT NULL RETURNING id`).length;
   });
 }
 

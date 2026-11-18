@@ -13,9 +13,10 @@ const conversa = (id: string, atualizadaEm: string): Conversa => ({
   arquivadaEm: null,
 });
 
-/** Um servidor de mentira com a mesma regra do real: apagada some da lista até ser restaurada. */
+/** Um servidor de mentira com a mesma regra do real: apagar tira a linha e devolve o que saiu; restaurar põe de volta. */
 function servidor(falhaAo?: keyof ApiConversas) {
   const linhas = new Map([conversa("a", "2026-10-13 10:00:00"), conversa("b", "2026-10-13 09:00:00")].map((c) => [c.id, { c, apagada: false }]));
+  const excluida = (c: Conversa) => ({ conversa: { ...c, mensagens: "[]" }, tarefas: [] });
   const chamadas: string[] = [];
   const api: ApiConversas = {
     async listar(arquivadas) {
@@ -32,8 +33,9 @@ function servidor(falhaAo?: keyof ApiConversas) {
       chamadas.push(`apagar ${id}`);
       if (falhaAo === "apagar") throw new Error("500");
       linhas.get(id)!.apagada = true;
+      return excluida(linhas.get(id)!.c);
     },
-    async restaurar(id) {
+    async restaurar({ conversa: { id } }) {
       chamadas.push(`restaurar ${id}`);
       linhas.get(id)!.apagada = false;
       return linhas.get(id)!.c;

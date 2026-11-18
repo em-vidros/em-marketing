@@ -1,7 +1,9 @@
 import { isStepCount, streamText, type LanguageModel, type ModelMessage } from "ai";
 import { BOTS, type BotId } from "./bots";
 import { configDoBot, instrucoesDe, type ConfigBot } from "./config";
+import { contextoDeData } from "./hoje";
 import { modelo } from "./models";
+import { registrarUso } from "../domain/uso";
 import { abrirConversa, postDaConversa, resumoDoPost } from "./post";
 import { APROVACAO, catalogo, type Inspiracoes, type RodarEspecialista } from "./tools";
 
@@ -32,7 +34,7 @@ export async function executar(botId: BotId, conversaId: string, messages: Model
   const { resolverModelo = doRegistry, abortSignal, delegada = false, segredoAprovacao, inspiracoes } = opcoes;
   const bot = await configDoBot(botId);
   await abrirConversa(conversaId, botId);
-  const instrucoes = [instrucoesDe(bot), ...(delegada ? [DELEGADA] : [])].join("\n\n");
+  const instrucoes = [instrucoesDe(bot), contextoDeData(), ...(delegada ? [DELEGADA] : [])].join("\n\n");
   const rodar: RodarEspecialista = (especialista, pedido, sinal) =>
     executar(especialista, conversaId, [{ role: "user", content: pedido }], { resolverModelo, abortSignal: sinal, delegada: true, inspiracoes });
   return streamText({
@@ -43,7 +45,10 @@ export async function executar(botId: BotId, conversaId: string, messages: Model
     activeTools: [...BOTS[botId].tools],
     toolApproval: APROVACAO,
     experimental_toolApprovalSecret: segredoAprovacao,
-    stopWhen: isStepCount(8),
+    // O post no formato ambos passa por 7 tools antes do resumo; 8 cortava o fluxo no fim.
+    stopWhen: isStepCount(12),
     abortSignal,
+    onFinish: ({ totalUsage }) =>
+      registrarUso({ origem: `Bot ${BOTS[botId].nome}`, modelo: bot.modelo.slice(bot.modelo.indexOf(":") + 1), entrada: totalUsage.inputTokens ?? 0, saida: totalUsage.outputTokens ?? 0, imagens: 0 }),
   });
 }

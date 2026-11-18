@@ -8,7 +8,6 @@ import { Avatar } from "../Avatar";
 import { Expansivel } from "../Expansivel";
 import { Falha } from "../Falha";
 import { semMarkdown } from "../texto";
-import { atividadeDe } from "../ia/atividade";
 import { IconeDaFase } from "../ia/LinhaFerramenta";
 import { Pensando } from "../ia/Pensando";
 import { Chevron, Raciocinio } from "../ia/Raciocinio";
@@ -94,7 +93,7 @@ function Transcricao({ tarefa }: { tarefa: Tarefa }) {
           </div>
         ),
       )}
-      {noAr && atividadeDe(ultima, true).tipo === "pensando" && <Pensando />}
+      {noAr && <Pensando />}
       {mensagens.length === 0 && !noAr && <p className="text-[13px] text-tinta-3">Esta tarefa não deixou mensagens.</p>}
     </div>
   );

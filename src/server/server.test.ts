@@ -254,42 +254,48 @@ describe("gestão de conversas", () => {
     const pelaBia = await Promise.all([
       enviar(`/api/conversas/${id}`, bia.cookie, "PATCH", { titulo: "Invadida" }),
       enviar(`/api/conversas/${id}`, bia.cookie, "DELETE"),
-      enviar(`/api/conversas/${id}/restaurar`, bia.cookie, "POST"),
     ]);
     const renomeada = (await (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { titulo: "Dia do Vidraceiro", arquivada: true })).json()) as Conversa;
     const arquivadaDeNovo = (await (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { arquivada: true })).json()) as Conversa;
     const naLista = ids(await comCookie<Conversa[]>("/api/conversas", ana.cookie));
     const nasArquivadas = ids(await comCookie<Conversa[]>("/api/conversas?arquivadas=1", ana.cookie));
     const apagar = [await enviar(`/api/conversas/${id}`, ana.cookie, "DELETE"), await enviar(`/api/conversas/${id}`, ana.cookie, "DELETE")];
+    const excluida = await apagar[0]!.json();
     const depoisDeApagar = [
       (await fetch(url(`/api/conversas/${id}`), { headers: { cookie: ana.cookie } })).status,
       (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { arquivada: false })).status,
       ids(await comCookie<Conversa[]>("/api/conversas?arquivadas=1", ana.cookie)),
     ];
-    const restaurada = (await (await enviar(`/api/conversas/${id}/restaurar`, ana.cookie, "POST")).json()) as Conversa;
+    const restaurada = (await (await enviar(`/api/conversas/${id}/restaurar`, ana.cookie, "POST", excluida)).json()) as Conversa;
+    const restaurarDeNovo = await enviar(`/api/conversas/${id}/restaurar`, bia.cookie, "POST", excluida);
     const desarquivada = (await (await enviar(`/api/conversas/${id}`, ana.cookie, "PATCH", { arquivada: false })).json()) as Conversa;
 
-    expect(pelaBia.map((r) => r.status)).toEqual([404, 404, 404]);
+    expect(pelaBia.map((r) => r.status)).toEqual([404, 404]);
     expect([renomeada.titulo, typeof renomeada.arquivadaEm]).toEqual(["Dia do Vidraceiro", "number"]);
     expect(arquivadaDeNovo.arquivadaEm).toBe(renomeada.arquivadaEm);
     expect([naLista, nasArquivadas]).toEqual([[], [id]]);
-    expect(apagar.map((r) => r.status)).toEqual([204, 204]);
+    expect(apagar.map((r) => r.status)).toEqual([200, 404]);
     expect(depoisDeApagar).toEqual([404, 404, []]);
+    expect(restaurarDeNovo.status).toBe(404);
     expect(restaurada).toMatchObject({ id, titulo: "Dia do Vidraceiro", arquivadaEm: renomeada.arquivadaEm });
     expect(desarquivada.arquivadaEm).toBeNull();
     expect(ids(await comCookie<Conversa[]>("/api/conversas", ana.cookie))).toEqual([id]);
   });
 
-  test("POST /api/chat numa conversa apagada é recusado e não grava nada", async () => {
+  test("excluir tira a conversa e as tarefas do banco; restaurar põe as duas de volta", async () => {
     const ana = await sessao("ana@emvidros.com.br");
-    const id = `apagada-${crypto.randomUUID()}`;
-    await abrirConversaDoUsuario(ana.id, id, "chefe", "Vai ser apagada");
-    await enviar(`/api/conversas/${id}`, ana.cookie, "DELETE");
+    const id = `excluida-${crypto.randomUUID()}`;
+    await abrirConversaDoUsuario(ana.id, id, "chefe", "Vai sair do banco");
+    await gravarMensagens(id, [msg("u1", "user")]);
+    await semearTarefa(`${id}-t`, id, "concluida", Date.now());
 
-    const res = await fetch(url("/api/chat"), { method: "POST", headers: { "content-type": "application/json", cookie: ana.cookie }, body: pedidoDeChat(id) });
+    const excluida = await (await enviar(`/api/conversas/${id}`, ana.cookie, "DELETE")).json();
+    const noBanco = [await q`SELECT id FROM conversas WHERE id = ${id}`, await q`SELECT id FROM tarefas WHERE conversa_id = ${id}`];
+    await enviar(`/api/conversas/${id}/restaurar`, ana.cookie, "POST", excluida);
 
-    expect(res.status).toBe(404);
-    expect(await q`SELECT mensagens FROM conversas WHERE id = ${id}`).toEqual([{ mensagens: "[]" }]);
+    expect(noBanco).toEqual([[], []]);
+    expect(await idsDe(id)).toEqual(["u1"]);
+    expect(await q`SELECT id FROM tarefas WHERE conversa_id = ${id}`).toEqual([{ id: `${id}-t` }]);
   });
 
   test("GET /api/bots/:id/tarefas pagina as tarefas do especialista nas conversas vivas do usuário; o Chefe lista conversas", async () => {
@@ -349,6 +355,8 @@ describe("apagar e restaurar mensagens", () => {
     const turno = await enviar(caminho("u2"), cookie, "DELETE");
     const doBot = await enviar(caminho("a4"), cookie, "DELETE");
     const deNovo = await enviar(caminho("a4"), cookie, "DELETE");
+    const restantes = await idsDe(id);
+    const tarefas = (await tarefasDaConversa(id)).map((t) => t.id);
     await enviar(`/api/conversas/${id}`, cookie, "DELETE");
     const naApagada = await enviar(caminho("u1"), cookie, "DELETE");
 
@@ -356,8 +364,8 @@ describe("apagar e restaurar mensagens", () => {
     expect([turno.status, await turno.json()]).toEqual([200, { removidas: [msg("u2", "user"), msg("a2", "assistant"), msg("a3", "assistant")], depoisDe: "a1", antesDe: "u3" }]);
     expect([doBot.status, await doBot.json()]).toEqual([200, { removidas: [msg("a4", "assistant")], depoisDe: "u3", antesDe: null }]);
     expect([deNovo.status, naApagada.status]).toEqual([404, 404]);
-    expect(await idsDe(id)).toEqual(["u1", "a1", "u3"]);
-    expect((await tarefasDaConversa(id)).map((t) => t.id)).toEqual([`${id}-t`]);
+    expect(restantes).toEqual(["u1", "a1", "u3"]);
+    expect(tarefas).toEqual([`${id}-t`]);
   });
 
   test("restaurar põe o turno de volta no lugar, repetir não duplica, e recusa se a conversa mudou depois dele", async () => {

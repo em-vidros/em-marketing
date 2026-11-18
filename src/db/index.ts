@@ -149,6 +149,18 @@ export async function criarTabelas(): Promise<void> {
     )`;
     await q`CREATE INDEX IF NOT EXISTS pautas_dia ON pautas(dia)`;
 
+    // Uma linha por chamada às APIs de IA (domain/uso.ts). em é epoch ms.
+    await q`CREATE TABLE IF NOT EXISTS uso_api (
+      id serial PRIMARY KEY,
+      em double precision NOT NULL,
+      origem text NOT NULL,
+      modelo text NOT NULL,
+      entrada integer NOT NULL DEFAULT 0,
+      saida integer NOT NULL DEFAULT 0,
+      imagens integer NOT NULL DEFAULT 0
+    )`;
+    await q`CREATE INDEX IF NOT EXISTS uso_api_em ON uso_api(em)`;
+
     // Valores soltos que o servidor grava em tempo de execução, como as credenciais do login da Meta.
     await q`CREATE TABLE IF NOT EXISTS configuracoes (
       chave text PRIMARY KEY,

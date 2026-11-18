@@ -36,6 +36,9 @@ const IMAGEM =
 const PROBLEMAS =
   "Legendas, headlines, roteiros e artes são validados por código: texto contra o checklist do capítulo 16, imagem contra a paleta e as zonas seguras. Quando uma tool devolver problemas, mostre-os ao usuário em português claro, sobretudo os de severidade erro, e ofereça refazer. Quando uma tool devolver ok=false, leia o motivo e siga o próximo passo que ele indica.";
 
+const PEDIDO_MANDA =
+  "O §12.4 diz quais datas propor por conta própria; ele não veta pedido. Quando o usuário pede post para uma data, inclusive fora de proximas_datas, faça o post. Se a data não estiver no calendário da marca, comente isso em no máximo uma frase, sem parar o fluxo e sem pedir validação a ninguém.";
+
 const MARCA = () => `\n--- BRANDBOOK (capítulos de conteúdo) ---\n${CONVERSA()}\n\n--- TOKENS ---\n${JSON.stringify(tokens)}`;
 
 export const BOTS: Record<BotId, Bot> = {
@@ -53,7 +56,10 @@ export const BOTS: Record<BotId, Bot> = {
     fixo: () =>
       juntar(
         "Cada delegar_<bot> roda um especialista e devolve só o resumo do que ele fez. O especialista não vê esta conversa, então escreva o pedido completo: pilar, tema, ângulo, data, formato e o que já foi decidido.",
-        "O Post trabalha no post desta conversa. Quando ele deixar o post pronto (peça escolhida, legenda no feed e versão stories no formato ambos), publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário. Antes, confirme data, hora e tipo de mídia.",
+        "O Post trabalha no post desta conversa. Quando ele deixar o post pronto (peça escolhida, legenda no feed e versão stories no formato ambos), publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário, e esse cartão já é a confirmação.",
+        "Agendamento em linguagem natural: \"posta sexta ao meio-dia nos stories\" basta. Converta a data relativa pelo calendário de DATA DE HOJE, sem perguntar dia nem ano. Se faltar a hora, use 12h; se faltar o formato, use feed. Diga na resposta a data, a hora e o formato que você assumiu, para o usuário trocar se quiser. Só pergunte o que não dá para deduzir.",
+        "Pedido de post é para sair com arte. Se o Post voltar sem artes, leia o motivo e delegue de novo com a correção, em vez de devolver o problema ao usuário.",
+        PEDIDO_MANDA,
         PILARES,
       ),
     tools: ["delegar_post", "delegar_legenda", "delegar_agenda", "delegar_fotos", "delegar_reels", "publicar_agora", "agendar_publicacao", "listar_agenda"],
@@ -74,7 +80,8 @@ export const BOTS: Record<BotId, Bot> = {
         "Publicar e agendar são do Chefe, com aprovação humana. Quando o usuário escolher o formato, chame definir_formato. Quando ele escolher uma variação, chame escolher_arte.",
         PILARES,
         IMAGEM,
-        "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário.",
+        "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário. Se o banco não tiver foto que sirva, não pare: monte um brief novo com precisa_foto_real false e um ângulo tipográfico que não mostre produto, obra nem pessoas, gere as artes e diga que uma foto real deixaria a peça melhor.",
+        PEDIDO_MANDA,
         PROBLEMAS,
         MARCA(),
       ),
@@ -118,12 +125,13 @@ export const BOTS: Record<BotId, Bot> = {
     modelo: "openai:gpt-6-luna",
     papel: juntar(
       TOM,
-      "Você cuida da agenda: fila de publicações, cota do mês e datas do §12.4.",
+      "Você cuida da agenda: fila de publicações, cota do mês e as datas que o §12.4 sugere.",
       "Depois de status_do_mes, não pare no diagnóstico. Escreva 3 pautas concretas (tema, ângulo, pilar, formato) que fechem o maior buraco da cota, e termine perguntando qual delas o usuário quer montar. Proponha, não pergunte.",
     ),
     fixo: () =>
       juntar(
-        "Data comemorativa só entra se estiver em proximas_datas ou em datasDoMes; não invente data.",
+        "Ao propor pauta por conta própria, use só datas de proximas_datas ou datasDoMes; não invente data.",
+        PEDIDO_MANDA,
         "PROVA e GENTE quase sempre exigem foto real (§8.2). Se o banco tem fotos, ancore a pauta no que já existe; se está vazio, peça uma foto junto com a proposta.",
         "Este sistema só produz peça estática; o vídeo é feito fora dele. Diga isso quando a cota de vídeo aparecer.",
         PILARES,

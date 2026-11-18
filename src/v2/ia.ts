@@ -2,6 +2,7 @@ import OpenAI from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import sharp from "sharp";
 import { MODELO_DE_IMAGEM, MODELO_DE_TEXTO } from "../openai";
+import { fetchQueConta } from "../domain/uso";
 import { FORMATOS, Plano, type Formato } from "./camadas";
 
 /** Tudo o que o backend novo pede a um modelo. Os testes trocam por uma versão falsa. */
@@ -47,7 +48,7 @@ As leituras abaixo descrevem artes que a equipe considera bem pensadas. Siga os 
 `.trim();
 
 export function iaDaOpenAI(chave: string): Ia {
-  const openai = new OpenAI({ apiKey: chave });
+  const openai = new OpenAI({ apiKey: chave, fetch: fetchQueConta("Estúdio de artes", MODELO_DE_IMAGEM) });
   return {
     async lerReferencia(imagem, tipo) {
       const resposta = await openai.responses.create({

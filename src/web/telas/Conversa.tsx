@@ -9,7 +9,6 @@ import { BotaoMenu } from "../componentes/BotaoMenu";
 import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
-import { atividadeDe } from "../componentes/ia/atividade";
 import { Pensando } from "../componentes/ia/Pensando";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
@@ -442,7 +441,6 @@ function Chat({
   const erro = chat.error ? lerErro(chat.error) : null;
   const ultima = chat.messages.at(-1);
   const turno = ultima?.role === "assistant" ? ultima : null;
-  const pensando = respondendo && atividadeDe(turno, true).tipo === "pensando";
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
@@ -512,7 +510,8 @@ function Chat({
                 </BlocoDaMensagem>
               ))}
             </AnimatePresence>
-            {pensando && <Pensando />}
+            {/* Um loader só, montado o turno inteiro: o tempo não zera entre um passo e outro. */}
+            {respondendo && <Pensando />}
             {erro && (
               <div
                 role="alert"

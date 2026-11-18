@@ -10,6 +10,7 @@ export type Rota =
   | { tela: "artes" }
   | { tela: "arte"; id: string }
   | { tela: "calendario" }
+  | { tela: "uso" }
   | { tela: "bot"; id: BotId; aba: "trabalho" | "config" }
   | { tela: "nao-encontrada" };
 
@@ -19,6 +20,7 @@ export function lerRota(caminho: string): Rota {
   if (caminho === "/atividade") return { tela: "atividade" };
   if (caminho === "/biblioteca") return { tela: "biblioteca" };
   if (caminho === "/calendario") return { tela: "calendario" };
+  if (caminho === "/uso") return { tela: "uso" };
   if (caminho === "/artes") return { tela: "artes" };
   const arte = /^\/artes\/([0-9a-f-]{36})$/.exec(caminho);
   if (arte?.[1]) return { tela: "arte", id: arte[1] };

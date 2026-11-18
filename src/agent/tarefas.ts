@@ -116,7 +116,7 @@ export async function pegarTarefa(id: string): Promise<Tarefa | null> {
 export async function tarefasAtivas(userId: string): Promise<ResumoTarefa[]> {
   const linhas = await q<Omit<Linha, "mensagens">>`SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.resumo, t.erro, t.criada_em, t.atualizada_em
     FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
-    WHERE c.user_id = ${userId} AND c.apagada_em IS NULL AND t.status = ANY(${[...ATIVOS]}::text[]) ORDER BY t.criada_em DESC`;
+    WHERE c.user_id = ${userId} AND t.status = ANY(${[...ATIVOS]}::text[]) ORDER BY t.criada_em DESC`;
   return linhas.map(resumoDaLinha);
 }
 
@@ -133,6 +133,6 @@ export async function trabalhoDoBot(userId: string, botId: BotId, offset: number
   if (botId === "chefe") return { tipo: "conversas", ...pagina(await conversasDoBot(userId, botId, offset, limite + 1)) };
   const linhas = await q<Omit<Linha, "mensagens">>`SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.resumo, t.erro, t.criada_em, t.atualizada_em
     FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
-    WHERE c.user_id = ${userId} AND c.apagada_em IS NULL AND t.bot_id = ${botId} ORDER BY t.criada_em DESC, t.id LIMIT ${limite + 1} OFFSET ${offset}`;
+    WHERE c.user_id = ${userId} AND t.bot_id = ${botId} ORDER BY t.criada_em DESC, t.id LIMIT ${limite + 1} OFFSET ${offset}`;
   return { tipo: "tarefas", ...pagina(linhas.map(resumoDaLinha)) };
 }

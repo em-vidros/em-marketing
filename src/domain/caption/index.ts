@@ -2,6 +2,9 @@ import type { Brief } from "../art/pipeline";
 import { VOZ } from "../brand";
 import { validarLegenda, validarTextoDaArte, temErro, formatarProblemas, type Problema } from "../brand/validate";
 import { MODELO_DE_TEXTO, openai } from "../../openai";
+import { comoExemplos, postsDaMarca } from "../historico";
+
+const exemplos = async () => comoExemplos(await postsDaMarca().catch(() => []));
 
 /**
  * Gera, valida contra o checklist do capítulo 16 e devolve para reescrita quando
@@ -54,7 +57,7 @@ export async function definirHeadline(
     `Brief: ${JSON.stringify(brief)}. Formato: ${formato}.
 Gere o texto que vai DENTRO da arte, em JSON: {"headline": "...", "apoio": "..."}.
 Headline curto e concreto, português impecável, no máximo 8 palavras. Apoio: 1 linha (em stories, vazio).
-Emoji é proibido na arte (§11.2). Unidades como "10 mm", "6, 8 e 10 mm". Responda SÓ o JSON.`,
+Emoji é proibido na arte (§11.2). Unidades como "10 mm", "6, 8 e 10 mm". Responda SÓ o JSON.${await exemplos()}`,
     (saida) => {
       try {
         const { headline, apoio } = JSON.parse(saida.replace(/```json?|```/g, "").trim());
@@ -82,7 +85,7 @@ gancho (1 linha, no máximo 8 palavras, sem emoji, sem pergunta genérica) → l
 corpo (2 a 4 linhas, uma ideia por linha) → linha em branco →
 ${brief.pilar === "MARCA" ? "SEM CTA (§10.3: post do pilar MARCA não leva CTA)" : "1 CTA, um único pedido"} → linha em branco →
 bloco de no máximo 5 hashtags, #EMVidros a primeira.
-Responda SÓ a legenda.`,
+Responda SÓ a legenda.${await exemplos()}`,
     (saida) => validarLegenda(saida, { pilar: brief.pilar }),
   );
 

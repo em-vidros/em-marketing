@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import type { ConversaExcluida } from "../agent/conversas";
 import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
 import type { ConfigBot } from "../agent/config";
 import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
@@ -38,8 +39,9 @@ export const apiConversas: ApiConversas = {
   listar: (arquivadas) => pegar<Conversa[]>(arquivadas ? "/api/conversas?arquivadas=1" : "/api/conversas"),
   mudar: async (id, mudanca) =>
     (await pedir(`/api/conversas/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(mudanca) })).json() as Promise<Conversa>,
-  apagar: async (id) => void (await pedir(`/api/conversas/${encodeURIComponent(id)}`, { method: "DELETE" })),
-  restaurar: async (id) => (await pedir(`/api/conversas/${encodeURIComponent(id)}/restaurar`, { method: "POST" })).json() as Promise<Conversa>,
+  apagar: async (id) => (await pedir(`/api/conversas/${encodeURIComponent(id)}`, { method: "DELETE" })).json() as Promise<ConversaExcluida>,
+  restaurar: async (excluida) =>
+    (await pedir(`/api/conversas/${encodeURIComponent(excluida.conversa.id)}/restaurar`, { method: "POST", body: JSON.stringify(excluida) })).json() as Promise<Conversa>,
 };
 
 const comCorpo = async <T>(caminho: string, method: string, corpo?: unknown): Promise<T> =>

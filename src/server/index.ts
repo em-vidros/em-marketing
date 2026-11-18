@@ -16,6 +16,6 @@ const server = Bun.serve({
 
 startScheduler();
 const purgadas = await purgarConversasApagadas();
-if (purgadas > 0) console.log(`${purgadas} conversa(s) apagada(s) há mais de 30 dias removida(s) de vez.`);
+if (purgadas > 0) console.log(`${purgadas} conversa(s) da lixeira antiga removida(s) de vez.`);
 
 console.log(`em-marketing ouvindo em :${server.port}`);

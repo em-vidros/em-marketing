@@ -1,7 +1,7 @@
 /*
  * Adaptado do ThinkingState do Beautiful UI (beautifului.dev, MIT, Copyright (c) 2026 Shane Levine).
- * Variante Reasoning: cabeçalho com brilho enquanto pensa, "Pensou por Ns" ao terminar, e o
- * raciocínio num trilho que abre sozinho durante o stream e fecha quando assenta.
+ * Variante Reasoning: "Pensou por Ns" ao terminar, e o raciocínio num trilho que abre ao clicar.
+ * Enquanto pensa não desenha nada: o loader do turno (Pensando) é o único indicador.
  */
 import { useEffect, useRef, useState } from "react";
 import { Expansivel } from "../Expansivel";
@@ -18,14 +18,14 @@ function useDuracao(ativo: boolean): number | null {
   return segundos;
 }
 
-function Brilho({ ativo }: { ativo: boolean }) {
+function Brilho() {
   return (
     <svg
       aria-hidden="true"
       width="14"
       height="14"
       viewBox="0 0 24 24"
-      className={`flex-none transition-colors duration-200 ${ativo ? "text-tinta-2" : "text-tinta-3"}`}
+      className="flex-none text-tinta-3"
       fill="currentColor"
     >
       <path d="M12 2l2.4 7.2L22 12l-7.6 2.8L12 22l-2.4-7.2L2 12l7.6-2.8z" />
@@ -54,27 +54,19 @@ export function Chevron({ aberto, className = "" }: { aberto: boolean; className
 
 export function Raciocinio({ texto, ativo }: { texto: string; ativo: boolean }) {
   const duracao = useDuracao(ativo);
-  const [escolha, setEscolha] = useState<boolean | null>(null);
-  const aberto = escolha ?? ativo;
+  const [aberto, setAberto] = useState(false);
+  if (ativo) return null;
 
   return (
     <div className="flex flex-col text-sm">
       <button
         type="button"
         aria-expanded={aberto}
-        onClick={() => setEscolha(!aberto)}
+        onClick={() => setAberto(!aberto)}
         className="-mx-1.5 flex w-fit cursor-pointer items-center gap-2 rounded-lg px-1.5 py-1 transition-colors duration-100 hover:bg-hover"
       >
-        <Brilho ativo={ativo} />
-        <span role="status" className="contents">
-          {ativo ? (
-            <span className="brilho text-[13px] font-medium whitespace-nowrap">Pensando</span>
-          ) : (
-            <span className="text-[13px] font-medium whitespace-nowrap text-tinta-2">
-              {duracao ? `Pensou por ${duracao}s` : "Pensou"}
-            </span>
-          )}
-        </span>
+        <Brilho />
+        <span className="text-[13px] font-medium whitespace-nowrap text-tinta-2">{duracao ? `Pensou por ${duracao}s` : "Pensou"}</span>
         <Chevron aberto={aberto} />
       </button>
       <Expansivel aberto={aberto && !!texto.trim()} className="relative ml-[5px] pt-1 pl-4">

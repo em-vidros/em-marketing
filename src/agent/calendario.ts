@@ -116,7 +116,7 @@ export interface NovaPauta {
 export async function pautaPorId(userId: string, id: number): Promise<ItemPauta | null> {
   const r = await primeira(
     q<LinhaPauta>`SELECT id, dia, hora, titulo, pilar, nota,
-        (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId} AND c.apagada_em IS NULL) AS conversa_id
+        (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId}) AS conversa_id
       FROM pautas WHERE id = ${id} AND apagada_em IS NULL`,
   );
   return r ? daPauta(r) : null;
@@ -270,7 +270,7 @@ export async function itensDoCalendario(userId: string, de: Dia, ate: Dia, lerAr
   const fim = utcDe(inicioDoDiaSP(ate) + DIA_MS);
   const pautas = (
     await q<LinhaPauta>`SELECT id, dia, hora, titulo, pilar, nota,
-        (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId} AND c.apagada_em IS NULL) AS conversa_id
+        (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId}) AS conversa_id
       FROM pautas WHERE dia BETWEEN ${de} AND ${ate} AND apagada_em IS NULL ORDER BY dia, hora NULLS FIRST`
   ).map(daPauta);
   const datas = datasEntre(de, ate).map((d): ItemData => ({ tipo: "data", dia: d.dia as Dia, nome: d.ocasiao }));

@@ -61,3 +61,35 @@ export function estadosDaEquipe(
 
   return estados;
 }
+
+/** O que a barra lateral mostra embaixo do título de uma conversa em andamento. */
+export interface AgoraDaConversa {
+  texto: string;
+  /** Com brilho: um bot está trabalhando. Sem brilho: esperando você ou na fila. */
+  trabalhando: boolean;
+}
+
+/**
+ * O que cada conversa está fazendo agora, por id. A aberta vem do stream ao vivo e traz o passo exato;
+ * as outras vêm das tarefas ativas do servidor, que só dizem qual especialista trabalha.
+ */
+export function agoraDasConversas(
+  atividade: readonly ResumoTarefa[],
+  aberta: { id: string; bot: BotId; estados: EstadosDaEquipe; respondendo: boolean } | null,
+  nomes: Record<BotId, { nome: string }>,
+): Record<string, AgoraDaConversa> {
+  const agora: Record<string, AgoraDaConversa> = {};
+  for (const t of [...atividade].reverse())
+    agora[t.conversaId] = t.status === "trabalhando" ? { texto: `${nomes[t.botId].nome} trabalhando`, trabalhando: true } : { texto: "Na fila", trabalhando: false };
+
+  if (!aberta) return agora;
+  const { id, bot, estados, respondendo } = aberta;
+  const estado = estados[bot];
+  if (estado.tipo === "esperando") agora[id] = { texto: estado.texto, trabalhando: false };
+  else if (estado.tipo === "delegando") {
+    const especialista = BOT_IDS.find((b) => b !== "chefe" && estados[b].tipo === "trabalhando");
+    agora[id] = { texto: especialista ? `${nomes[especialista].nome}: ${estados[especialista].texto}` : estado.texto, trabalhando: true };
+  } else if (respondendo && estado.tipo === "trabalhando") agora[id] = { texto: estado.texto, trabalhando: true };
+  else if (!respondendo) delete agora[id];
+  return agora;
+}

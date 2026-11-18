@@ -21,6 +21,7 @@ import {
 } from "../post";
 import { agendarPost } from "../fila";
 import { fotoPublica } from "./fotos";
+import { escolhasDeArte } from "../../domain/historico";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
 const mediaType = z.enum(["IMAGE", "STORIES"]);
@@ -97,7 +98,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         // "ambos": feed primeiro, o stories sai depois por derivar_story (PRD US-2).
         const alvo = p.formato === "ambos" ? "feed" : p.formato;
         // Referência é conveniência: sem elas, ou com o banco fora, a arte sai do estilo puro.
-        const lidas = (await inspiracoes?.().catch(() => [])) ?? [];
+        const lidas = [...((await inspiracoes?.().catch(() => [])) ?? []), ...(await escolhasDeArte().catch(() => []))];
         const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, inspiracoes: lidas });
         const estado = await aplicar(conversaId, { tipo: "artes", artes });
         return { ...estado, artes: await emOrdem(artes, artePublica) };

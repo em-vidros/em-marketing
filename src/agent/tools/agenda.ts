@@ -70,7 +70,7 @@ export const toolsDeAgenda = {
   }),
 
   proximas_datas: tool({
-    description: "Datas que passam na trava do §12.4 nos próximos dias. Só essas viram post de data; não invente outra.",
+    description: "Datas do calendário da marca (§12.4) nos próximos dias, para propor pauta por conta própria. Não limita o que o usuário pede.",
     inputSchema: z.object({ dias: z.number().int().min(1).max(366).optional() }),
     execute: async ({ dias }) => ({ datas: proximasDatas(dias ?? 45) }),
   }),

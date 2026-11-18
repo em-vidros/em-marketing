@@ -110,8 +110,8 @@ export function exigir<T extends TipoEvento>(post: EtapaPost | null, tipo: T): P
       if (post.brief.precisaFotoReal)
         return nao(
           "Invariante 4 (§8.2): a peça representa produto, obra, fábrica ou pessoas da EM Vidros e exige foto real. Não gere." +
-            " Chame buscar_fotos; se o banco não tiver, peça a foto com o guia do §8.3: luz natural difusa de lado," +
-            " ângulo de 15 a 30° fora do eixo, fundo limpo, enquadramento vertical.",
+            " Chame buscar_fotos e usar_foto. Se o banco não tiver foto que sirva, monte um brief novo com precisa_foto_real false" +
+            " e um ângulo tipográfico que não mostre produto, obra nem pessoas, e gere a partir dele.",
         );
       if (!formato) return nao("Invariante 1: o formato não foi definido. Chame definir_formato.");
       if (post.etapa === "formato") return nao("Invariante 2: o headline vem antes da imagem. Chame definir_headline.");

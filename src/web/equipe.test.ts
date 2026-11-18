@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { BOT_IDS, BOTS } from "./bots";
-import { estadosDaEquipe } from "./equipe";
+import { agoraDasConversas, estadosDaEquipe } from "./equipe";
 import type { Mensagem, Parte } from "./tipos";
 
 const delegacaoEmAndamento = {
@@ -64,4 +64,17 @@ test.each([
   const { chefe } = estadosDaEquipe([], mensagens, true, NOMES);
 
   expect(chefe).toEqual({ tipo: "trabalhando", texto });
+});
+
+test("a barra mostra o passo do especialista na conversa aberta e o especialista nas outras", () => {
+  const conversa = doChefe(delegacaoEmAndamento);
+  const estados = estadosDaEquipe([], conversa, true, NOMES);
+  const outra = { id: "t9", conversaId: "c2", botId: "agenda", pedido: "x", status: "trabalhando", resumo: null, erro: null, criadaEm: 1, atualizadaEm: 1 } as const;
+
+  const agora = agoraDasConversas([outra], { id: "c1", bot: "chefe", estados, respondendo: true }, NOMES);
+
+  expect(agora).toEqual({
+    c1: { texto: "Designer: Pensando", trabalhando: true },
+    c2: { texto: "Agenda trabalhando", trabalhando: true },
+  });
 });
