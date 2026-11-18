@@ -158,8 +158,12 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
 
   // A primeira mensagem de uma conversa nova cria a linha no servidor: a lista relê para mostrá-la.
   const primeira = vivo.mensagens.length > 0 && conversaId !== null && !conhecida(conversaId);
+  // O pedido pode chegar antes de o servidor gravar a linha; relê até ela aparecer, para a barra mostrar o trabalho ao vivo.
   useEffect(() => {
-    if (primeira && respondendo) void conversas.carregar();
+    if (!(primeira && respondendo)) return;
+    void conversas.carregar();
+    const t = setInterval(() => void conversas.carregar(), 1500);
+    return () => clearInterval(t);
   }, [primeira, respondendo, conversas]);
 
   const acoes: AcoesConversa = {
