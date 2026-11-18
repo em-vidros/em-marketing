@@ -5,7 +5,7 @@ import { FONTES, FORMATOS, PROPORCAO_DO_LOGO, type Camada, type Formato } from "
 
 type No = { type: string; props: Record<string, unknown> };
 
-const pastaDaMarca = new URL("../../brand/assets/", import.meta.url).pathname;
+const pastaDaMarca = `${process.cwd()}/brand/assets/`;
 
 const fontes = await Promise.all(
   Object.entries(FONTES).flatMap(([familia, pesos]) =>

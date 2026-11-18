@@ -17,7 +17,7 @@ const FORMATS = {
 const LOGO_FILE = { cor: "emvidros-oficial.png", branco: "emvidros-branca.png" } as const;
 
 const logo = (variant: "cor" | "branco") =>
-  toFile(readFileSync(new URL(`../../../brand/assets/logo/${LOGO_FILE[variant]}`, import.meta.url).pathname), "logo.png", {
+  toFile(readFileSync(`brand/assets/logo/${LOGO_FILE[variant]}`), "logo.png", {
     type: "image/png",
   });
 

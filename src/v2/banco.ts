@@ -24,12 +24,19 @@ interface Conexao {
   transacao<T>(fn: (q: Q) => Promise<T>): Promise<T>;
 }
 
-const migrationsFolder = new URL("../../drizzle", import.meta.url).pathname;
+const migrationsFolder = `${process.cwd()}/drizzle`;
 const naTransacao = new AsyncLocalStorage<Q>();
 let atual: Conexao | undefined;
 
+// O Bun SQL manda uma lista JS como "a,b", que o Postgres recusa em `::text[]`; o PGlite manda "{a,b}". Aqui as duas pontas ficam iguais.
+export function comoArrayDoPostgres(valor: unknown): unknown {
+  if (!Array.isArray(valor)) return valor;
+  const item = (v: unknown) => (v === null || v === undefined ? "NULL" : `"${String(v).replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`);
+  return `{${valor.map(item).join(",")}}`;
+}
+
 function doBun(cliente: SQL): Conexao {
-  const comoQ = (s: SQL): Q => (async (textos, ...valores) => [...(await s(textos, ...valores))]) as Q;
+  const comoQ = (s: SQL): Q => (async (textos, ...valores) => [...(await s(textos, ...valores.map(comoArrayDoPostgres)))]) as Q;
   return {
     banco: drizzleBun({ client: cliente, schema, casing: "snake_case" }) as unknown as Banco,
     q: comoQ(cliente),
@@ -54,10 +61,22 @@ function doPglite(pg: PGlite): Conexao {
  */
 export async function abrirBanco(opcoes: { url?: string; dir: string | null }): Promise<Banco> {
   const conexao = opcoes.url ? doBun(new SQL(opcoes.url)) : doPglite(new PGlite(opcoes.dir ?? undefined));
-  if (opcoes.url) await migrarBun(conexao.banco as never, { migrationsFolder });
+  if (opcoes.url) await comNovaTentativa(() => migrarBun(conexao.banco as never, { migrationsFolder }));
   else await migrarPglite(conexao.banco as never, { migrationsFolder });
   atual = conexao;
   return conexao.banco;
+}
+
+// Duas funções frias da Vercel migram ao mesmo tempo e uma perde a corrida no CREATE SCHEMA; na volta tudo já existe.
+async function comNovaTentativa(fn: () => Promise<unknown>, tentativas = 4) {
+  for (let i = 1; ; i++) {
+    try {
+      return await fn();
+    } catch (erro) {
+      if (i >= tentativas) throw erro;
+      await Bun.sleep(300 * i + Math.random() * 300);
+    }
+  }
 }
 
 function conexao(): Conexao {

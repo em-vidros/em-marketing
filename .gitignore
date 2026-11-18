@@ -12,3 +12,4 @@ data/
 *.local
 .vercel
 dist/
+api/_pacote.js

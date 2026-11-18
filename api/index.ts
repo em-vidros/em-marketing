@@ -1,7 +1,3 @@
-import { rotasDoApp } from "../src/server/app";
-import { roteador } from "../src/server/roteador";
-
-// A função única da Vercel: tudo que não é arquivo estático do dist/ cai aqui (vercel.json).
-const pronto = rotasDoApp().then(roteador);
-
-export default { fetch: async (req: Request) => (await pronto)(req) };
+// O build (scripts/build-api.ts) empacota src/server/vercel.ts aqui: o rastreador de dependências
+// da Vercel perde pacotes do Bun, então só os módulos nativos ficam de fora do pacote.
+export { default } from "./_pacote.js";
