@@ -114,7 +114,7 @@ export function SeletorDeModelo({
     <div role="radiogroup" aria-label="Modelo" className="flex flex-col overflow-hidden rounded-[12px] border border-linha-forte">
       {modelos.dados.map((m) => {
         const marcado = m.id === valor;
-        const motivo = !m.disponivel ? "Falta a chave de API no servidor" : null;
+        const motivo = !m.disponivel ? "Sem chave de API" : null;
         // O modelo em uso continua marcável mesmo sem chave, para não sumir da lista.
         const desabilitado = !m.disponivel && m.id !== salvo;
         return (
@@ -141,7 +141,7 @@ export function SeletorDeModelo({
             </span>
             <span className={`flex min-w-0 flex-1 flex-col ${desabilitado ? "text-tinta-4" : m.disponivel ? "" : "text-tinta-2"}`}>
               <span className="font-medium">{m.nome}</span>
-              <span className="truncate font-mono text-xs text-tinta-3">{m.id}</span>
+              <span title={m.id} className="truncate font-mono text-xs text-tinta-3">{m.id}</span>
             </span>
             {motivo && <span className="flex-none text-right text-xs text-tinta-3">{motivo}</span>}
           </label>
@@ -265,7 +265,7 @@ export function Setor({
           id={id}
           ref={campoRef}
           maxLength={40}
-          placeholder="Escolha um setor ou digite um novo"
+          placeholder="Escolha ou digite um setor"
           aria-invalid={invalido || undefined}
           aria-describedby={descrito}
           className={`${estiloCampo} pr-10`}
