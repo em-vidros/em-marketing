@@ -114,14 +114,19 @@ export async function arteDaImagem(
 
 export type Edicao = { camadas: Camada[]; ajustes: Ajustes };
 
+/** A arte ainda está na versão `base`. O banco guarda microssegundos e a Date do JS só milissegundos, por isso trunca. */
+const naVersao = (base: Date) => sql`date_trunc('milliseconds', ${artes.atualizadaEm}) = ${base.toISOString()}::timestamptz`;
+
 /**
  * Grava a edição. Com `base`, a versão que a pessoa estava editando, só grava se ninguém gravou
  * outra depois dela: duas pessoas na mesma arte não apagam o trabalho uma da outra em silêncio.
- * O banco guarda microssegundos e a API devolve milissegundos, por isso a comparação trunca.
  */
 export async function gravarEdicao(banco: Banco, id: string, edicao: Edicao, base?: Date): Promise<{ arte: Arte } | { conflito: Arte } | null> {
-  const mesmaVersao = base ? sql`date_trunc('milliseconds', ${artes.atualizadaEm}) = ${base.toISOString()}::timestamptz` : undefined;
-  const [arte] = await banco.update(artes).set({ ...edicao, atualizadaEm: new Date() }).where(and(eq(artes.id, id), mesmaVersao)).returning();
+  const [arte] = await banco
+    .update(artes)
+    .set({ ...edicao, atualizadaEm: new Date() })
+    .where(and(eq(artes.id, id), base && naVersao(base)))
+    .returning();
   if (arte) return { arte };
   const atual = await pegarArte(banco, id);
   return atual ? { conflito: atual } : null;
@@ -144,7 +149,7 @@ export async function separarElementos({ banco, ia, arquivos }: Estudio, id: str
   const [arte] = await banco
     .update(artes)
     .set({ cena, camadas, atualizadaEm: new Date() })
-    .where(and(eq(artes.id, id), eq(artes.atualizadaEm, atual.atualizadaEm)))
+    .where(and(eq(artes.id, id), naVersao(atual.atualizadaEm)))
     .returning();
   return arte ?? (await pegarArte(banco, id));
 }

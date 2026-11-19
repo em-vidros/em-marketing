@@ -3,6 +3,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import sharp from "sharp";
+import { sql } from "drizzle-orm";
 import { criarApi } from "./api";
 import { arquivosNoDisco } from "./arquivos";
 import { banco } from "./banco";
@@ -216,11 +217,14 @@ describe("artes", () => {
 });
 
 describe("imagem antiga no editor", () => {
+  const NO_NEON = sql`'2026-11-19T14:46:59.723790Z'::timestamptz`;
+
   test("separa o texto e o logo desenhados na imagem em camadas, uma vez só, e apaga as áreas deles da cena", async () => {
     const original = await arquivos.salvar(await cenaFalsa("feed"), "jpg");
     const [antiga] = await banco()
       .insert(artes)
-      .values({ pedido: "Post 7, variação 2: arts/post7.jpg", formato: "feed", cena: original, promptDaCena: "Box", referencias: [], camadas: [], criadaPor: "u-ana" })
+      // O Neon grava o defaultNow() com microssegundos, que a Date do JS corta; o relógio do PGlite para no milissegundo.
+      .values({ pedido: "Post 7, variação 2: arts/post7.jpg", formato: "feed", cena: original, promptDaCena: "Box", referencias: [], camadas: [], criadaPor: "u-ana", criadaEm: NO_NEON, atualizadaEm: NO_NEON })
       .returning();
     const antes = await (await pedir(`/api/artes/${antiga!.id}`)).json();
 
