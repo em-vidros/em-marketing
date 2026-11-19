@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { motion, useReducedMotion } from "motion/react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import type { EstadoDaChave, Provedor } from "../../domain/chaves";
 import { apiChaves } from "../api";
+import { MOLA, SAIDA } from "../movimento";
 
 const PAINEL_DA_OPENAI = "https://platform.openai.com/api-keys";
 
@@ -50,36 +52,69 @@ export function ChaveDaIa() {
   if (erro) return <p className="rounded-cartao bg-painel p-4 text-sm text-erro">{erro}</p>;
   if (!openai) return <section aria-busy="true" className="h-[320px] rounded-cartao bg-painel" />;
 
-  if (!guiando && openai.origem === "equipe") {
-    return <Recibo chave={openai} recemConectada={acabou} trocar={() => setGuiando(true)} desconectar={() => desconectar("openai")} />;
-  }
-  if (!guiando && openai.origem === "ambiente") {
-    return (
-      <section className="flex flex-col gap-4 rounded-cartao bg-painel p-4 sm:p-5">
-        <div className="flex flex-col gap-1">
-          <h2 className="text-base font-semibold">O app usa a chave do servidor</h2>
-          <p className="text-sm text-tinta-2">Termina em {openai.final}. Só quem tem acesso à Vercel troca essa chave.</p>
-        </div>
-        <button type="button" onClick={() => setGuiando(true)} className="pressiona h-10 self-start rounded-item bg-tinta px-4 text-sm font-medium text-sobre-tinta">
-          Conectar a chave da equipe
-        </button>
-      </section>
-    );
-  }
+  const tela = guiando || openai.origem === "nenhuma" ? "passos" : openai.origem === "equipe" ? "recibo" : "servidor";
 
   return (
-    <Passos
-      podeCancelar={openai.origem !== "nenhuma"}
-      cancelar={() => setGuiando(false)}
-      conectar={async (c) => {
-        const r = await conectar("openai", c);
-        if (!r) {
-          setGuiando(false);
-          setAcabou(true);
-        }
-        return r;
-      }}
-    />
+    <Troca tela={tela}>
+      {tela === "recibo" && openai.origem === "equipe" ? (
+        <Recibo chave={openai} recemConectada={acabou} trocar={() => setGuiando(true)} desconectar={() => desconectar("openai")} />
+      ) : tela === "servidor" && openai.origem === "ambiente" ? (
+        <section className="flex flex-col gap-4 rounded-cartao bg-painel p-4 sm:p-5">
+          <div className="flex flex-col gap-1">
+            <h2 className="text-base font-semibold">O app usa a chave do servidor</h2>
+            <p className="text-sm text-tinta-2">Termina em {openai.final}. Só quem tem acesso à Vercel troca essa chave.</p>
+          </div>
+          <button type="button" onClick={() => setGuiando(true)} className="pressiona h-10 self-start rounded-item bg-tinta px-4 text-sm font-medium text-sobre-tinta">
+            Conectar a chave da equipe
+          </button>
+        </section>
+      ) : (
+        <Passos
+          podeCancelar={openai.origem !== "nenhuma"}
+          cancelar={() => setGuiando(false)}
+          conectar={async (c) => {
+            const r = await conectar("openai", c);
+            if (!r) {
+              setGuiando(false);
+              setAcabou(true);
+            }
+            return r;
+          }}
+        />
+      )}
+    </Troca>
+  );
+}
+
+/**
+ * O cartão cresce ou encolhe na altura do conteúdo novo, e o que vem embaixo acompanha em vez de
+ * pular. Na primeira pintura nada anima. Com movimento reduzido só a opacidade muda.
+ */
+function Troca({ tela, children }: { tela: string; children: ReactNode }) {
+  const reduzir = useReducedMotion();
+  const conteudo = useRef<HTMLDivElement>(null);
+  const [altura, setAltura] = useState<number | "auto">("auto");
+  const primeira = useRef(tela);
+
+  useLayoutEffect(() => {
+    const el = conteudo.current;
+    if (!el) return;
+    const medir = () => setAltura(el.offsetHeight);
+    medir();
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const entrou = primeira.current !== tela;
+  return (
+    <motion.div initial={false} animate={{ height: altura }} transition={reduzir ? { duration: 0 } : MOLA} className="overflow-clip rounded-cartao">
+      <div ref={conteudo}>
+        <motion.div key={tela} initial={entrou ? { opacity: 0, y: reduzir ? 0 : 6 } : false} animate={{ opacity: 1, y: 0 }} transition={SAIDA}>
+          {children}
+        </motion.div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -139,6 +174,7 @@ function Passos({ conectar, podeCancelar, cancelar }: { conectar: (c: string) =>
               type="password"
               autoComplete="off"
               spellCheck={false}
+              autoFocus={podeCancelar}
               placeholder="sk-proj-..."
               value={valor}
               onChange={(e) => {
