@@ -114,6 +114,17 @@ describe("artes", () => {
     expect([...data.subarray(0, 3)]).toEqual([255, 0, 0]);
   });
 
+  test("texto dentro do SVG sai com a fonte da marca, mesmo sem fontes no servidor", async () => {
+    const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="200"><rect width="400" height="200" fill="#000"/><text x="20" y="150" font-size="140" fill="#fff">EM</text></svg>';
+    const form = new FormData();
+    form.set("arquivo", new File([svg], "texto.svg", { type: "image/svg+xml" }));
+    const { chave } = await (await pedir(`/api/artes/${arte.id}/imagens`, { method: "POST", body: form })).json();
+    const png = Buffer.from(await (await pedir(`/api/arquivos/${chave}`)).arrayBuffer());
+    const px = await sharp(png).greyscale().raw().toBuffer();
+    expect(px.filter((v) => v > 200).length).toBeGreaterThan(1000);
+  });
+
   test("recusa arquivo de camada que não é imagem", async () => {
     const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
     const form = new FormData();

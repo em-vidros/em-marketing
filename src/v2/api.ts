@@ -1,4 +1,5 @@
 import { Resvg } from "@resvg/resvg-js";
+import { readdirSync } from "node:fs";
 import { Hono } from "hono";
 import sharp from "sharp";
 import { z } from "zod";
@@ -8,6 +9,18 @@ import { EXTENSOES, ehChave, TIPO_DA_EXTENSAO, type Extensao } from "./arquivos"
 import { Camadas, FORMATOS, type Formato } from "./camadas";
 import { criarReferencia, editarLeitura, listarReferencias, removerReferencia, restaurarReferencia } from "./referencias";
 import { renderizar } from "./render";
+
+/** O servidor não tem fontes de sistema: texto dentro de um SVG enviado sai com as fontes da marca. */
+const PASTA_DAS_FONTES = `${process.cwd()}/brand/assets/fonts`;
+const FONTES_DO_SVG = {
+  loadSystemFonts: false,
+  fontFiles: readdirSync(PASTA_DAS_FONTES)
+    .filter((n) => /\.(ttf|otf)$/i.test(n))
+    .map((n) => `${PASTA_DAS_FONTES}/${n}`),
+  defaultFontFamily: "Poppins",
+  sansSerifFamily: "Poppins",
+  serifFamily: "Playfair Display",
+};
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TAMANHO_MAXIMO = 10 * 1024 * 1024;
@@ -133,7 +146,7 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     let png: Uint8Array;
     try {
       png = ehSvg
-        ? new Resvg(Buffer.from(bytes), { fitTo: { mode: "width", value: 2048 } }).render().asPng()
+        ? new Resvg(Buffer.from(bytes), { fitTo: { mode: "width", value: 2048 }, font: FONTES_DO_SVG }).render().asPng()
         : new Uint8Array(await sharp(bytes).rotate().resize(2048, 2048, { fit: "inside", withoutEnlargement: true }).png().toBuffer());
     } catch {
       return c.json(erro("Não deu para ler essa imagem. Confira se o arquivo não está corrompido."), 400);
