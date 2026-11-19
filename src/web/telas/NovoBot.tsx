@@ -149,11 +149,11 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
             <Problema id={`${ids}-setor-erro`} texto={problemas.setor} />
           </Linha>
           <Linha rotulo="Aparência" ajuda="A forma e a cor do avatar.">
-            <div role="radiogroup" aria-label="Forma" className="flex flex-wrap gap-2">
+            <div role="radiogroup" aria-label="Forma" className="grid w-fit grid-cols-4 gap-2">
               {(Object.keys(FORMAS) as Forma[]).map((forma) => (
                 <label
                   key={forma}
-                  className={`flex min-w-20 cursor-pointer flex-col items-center gap-1 rounded-[12px] border px-3 py-2 text-xs has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-tinta ${
+                  className={`flex cursor-pointer flex-col items-center gap-1 rounded-[12px] border px-3 py-2 text-xs has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-tinta ${
                     pedido.forma === forma ? "border-tinta bg-fundo" : "border-linha-forte hover:bg-fundo"
                   }`}
                 >
