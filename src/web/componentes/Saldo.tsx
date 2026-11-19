@@ -22,7 +22,7 @@ function Barra({ restante, alta = false }: { restante: number; alta?: boolean })
       aria-valuemin={0}
       aria-valuemax={100}
       aria-valuenow={Math.round(restante * 100)}
-      aria-label="Crédito que sobra"
+      aria-label="Crédito disponível"
       className={`w-full overflow-hidden rounded-full bg-linha-forte ${alta ? "h-2" : "h-1.5"}`}
     >
       <div className={`h-full rounded-full ${cor} transition-[width] duration-500 ease-out`} style={{ width: `${Math.max(restante > 0 ? 2 : 0, restante * 100)}%` }} />
@@ -44,7 +44,7 @@ export function SaldoCompacto() {
   return (
     <span className="flex w-full flex-col gap-1.5 text-xs">
       <span className="flex items-baseline justify-between gap-2">
-        <span className="text-tinta-2">Sobra na OpenAI</span>
+        <span className="text-tinta-2">Crédito OpenAI</span>
         <span className="tabular font-medium text-tinta">{s ? dolar.format(s.disponivel) : "—"}</span>
       </span>
       <Barra restante={s ? restanteDe(s) : 0} />
@@ -75,7 +75,7 @@ export function SaldoDetalhado() {
     <section className="flex flex-col gap-4 rounded-cartao bg-painel p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="flex flex-col gap-1">
-          <span className="text-sm text-tinta-2">Sobra na OpenAI</span>
+          <span className="text-sm text-tinta-2">Crédito disponível</span>
           <span className="tabular text-4xl/none font-semibold tracking-[-0.03em]">{dolar.format(s.disponivel)}</span>
         </div>
         {ultimo && (

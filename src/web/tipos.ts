@@ -33,6 +33,7 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
   definir_formato: { fazendo: "Definindo o formato", feito: "Formato definido" },
   definir_headline: { fazendo: "Escrevendo a headline", feito: "Headline escrita" },
   gerar_3_artes: { fazendo: "Gerando 3 artes", feito: "3 artes geradas" },
+  pesquisar_referencias: { fazendo: "Pesquisando referências", feito: "Referências pesquisadas" },
   mostrar_artes: { fazendo: "Separando as artes", feito: "Artes para escolher" },
   escolher_arte: { fazendo: "Registrando a escolha", feito: "Arte escolhida" },
   buscar_fotos: { fazendo: "Buscando fotos", feito: "Fotos buscadas" },

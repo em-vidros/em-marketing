@@ -36,6 +36,9 @@ const IMAGEM =
 const PROBLEMAS =
   "Legendas, headlines, roteiros e artes são validados por código: texto contra o checklist do capítulo 16, imagem contra a paleta e as zonas seguras. Quando uma tool devolver problemas, mostre-os ao usuário em português claro, sobretudo os de severidade erro, e ofereça refazer. Quando uma tool devolver ok=false, leia o motivo e siga o próximo passo que ele indica.";
 
+const ESTILO =
+  "Estilo das artes: o padrão são os posts reais da @emvidros (vidro 3D brilhante, foto de arquitetura com faixa teal, parabéns em duotone teal, chamada em caixa alta sobre teal); gerar_3_artes já manda essas referências ao modelo. Quando o usuário pedir outro estilo (mais gráfico, com ilustração, minimalista, colagem, outro clima), siga o pedido: chame pesquisar_referencias para achar 2 ou 3 referências profissionais desse estilo em posts de marcas, agências e portfólios de design, transforme o que achou numa direção de arte concreta (composição, elementos, tipografia, textura, luz) e passe em direcao no gerar_3_artes. Nunca gere de novo o mesmo estilo de antes quando ele pediu outro. Se o usuário colar links de imagem como referência, passe em referencias.";
+
 const PEDIDO_MANDA =
   "O §12.4 diz quais datas propor por conta própria; ele não veta pedido. Quando o usuário pede post para uma data, inclusive fora de proximas_datas, faça o post. Se a data não estiver no calendário da marca, comente isso em no máximo uma frase, sem parar o fluxo e sem pedir validação a ninguém.";
 
@@ -60,6 +63,7 @@ export const BOTS: Record<BotId, Bot> = {
         "Agendamento em linguagem natural: \"posta sexta ao meio-dia nos stories\" basta. Converta a data relativa pelo calendário de DATA DE HOJE, sem perguntar dia nem ano. Se faltar a hora, use 12h; se faltar o formato, use feed. Diga na resposta a data, a hora e o formato que você assumiu, para o usuário trocar se quiser. Só pergunte o que não dá para deduzir.",
         "Pedido de post é para sair com arte. Se o Post voltar sem artes, leia o motivo e delegue de novo com a correção, em vez de devolver o problema ao usuário.",
         "A escolha da arte é sempre do usuário. Quando o Post voltar com as 3 artes, chame mostrar_artes, que desenha as opções na conversa, e pergunte qual ele quer. Só chame escolher_arte com o número que o usuário disse ou clicou; depois delegue ao Post o que faltar (legenda, versão stories). Nunca publique nem agende sem essa escolha.",
+        "Quando o usuário pedir outro estilo de arte, repasse ao Post o pedido com as palavras dele e mande gerar de novo seguindo esse estilo, com pesquisa de referências. Repasse também os links de imagem que ele colou. Ao mostrar as novas artes, pergunte se ele tem referências desse estilo: um link direto de imagem colado aqui, ou imagens subidas na Biblioteca, que entram na próxima rodada.",
         PEDIDO_MANDA,
         PILARES,
       ),
@@ -94,6 +98,7 @@ export const BOTS: Record<BotId, Bot> = {
         IMAGEM,
         "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário. Se o banco não tiver foto que sirva, não pare: monte um brief novo com precisa_foto_real false e um ângulo tipográfico que não mostre produto, obra nem pessoas, gere as artes e diga que uma foto real deixaria a peça melhor.",
         PEDIDO_MANDA,
+        ESTILO,
         PROBLEMAS,
         MARCA(),
       ),
@@ -102,6 +107,7 @@ export const BOTS: Record<BotId, Bot> = {
       "definir_formato",
       "definir_headline",
       "gerar_3_artes",
+      "pesquisar_referencias",
       "mostrar_artes",
       "escolher_arte",
       "buscar_fotos",

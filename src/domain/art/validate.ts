@@ -28,9 +28,6 @@ export const LIMIARES = {
   /** Fração de pixels com matiz fora do sistema. */
   foraDaPaletaAviso: 0.008,
   foraDaPaletaErro: 0.03,
-  /** §4 "70/20/10": se a arte parece muito verde, ela está errada. */
-  tealAviso: 0.25,
-  neutroMinimo: 0.55,
   /** §6.2: desvio-padrão de luminância (0–255) numa zona segura de story. */
   sdZonaSegura: 18,
   /** Largura da amostra. Reduzir é o que torna a análise barata. */
@@ -133,7 +130,7 @@ async function agitacao(jpeg: Buffer, top: number, height: number): Promise<numb
  * decide refazer é o humano (é o mesmo contrato do validador de legenda, com a
  * diferença de que texto barato pode ser reescrito em loop e imagem não).
  */
-export async function validarArte(jpeg: Buffer, formato: Formato): Promise<Problema[]> {
+export async function validarArte(jpeg: Buffer, formato: Formato, { paleta = true }: { paleta?: boolean } = {}): Promise<Problema[]> {
   const p: Problema[] = [];
   const esperado = tokens.formats[formato].final;
 
@@ -155,7 +152,9 @@ export async function validarArte(jpeg: Buffer, formato: Formato): Promise<Probl
   const c = await composicao(jpeg);
   const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
-  if (c.fora >= LIMIARES.foraDaPaletaAviso)
+  // Os posts reais da @emvidros são teal do começo ao fim; a regra 70/20/10 do brandbook antigo não vale mais.
+  // Estilos com foto ou com a direção do usuário trazem as cores do mundo e pulam a checagem de paleta.
+  if (paleta && c.fora >= LIMIARES.foraDaPaletaAviso)
     p.push({
       regra: "§4.1 paleta",
       severidade: c.fora >= LIMIARES.foraDaPaletaErro ? "erro" : "aviso",
@@ -163,20 +162,6 @@ export async function validarArte(jpeg: Buffer, formato: Formato): Promise<Probl
         `${pct(c.fora)} da arte tem matiz fora do sistema` +
         (c.matizesFora.length ? ` (≈ ${c.matizesFora.map((h) => `${h}°`).join(", ")})` : "") +
         ". A paleta é teal, grafite e neutros — nenhuma outra cor aparece.",
-    });
-
-  if (c.teal >= LIMIARES.tealAviso)
-    p.push({
-      regra: "§4.3 proporção 70/20/10",
-      severidade: "aviso",
-      detalhe: `${pct(c.teal)} de teal (alvo ≈ 10%). Se a arte parece "muito verde", ela está errada — exceto no estilo faixa-teal, cujo fundo é teal por definição.`,
-    });
-
-  if (c.neutro < LIMIARES.neutroMinimo)
-    p.push({
-      regra: "§4.3 proporção 70/20/10",
-      severidade: "aviso",
-      detalhe: `só ${pct(c.neutro)} de neutro (alvo ≈ 70% entre off-white, areia e grafite).`,
     });
 
   if (formato === "stories") {

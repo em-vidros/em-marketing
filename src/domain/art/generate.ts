@@ -31,6 +31,8 @@ export async function generateArt(opts: {
   formato: Formato;
   logoVariant?: "cor" | "branco";
   base?: string;
+  /** Posts reais da EM Vidros ou imagens que o usuário mandou, como referência de estilo. Vão depois do logo. */
+  referencias?: Uint8Array[];
 }): Promise<Buffer> {
   const f = FORMATS[opts.formato];
   const imagens = [await logo(opts.logoVariant ?? "cor")];
@@ -39,6 +41,7 @@ export async function generateArt(opts: {
     if (!base) throw new Error("A arte escolhida sumiu do armazenamento.");
     imagens.push(await toFile(base, "base.jpg", { type: "image/jpeg" }));
   }
+  for (const [i, ref] of (opts.referencias ?? []).entries()) imagens.push(await toFile(ref, `referencia-${i + 1}.jpg`, { type: "image/jpeg" }));
 
   const resposta = await openai().images.edit({
     model: MODELO_DE_IMAGEM,

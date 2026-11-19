@@ -74,10 +74,12 @@ describe("validarArte", () => {
     expect(paleta?.severidade).toBe("erro");
   });
 
-  test("arte inteira de teal é aviso de proporção, nunca erro — faixa-teal é legítimo", async () => {
-    const ps = await validarArte(await solido("#2F646A"), "feed");
-    expect(erros(ps)).toEqual([]);
-    expect(regras(ps)).toContain("§4.3 proporção 70/20/10");
+  test("arte inteira de teal passa limpa: é o padrão dos posts reais da @emvidros", async () => {
+    expect(await validarArte(await solido("#2F646A"), "feed")).toEqual([]);
+  });
+
+  test("estilo com foto pula a paleta: as cores do mundo entram", async () => {
+    expect(regras(await validarArte(await solido("#E8822A"), "feed", { paleta: false }))).not.toContain("§4.1 paleta");
   });
 
   test("mancha colorida pequena passa do limiar de aviso sem virar erro", async () => {

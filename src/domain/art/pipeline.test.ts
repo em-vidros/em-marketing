@@ -1,6 +1,6 @@
 import { expect, test, describe } from "bun:test";
 import { existsSync } from "node:fs";
-import { buildPrompt, stylesFor, PILARES, type Brief } from "./pipeline";
+import { buildPrompt, referenciasDoEstilo, stylesFor, PILARES, type Brief } from "./pipeline";
 import styleMap from "../../../styles/map.json";
 import { tokens } from "../brand";
 
@@ -62,6 +62,16 @@ describe("buildPrompt", () => {
     expect(prompt).toContain("must be real photography");
     expect(prompt).toContain("#2F646A");
     expect(prompt).not.toMatch(/#(2C7A75|5FA9A2|3FA9A0|00A99D|3D3D3D)/i);
+  });
+
+  test("todo estilo do mapa leva posts reais da EM Vidros como referência", () => {
+    for (const p of PILARES) for (const st of stylesFor(p)) expect(referenciasDoEstilo(st).length).toBe(2);
+  });
+
+  test("o estilo que o usuário pediu entra no prompt e manda sobre o da casa", () => {
+    const prompt = buildPrompt({ styleId: "vidro-3d", formato: "feed", brief, headline: "H", direcao: "ilustração flat com traço de giz" });
+    expect(prompt).toContain("overrides the visual language");
+    expect(prompt).toContain("ilustração flat com traço de giz");
   });
 
   test("foto-real se recusa a virar prompt", () => {

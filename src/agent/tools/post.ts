@@ -1,4 +1,5 @@
 import { tool } from "ai";
+import sharp from "sharp";
 import { z } from "zod";
 import { emOrdem, urlDaMidia } from "../../db";
 import { q } from "../../v2/banco";
@@ -24,6 +25,27 @@ import { fotoPublica } from "./fotos";
 import { escolhasDeArte } from "../../domain/historico";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
+
+const TETO_DA_REFERENCIA = 10 * 1024 * 1024;
+
+/** Baixa as imagens de referência que o usuário mandou e devolve em JPEG. Link que não é imagem vira aviso, não erro. */
+async function baixarReferencias(urls: string[]): Promise<{ imagens: Uint8Array[]; recusadas: string[] }> {
+  const imagens: Uint8Array[] = [];
+  const recusadas: string[] = [];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000), headers: { "user-agent": "Mozilla/5.0" } });
+      const tipo = res.headers.get("content-type") ?? "";
+      if (!res.ok || !tipo.startsWith("image/")) throw new Error(tipo || String(res.status));
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      if (bytes.byteLength > TETO_DA_REFERENCIA) throw new Error("acima de 10 MB");
+      imagens.push(await sharp(bytes).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer());
+    } catch {
+      recusadas.push(url);
+    }
+  }
+  return { imagens, recusadas };
+}
 const mediaType = z.enum(["IMAGE", "STORIES"]);
 
 /** Grava o evento e devolve o estado novo, ou a recusa da máquina de estados. */
@@ -87,9 +109,23 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
     }),
 
     gerar_3_artes: tool({
-      description: "Gera as 3 variações de arte no formato escolhido. Refazer as artes é chamar de novo.",
-      inputSchema: z.object({}),
-      execute: async () => {
+      description:
+        "Gera as 3 variações de arte no formato escolhido, no estilo dos posts reais da EM Vidros. Refazer as artes é chamar de novo. Quando o usuário pedir outro estilo, passe direcao com o que ele pediu, detalhado com o que você achou em pesquisar_referencias.",
+      inputSchema: z.object({
+        direcao: z
+          .string()
+          .max(1500)
+          .optional()
+          .describe(
+            "Direção de arte pedida pelo usuário, em inglês ou português: estilo, elementos, composição, tipografia, clima. Concreta, como um diretor de arte escreveria. Omita para o estilo padrão da casa.",
+          ),
+        referencias: z
+          .array(z.string().url())
+          .max(3)
+          .optional()
+          .describe("Links diretos de imagens de referência que o usuário mandou na conversa (terminam em .jpg, .png ou .webp, ou são de CDN de imagem)."),
+      }),
+      execute: async ({ direcao, referencias }) => {
         const r = exigir(await atual(), "artes");
         if (!r.ok) return r;
         const p = r.post;
@@ -99,9 +135,14 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         const alvo = p.formato === "ambos" ? "feed" : p.formato;
         // Referência é conveniência: sem elas, ou com o banco fora, a arte sai do estilo puro.
         const lidas = [...((await inspiracoes?.().catch(() => [])) ?? []), ...(await escolhasDeArte().catch(() => []))];
-        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, inspiracoes: lidas });
+        const baixadas = referencias?.length ? await baixarReferencias(referencias) : { imagens: [], recusadas: [] };
+        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, inspiracoes: lidas, direcao, referenciasDoUsuario: baixadas.imagens });
         const estado = await aplicar(conversaId, { tipo: "artes", artes });
-        return { ...estado, artes: await emOrdem(artes, artePublica) };
+        return {
+          ...estado,
+          artes: await emOrdem(artes, artePublica),
+          ...(baixadas.recusadas.length ? { referenciasRecusadas: baixadas.recusadas, aviso: "Estes links não eram imagens e ficaram de fora. Peça ao usuário o link direto da imagem ou que suba na Biblioteca." } : {}),
+        };
       },
     }),
 

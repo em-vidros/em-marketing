@@ -1,3 +1,4 @@
+import { openai } from "@ai-sdk/openai";
 import { toolsDeAgenda } from "./agenda";
 import { toolsDeDelegacao, type RodarEspecialista } from "./delegar";
 import { toolsDeFotos } from "./fotos";
@@ -14,6 +15,8 @@ export const catalogo = async (conversaId: string, rodar: RodarEspecialista, ins
   ...toolsDeFotos,
   ...toolsDeAgenda,
   ...toolsDeTexto,
+  // Busca na web da OpenAI, executada pelo provedor: o Post procura referências quando o usuário pede outro estilo.
+  pesquisar_referencias: openai.tools.webSearch({ searchContextSize: "medium" }),
   ...(await toolsDeDelegacao(conversaId, rodar)),
 });
 
