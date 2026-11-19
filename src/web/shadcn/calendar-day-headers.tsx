@@ -33,12 +33,14 @@ export function CalendarDayHeaders({
           <div
             key={day.date.toISOString()}
             className={cn(
-              "flex min-w-0 flex-col items-center justify-center gap-0.5 py-2 text-sm sm:flex-row sm:gap-1",
+              // A container: the column's own width picks the full or short day name
+              "@container min-w-0 py-2 text-sm",
               highlightedDate &&
                 isSameDay(day.date, highlightedDate) &&
                 "column-highlight",
             )}
           >
+            <div className="flex flex-col items-center justify-center gap-0.5 @[6rem]:flex-row @[6rem]:gap-1">
             <span
               className={cn(
                 day.isToday
@@ -46,8 +48,8 @@ export function CalendarDayHeaders({
                   : "text-muted-foreground font-normal",
               )}
             >
-              <span className="max-sm:hidden">{day.dayName}</span>
-              <span className="sm:hidden">{day.dayName.slice(0, 3)}</span>
+              <span className="@max-[6rem]:hidden">{day.dayName}</span>
+              <span className="@[6rem]:hidden">{day.dayName.slice(0, 3)}</span>
             </span>
             <span
               className={cn(
@@ -59,6 +61,7 @@ export function CalendarDayHeaders({
             >
               {day.dayNumber}
             </span>
+            </div>
           </div>
         ))}
       </div>
@@ -84,12 +87,14 @@ export function CalendarDayHeaders({
           <div
             key={day.date.toISOString()}
             className={cn(
-              "flex min-w-0 flex-col items-center justify-center gap-0.5 py-2 text-sm sm:flex-row sm:gap-1",
+              // A container: the column's own width picks the full or short day name
+              "@container min-w-0 py-2 text-sm",
               highlightedDate &&
                 isSameDay(day.date, highlightedDate) &&
                 "column-highlight",
             )}
           >
+            <div className="flex flex-col items-center justify-center gap-0.5 @[6rem]:flex-row @[6rem]:gap-1">
             <span
               className={cn(
                 day.isToday
@@ -97,8 +102,8 @@ export function CalendarDayHeaders({
                   : "text-muted-foreground font-normal",
               )}
             >
-              <span className="max-sm:hidden">{day.dayName}</span>
-              <span className="sm:hidden">{day.dayName.slice(0, 3)}</span>
+              <span className="@max-[6rem]:hidden">{day.dayName}</span>
+              <span className="@[6rem]:hidden">{day.dayName.slice(0, 3)}</span>
             </span>
             <span
               className={cn(
@@ -110,6 +115,7 @@ export function CalendarDayHeaders({
             >
               {day.dayNumber}
             </span>
+            </div>
           </div>
         ))}
       </div>
