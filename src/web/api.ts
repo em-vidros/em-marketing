@@ -83,7 +83,8 @@ export const apiChaves = {
 };
 
 /** Uma arte como chega pela API: as datas vêm em texto ISO. */
-export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: string; atualizadaEm: string };
+/** `separavel` só vem no GET: a arte nasceu de uma imagem com texto desenhado e ainda não foi separada em camadas. */
+export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: string; atualizadaEm: string; separavel?: boolean };
 
 /** As rotas de artes do backend novo (src/v2/api.ts). */
 export const apiArtes = {
@@ -91,6 +92,8 @@ export const apiArtes = {
   gravar: async (id: string, edicao: Edicao, base: string) =>
     (await pedir(`/api/artes/${id}`, { method: "PUT", body: JSON.stringify(edicao), headers: { "if-match": base } })).json() as Promise<ArteDaApi>,
   novaCena: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}/cena`, "POST"),
+  /** Tira texto e logo de dentro da imagem e devolve a arte com eles em camadas. Leva perto de um minuto. */
+  separar: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}/separar`, "POST"),
   /** Imagem ou SVG para uma camada. O servidor devolve o PNG guardado e a proporção dele. */
   enviarImagem: async (id: string, arquivo: File) => {
     const form = new FormData();

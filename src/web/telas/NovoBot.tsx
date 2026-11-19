@@ -91,12 +91,12 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
           <Avatar bot="" visual={visualCriado(pedido.forma, pedido.cor)} tamanho={56} anel="var(--color-fundo)" />
           <div className="flex min-w-0 flex-col gap-1">
             <h1 className="text-2xl/tight font-semibold tracking-[-0.02em] text-balance [overflow-wrap:anywhere]">{pedido.nome.trim() || "Novo bot"}</h1>
-            <p className="text-pretty text-tinta-2">Qualquer pessoa da equipe pode conversar com ele, mudar a configuração ou apagar.</p>
+            <p className="text-pretty text-tinta-2">Toda a equipe pode conversar com ele, mudar a configuração e apagar.</p>
           </div>
         </header>
 
         <Cartao>
-          <Linha rotulo="Nome" para={`${ids}-nome`} ajuda="Como o bot aparece na barra lateral e nas conversas.">
+          <Linha rotulo="Nome" para={`${ids}-nome`} ajuda="Aparece na barra lateral e no topo de cada conversa.">
             <input
               id={`${ids}-nome`}
               ref={campoDe("nome")}
@@ -111,7 +111,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
             />
             <Problema id={`${ids}-nome-erro`} texto={problemas.nome} />
           </Linha>
-          <Linha rotulo="Descrição" para={`${ids}-descricao`} ajuda="Uma frase sobre o papel dele. Aparece embaixo do nome.">
+          <Linha rotulo="Descrição" para={`${ids}-descricao`} ajuda="Uma frase sobre o que ele faz. O bot lê essa frase para saber quais ferramentas usar, e ela aparece embaixo do nome.">
             <Descricao
               id={`${ids}-descricao`}
               campoRef={campoDe("descricao")}
@@ -123,7 +123,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
             />
             <Problema id={`${ids}-descricao-erro`} texto={problemas.descricao} />
           </Linha>
-          <Linha rotulo="Setor" para={`${ids}-setor`} ajuda="O grupo do bot na barra lateral. Use um que já existe para juntar com ele.">
+          <Linha rotulo="Setor" para={`${ids}-setor`} ajuda="Junta o bot com os outros do mesmo setor na barra lateral e diz a ele em que área trabalha.">
             <Setor
               id={`${ids}-setor`}
               valor={pedido.setor}
@@ -135,7 +135,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
             />
             <Problema id={`${ids}-setor-erro`} texto={problemas.setor} />
           </Linha>
-          <Linha rotulo="Aparência" ajuda="A forma e a cor do personagem.">
+          <Linha rotulo="Aparência" ajuda="A forma e a cor do avatar.">
             <div role="radiogroup" aria-label="Forma" className="flex flex-wrap gap-2">
               {(Object.keys(FORMAS) as Forma[]).map((forma) => (
                 <label
@@ -166,7 +166,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
               ))}
             </div>
           </Linha>
-          <Linha rotulo="Modelo" ajuda="O modelo de IA que responde por este bot.">
+          <Linha rotulo="Modelo" ajuda="A IA que escreve as respostas deste bot.">
             <SeletorDeModelo
               valor={pedido.modelo}
               salvo={pedido.modelo}
@@ -181,7 +181,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
           <Linha
             rotulo="Prompt"
             para={`${ids}-prompt`}
-            ajuda="O papel do bot: o que ele faz, em que ordem e o que evita. Escreva como se explicasse a uma pessoa nova na equipe."
+            ajuda="Diga o que ele faz, em que ordem e o que evita. Escreva como se explicasse o trabalho a alguém que entrou na equipe hoje."
           >
             <TextoLongo
               id={`${ids}-prompt`}
@@ -195,7 +195,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
           </Linha>
         </Cartao>
         <p className="-mt-4 px-1 text-[13px] text-pretty text-tinta-3">
-          Não precisa escolher ferramentas: o bot decide o que usar pela descrição e pelo setor. O brandbook da EM Vidros entra no prompt por padrão. Regras, memória e brandbook ficam na aba Configuração, depois de criar.
+          O bot escolhe as ferramentas sozinho, pela descrição e pelo setor. O brandbook da EM Vidros já vai junto no prompt. Depois de criar, a aba Configuração tem as regras, a memória e a opção de tirar o brandbook.
         </p>
 
         <div className="flex flex-wrap items-center justify-end gap-3">

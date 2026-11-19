@@ -4,6 +4,7 @@ import type { Banco } from "./banco";
 import { camadasIniciais, type Ajustes, type Camada, type Formato } from "./camadas";
 import type { Ia } from "./ia";
 import { escolherReferencias, listarReferencias } from "./referencias";
+import { areasDosElementos, camadasDosElementos } from "./separar";
 import { artes, type Arte } from "./schema";
 
 export interface Estudio {
@@ -22,6 +23,15 @@ export const listarArtes = (banco: Banco) => banco.select().from(artes).orderBy(
  * O pedido da arte que nasce de uma imagem de post (arteDaImagem). É a chave que reabre a mesma arte,
  * então o texto não pode mudar: as artes já abertas no editor guardam este formato.
  */
+const PEDIDO_DE_IMAGEM = /^Post [0-9]+, (variação [0-9]+|story): /;
+
+/**
+ * Uma arte aberta de uma imagem de post tem o texto e o logo desenhados na cena. Enquanto ninguém mexeu nela,
+ * o editor pede para separar esses elementos em camadas. Separada ou editada, `atualizadaEm` muda e ela sai daqui.
+ */
+export const separavel = (arte: Pick<Arte, "pedido" | "camadas" | "criadaEm" | "atualizadaEm">) =>
+  PEDIDO_DE_IMAGEM.test(arte.pedido) && arte.camadas.length === 0 && arte.atualizadaEm.getTime() === arte.criadaEm.getTime();
+
 export const pedidoDaImagem = (i: { postId: number; variante: number | null; path: string }) =>
   i.variante === null ? `Post ${i.postId}, story: ${i.path}` : `Post ${i.postId}, variação ${i.variante}: ${i.path}`;
 
@@ -115,6 +125,28 @@ export async function gravarEdicao(banco: Banco, id: string, edicao: Edicao, bas
   if (arte) return { arte };
   const atual = await pegarArte(banco, id);
   return atual ? { conflito: atual } : null;
+}
+
+/**
+ * Tira o texto e o logo de dentro da cena e devolve cada um como camada. Lê os elementos, apaga as áreas deles
+ * com o modelo de imagem e grava a cena limpa. Se a leitura não acha nada, só marca a arte como separada.
+ */
+export async function separarElementos({ banco, ia, arquivos }: Estudio, id: string): Promise<Arte | null> {
+  const atual = await pegarArte(banco, id);
+  if (!atual) return null;
+  if (!separavel(atual)) return atual;
+  const original = await arquivos.ler(atual.cena);
+  if (!original) throw new Error("A imagem desta arte sumiu do armazenamento.");
+  const elementos = await ia.lerElementos(original, atual.formato);
+  const areas = areasDosElementos(elementos, atual.formato);
+  const cena = areas.length ? await arquivos.salvar(await ia.apagarAreas(original, atual.formato, areas), "jpg") : atual.cena;
+  const camadas = camadasDosElementos(elementos, atual.formato);
+  const [arte] = await banco
+    .update(artes)
+    .set({ cena, camadas, atualizadaEm: new Date() })
+    .where(and(eq(artes.id, id), eq(artes.atualizadaEm, atual.atualizadaEm)))
+    .returning();
+  return arte ?? (await pegarArte(banco, id));
 }
 
 /** O botão "Nova cena": gera outra cena com o mesmo prompt e mantém as camadas. */

@@ -58,11 +58,16 @@ type Gravacao = { tipo: "salvo" } | { tipo: "pendente" } | { tipo: "salvando" } 
 
 export function Arte({ id, abrirMenu }: { id: string; abrirMenu: () => void }) {
   const [carga, tentar] = useApi<ArteDaApi>(`/api/artes/${id}`);
+  const [separada, setSeparada] = useState<ArteDaApi | null>(null);
   useEffect(() => {
     document.title = `${carga.estado === "pronto" ? tituloDa(carga.dados) : "Arte"} · EM Marketing`;
   }, [carga]);
 
-  if (carga.estado === "pronto") return <Editor inicial={carga.dados} abrirMenu={abrirMenu} />;
+  if (carga.estado === "pronto") {
+    const arte = separada ?? carga.dados;
+    if (arte.separavel) return <Separacao arte={arte} abrirMenu={abrirMenu} aoTerminar={setSeparada} />;
+    return <Editor inicial={arte} abrirMenu={abrirMenu} />;
+  }
   return (
     <main id="conteudo" className="flex-1 px-4 pt-3 sm:px-6 md:pt-10">
       <BotaoMenu abrir={abrirMenu} />
@@ -70,6 +75,68 @@ export function Arte({ id, abrirMenu }: { id: string; abrirMenu: () => void }) {
         <p className="text-tinta-3">Carregando…</p>
       ) : (
         <Falha texto="Não deu para abrir a arte." erro={carga.erro} tentar={tentar} />
+      )}
+    </main>
+  );
+}
+
+/** Uma separação por arte, mesmo que a tela monte duas vezes: cada pedido custa uma leitura e uma imagem nova. */
+const separacoes = new Map<string, Promise<ArteDaApi>>();
+
+function separarUmaVez(id: string) {
+  let pedido = separacoes.get(id);
+  if (!pedido) {
+    pedido = apiArtes.separar(id).finally(() => separacoes.delete(id));
+    separacoes.set(id, pedido);
+  }
+  return pedido;
+}
+
+/**
+ * Uma imagem antiga chega com o texto e o logo desenhados nela. Antes do editor abrir, o servidor separa
+ * cada um numa camada. Se falhar, a pessoa tenta de novo ou edita a imagem como está.
+ */
+function Separacao({ arte, abrirMenu, aoTerminar }: { arte: ArteDaApi; abrirMenu: () => void; aoTerminar: (a: ArteDaApi) => void }) {
+  const [erro, setErro] = useState<string | null>(null);
+  const [tentativa, setTentativa] = useState(0);
+  useEffect(() => {
+    let ativo = true;
+    setErro(null);
+    separarUmaVez(arte.id).then(
+      (separada) => ativo && aoTerminar({ ...separada, separavel: false }),
+      (e: Error) => ativo && setErro(e.message),
+    );
+    return () => void (ativo = false);
+  }, [arte.id, tentativa, aoTerminar]);
+
+  const { largura, altura } = FORMATOS[arte.formato];
+  return (
+    <main id="conteudo" className="flex flex-1 flex-col items-center gap-5 overflow-y-auto px-4 pt-3 pb-10 sm:px-6 md:pt-10">
+      <div className="self-start">
+        <BotaoMenu abrir={abrirMenu} />
+      </div>
+      <img
+        src={apiArtes.png(arte)}
+        alt=""
+        width={largura}
+        height={altura}
+        className={`max-h-[60dvh] w-auto rounded-cartao outline-1 -outline-offset-1 outline-black/10 ${erro ? "" : "motion-safe:animate-pulse"}`}
+      />
+      {erro ? (
+        <div className="flex w-full max-w-md flex-col gap-3">
+          <Falha texto="Não deu para separar o texto da imagem." erro={erro} tentar={() => setTentativa((t) => t + 1)} />
+          <button
+            type="button"
+            onClick={() => aoTerminar({ ...arte, separavel: false })}
+            className="pressiona cursor-pointer self-start rounded-full bg-linha px-4 py-2 text-sm font-medium hover:bg-linha-forte"
+          >
+            Editar a imagem como está
+          </button>
+        </div>
+      ) : (
+        <p role="status" className="max-w-md text-center text-sm text-pretty text-tinta-2">
+          Separando o texto e o logo da imagem para você editar cada um. Leva perto de um minuto, e só acontece na primeira vez.
+        </p>
       )}
     </main>
   );

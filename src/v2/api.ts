@@ -4,7 +4,7 @@ import { Hono } from "hono";
 import sharp from "sharp";
 import { z } from "zod";
 import type { Usuario } from "../server/auth";
-import { criarArte, gravarEdicao, listarArtes, novaCena, pegarArte, type Estudio } from "./artes";
+import { criarArte, gravarEdicao, listarArtes, novaCena, pegarArte, separarElementos, separavel, type Estudio } from "./artes";
 import { EXTENSOES, ehChave, TIPO_DA_EXTENSAO, type Extensao } from "./arquivos";
 import { Ajustes, Camadas, FORMATOS, type Formato } from "./camadas";
 import { catalogoDeFontes, fonteRecusada } from "./fontsource";
@@ -125,6 +125,11 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
 
   api.get("/artes/:id", async (c) => {
     const arte = await pegarArte(banco, c.req.param("id"));
+    return arte ? c.json({ ...arte, separavel: separavel(arte) }) : c.json(erro("Não encontrado."), 404);
+  });
+
+  api.post("/artes/:id/separar", async (c) => {
+    const arte = await separarElementos(estudio, c.req.param("id"));
     return arte ? c.json(arte) : c.json(erro("Não encontrado."), 404);
   });
 

@@ -24,16 +24,33 @@ const iaFalsa: Ia = {
     return { cena: "flat matte glass texture", titulo: "Vidro temperado aguenta o dia a dia", apoio: "Box sob medida em 7 dias", display: false, fundoEscuro: false };
   },
   gerarCena: async (_prompt, formato) => cenaFalsa(formato),
+  lerElementos: async () => {
+    separacoes.leituras++;
+    return {
+      textos: [
+        { texto: "Box temperado\npronta entrega", x: 80, y: 120, largura: 600, altura: 200, tamanho: 80, fonte: "Poppins", peso: "600", cor: "#2f646a", alinhamento: "esquerda" },
+      ],
+      logo: { x: 826, y: 1128, largura: 190, altura: 158, variante: "cor", selo: false },
+    };
+  },
+  apagarAreas: async (_imagem, formato, areas) => {
+    separacoes.areas.push(...areas);
+    return cenaFalsa(formato);
+  },
 };
+
+let separacoes = { leituras: 0, areas: [] as { x: number; y: number; largura: number; altura: number }[] };
+let arquivos: ReturnType<typeof arquivosNoDisco>;
 
 let api: ReturnType<typeof criarApi>;
 
 beforeEach(async () => {
   leiturasRecebidas = [];
+  separacoes = { leituras: 0, areas: [] };
   // O banco é o do preload, de todos os arquivos de teste; cada caso começa sem referências nem artes.
   await banco().delete(referencias);
   await banco().delete(artes);
-  const arquivos = arquivosNoDisco(mkdtempSync(join(tmpdir(), "em-v2-")));
+  arquivos = arquivosNoDisco(mkdtempSync(join(tmpdir(), "em-v2-")));
   api = criarApi({ banco: banco(), ia: iaFalsa, arquivos }, async (req) => (req.headers.get("x-teste") === "ana" ? ana : null));
 });
 
@@ -195,6 +212,34 @@ describe("artes", () => {
     } finally {
       rede.mockRestore();
     }
+  });
+});
+
+describe("imagem antiga no editor", () => {
+  test("separa o texto e o logo desenhados na imagem em camadas, uma vez só, e apaga as áreas deles da cena", async () => {
+    const original = await arquivos.salvar(await cenaFalsa("feed"), "jpg");
+    const [antiga] = await banco()
+      .insert(artes)
+      .values({ pedido: "Post 7, variação 2: arts/post7.jpg", formato: "feed", cena: original, promptDaCena: "Box", referencias: [], camadas: [], criadaPor: "u-ana" })
+      .returning();
+    const antes = await (await pedir(`/api/artes/${antiga!.id}`)).json();
+
+    const separada = await (await pedir(`/api/artes/${antiga!.id}/separar`, { method: "POST" })).json();
+    const depois = await (await pedir(`/api/artes/${antiga!.id}`)).json();
+    await pedir(`/api/artes/${antiga!.id}/separar`, { method: "POST" });
+
+    expect(antes.separavel).toBe(true);
+    expect(separada.cena).not.toBe(original);
+    expect(separada.camadas).toEqual([
+      expect.objectContaining({ tipo: "texto", texto: "Box temperado\npronta entrega", fonte: "Poppins", peso: 600, tamanho: 80, cor: "#2F646A", x: 80, y: 120, entrelinha: 1.25 }),
+      { id: "logo", tipo: "logo", variante: "cor", x: 826, y: 1128, largura: 190 },
+    ]);
+    expect(separacoes.areas).toEqual([
+      { x: 52, y: 92, largura: 656, altura: 256 },
+      { x: 798, y: 1100, largura: 246, altura: 214 },
+    ]);
+    expect(depois.separavel).toBe(false);
+    expect(separacoes.leituras).toBe(1);
   });
 });
 

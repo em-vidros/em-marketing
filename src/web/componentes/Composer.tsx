@@ -46,7 +46,11 @@ export function Composer({
       className="sticky bottom-0 bg-linear-to-t from-fundo from-70% to-fundo/0 px-4 pt-2 pb-[max(20px,env(safe-area-inset-bottom))] sm:px-6"
     >
       <div
-        onClick={() => campo.current?.focus()}
+        onClick={(e) => {
+          // Clique em botão (o seletor de bot, enviar) ou num popup em portal não rouba o foco dele.
+          const alvo = e.target as Element;
+          if (e.currentTarget.contains(alvo) && !alvo.closest("button, a")) campo.current?.focus();
+        }}
         className="mx-auto flex max-w-3xl cursor-text flex-col gap-1.5 rounded-composer border border-borda-campo bg-superficie pt-3.5 pr-3 pb-2.5 pl-5 transition-[border-color] duration-150 focus-within:border-tinta"
       >
         <label htmlFor="mensagem" className="sr-only">

@@ -294,7 +294,7 @@ export function Setor({
             </ComboboxItem>
           ))}
         </ComboboxList>
-        <ComboboxEmpty className="px-2.5 py-2 text-[13px] empty:hidden text-tinta-3">Setor novo. Enter para usar este nome.</ComboboxEmpty>
+        <ComboboxEmpty className="px-2.5 py-2 text-[13px] empty:hidden text-tinta-3">Setor novo. Enter confirma o nome.</ComboboxEmpty>
       </ComboboxContent>
     </Combobox>
   );
