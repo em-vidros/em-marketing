@@ -119,8 +119,24 @@ export function Uso({ abrirMenu }: { abrirMenu: () => void }) {
               </div>
             </section>
             <PorDia dias={carga.dados.porDia} />
-            <details>
-              <summary className="cursor-pointer text-sm text-tinta-2 hover:text-tinta">Detalhes por modelo e por origem</summary>
+            <details className="group">
+              <summary className="flex w-fit cursor-pointer list-none items-center gap-1.5 py-1 text-sm text-tinta-2 hover:text-tinta [&::-webkit-details-marker]:hidden">
+                <svg
+                  aria-hidden="true"
+                  width="10"
+                  height="10"
+                  viewBox="0 0 10 10"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="transition-transform duration-300 ease-(--ease-saida) group-open:rotate-90 motion-reduce:transition-none"
+                >
+                  <path d="M3.5 2l3 3-3 3" />
+                </svg>
+                Detalhes por modelo e por origem
+              </summary>
               <div className="mt-4 flex flex-col gap-8">
                 <Tabela titulo="Por modelo" coluna="Modelo" linhas={carga.dados.porModelo.map(({ modelo, ...t }) => ({ nome: modelo, ...t }))} />
                 <Tabela titulo="Por origem" coluna="Origem" linhas={carga.dados.porOrigem.map(({ origem, ...t }) => ({ nome: origem, ...t }))} />
