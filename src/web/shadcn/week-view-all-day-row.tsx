@@ -74,7 +74,7 @@ export function WeekViewAllDayRow({
     >
       {/* All-day label, as wide as the time axis below it */}
       <div
-        className="border-border text-muted-foreground flex w-16 flex-shrink-0 items-start justify-end border-r px-2 py-2 text-xxs"
+        className="border-border text-muted-foreground flex w-16 flex-shrink-0 items-start justify-end border-r px-2 py-2 text-right text-xxs"
         style={
           timeAxisWidth === undefined ? undefined : { width: timeAxisWidth }
         }
