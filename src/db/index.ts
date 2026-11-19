@@ -43,6 +43,10 @@ export async function criarTabelas(): Promise<void> {
       apagada_em double precision     -- epoch ms; NULL = viva. O boot remove de vez depois de 30 dias.
     )`;
     await q`CREATE INDEX IF NOT EXISTS conversas_usuario ON conversas(user_id, updated_at)`;
+    // O turno do bot em andamento (agent/conversas.ts, comecarTurno). turno_ate é o fim do aluguel em epoch ms,
+    // NULL = livre. parar_em é quando alguém apertou Parar nesse turno.
+    await q`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS turno_ate double precision`;
+    await q`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS parar_em double precision`;
 
     // Uma delegação do Chefe a um especialista (agent/tarefas.ts). conversa_id é a
     // conversa do Chefe; mensagens é o UIMessage[] do especialista em JSON.

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { APICallError, simulateReadableStream, type LanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { executar } from ".";
+import { PARADO_PELO_USUARIO } from "./conversas";
 import { pegarTarefa, tarefasDaConversa } from "./tarefas";
 
 type Chunk = Awaited<ReturnType<MockLanguageModelV4["doStream"]>>["stream"] extends ReadableStream<infer C> ? C : never;
@@ -76,6 +77,29 @@ describe("delegação do Chefe", () => {
 
     expect(tarefa).toMatchObject({ status: "falhou", resumo: null, erro: expect.stringContaining("limite de uso") });
     expect(resultadoVistoPeloChefe(chefe)).toEqual({ type: "json", value: { tarefaId: tarefa?.id, status: "falhou", erro: tarefa?.erro } });
+  });
+
+  test("a tarefa parada no meio fica como falhou, com o motivo, e não como concluída", async () => {
+    const parar = new AbortController();
+    const legenda = new MockLanguageModelV4({
+      doStream: async () => {
+        parar.abort();
+        return { stream: new ReadableStream<Chunk>({ start: (c) => c.enqueue({ type: "text-start", id: "t" }) }) };
+      },
+    });
+    const conversaId = `teste-${crypto.randomUUID()}`;
+    const result = await executar("chefe", conversaId, [{ role: "user", content: "Preciso de uma legenda." }], {
+      resolverModelo: (bot) => (bot.id === "chefe" ? chefeQueDelega() : legenda),
+      abortSignal: parar.signal,
+    });
+
+    await result.consumeStream();
+    // O turno do Chefe fecha antes de a tool gravar o fim da tarefa.
+    const terminada = async () => (await tarefasDaConversa(conversaId)).find((t) => t.status === "falhou" || t.status === "concluida");
+    let tarefa = await terminada();
+    for (let i = 0; i < 100 && !tarefa; i++) tarefa = await Bun.sleep(10).then(terminada);
+
+    expect(tarefa).toMatchObject({ status: "falhou", erro: PARADO_PELO_USUARIO });
   });
 
   test("duas delegar_post no mesmo passo rodam uma depois da outra", async () => {

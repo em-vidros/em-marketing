@@ -2,7 +2,8 @@ import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, isToolUIPart, simulateReadableStream, type LanguageModel, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { AINDA_RESPONDENDO, abrirConversaDoUsuario, apagarMensagem, conversaDoUsuario, mensagensDaConversa } from "../agent/conversas";
+import { AINDA_RESPONDENDO, abrirConversaDoUsuario, apagarMensagem, conversaDoUsuario, mensagensDaConversa, pararTurno } from "../agent/conversas";
+import type { BotId } from "../agent/bots";
 import { criarPost, gravarPost, transicionar, type EtapaPost, type Evento } from "../agent/post";
 import { primeira } from "../db";
 import { q } from "../v2/banco";
@@ -32,17 +33,17 @@ const chefeQueAgenda = () => {
   });
 };
 
-/** Uma conversa com um post com arte escolhida e legenda, pronto para agendar. */
-async function conversaComPost(): Promise<string> {
+const PRONTO_PARA_AGENDAR: Evento[] = [
+  { tipo: "headline", headline: { headline: "O temperado quebra em grãos.", apoio: "" } },
+  { tipo: "artes", artes: [{ variant: 1, style: "tecnico-poppins", path: "v1.jpg", problemas: [] }] },
+  { tipo: "escolha", variante: 1 },
+  { tipo: "legenda", legenda: "Legenda." },
+];
+
+/** Uma conversa com um post. Por padrão, com arte escolhida e legenda, pronto para agendar. */
+async function conversaComPost(botId: BotId = "chefe", eventos = PRONTO_PARA_AGENDAR): Promise<string> {
   const id = `chat-${crypto.randomUUID()}`;
-  await abrirConversaDoUsuario(usuario.id, id, "chefe", "Post de teste");
-  const arte = { variant: 1, style: "tecnico-poppins", path: "v1.jpg", problemas: [] };
-  const eventos: Evento[] = [
-    { tipo: "headline", headline: { headline: "O temperado quebra em grãos.", apoio: "" } },
-    { tipo: "artes", artes: [arte] },
-    { tipo: "escolha", variante: 1 },
-    { tipo: "legenda", legenda: "Legenda." },
-  ];
+  await abrirConversaDoUsuario(usuario.id, id, botId, "Post de teste");
   const post = eventos.reduce<EtapaPost>((p, e) => {
     const r = transicionar(p, e);
     if (!r.ok) throw new Error(r.motivo);
@@ -192,6 +193,50 @@ describe("editar e apagar mensagens", () => {
       ["user", "primeira"],
       ["assistant", "Ok."],
     ]);
+  });
+});
+
+describe("parar", () => {
+  test("Parar com uma tool rodando corta o turno, grava a resposta pela metade e a mensagem seguinte é respondida", async () => {
+    let chamadas = 0;
+    const modelo = new MockLanguageModelV4({
+      doStream: async () =>
+        chamadas++ > 0
+          ? responde("Ok.")
+          : turnoDoModelo(
+              [
+                { type: "text-start", id: "t" },
+                { type: "text-delta", id: "t", delta: "Vou gerar as artes." },
+                { type: "text-end", id: "t" },
+                { type: "tool-call", toolCallId: "artes-1", toolName: "gerar_3_artes", input: "{}" },
+              ],
+              "tool-calls",
+            ),
+    });
+    // As artes não saem nunca: só o sinal de parar encerra o turno.
+    const gerando = Promise.withResolvers<void>();
+    const inspiracoes = () => {
+      gerando.resolve();
+      return new Promise<never>(() => {});
+    };
+    const rota = rotaDeChat({ resolverModelo: () => modelo, inspiracoes });
+    const id = await conversaComPost("post", PRONTO_PARA_AGENDAR.slice(0, 1));
+    const emCurso = await pedir(rota, id, doUsuario("u1", "Gere as artes."), "post");
+    await gerando.promise;
+
+    await emCurso.body!.cancel();
+    await pararTurno(usuario.id, id);
+    const seguinte = await pedir(rota, id, doUsuario("u2", "Outra coisa."), "post");
+    await seguinte.text();
+
+    expect(seguinte.status).toBe(200);
+    expect(await textos(id)).toEqual([
+      ["user", "Gere as artes."],
+      ["assistant", "Vou gerar as artes."],
+      ["user", "Outra coisa."],
+      ["assistant", "Ok."],
+    ]);
+    expect((await mensagensDaConversa(id))[1]?.parts.find(isToolUIPart)).toMatchObject({ state: "output-error", errorText: "Parado pelo usuário antes de terminar." });
   });
 });
 

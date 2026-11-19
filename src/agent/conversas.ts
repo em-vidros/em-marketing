@@ -162,28 +162,84 @@ async function trocarMensagens(id: string, mensagens: UIMessage[]): Promise<void
 }
 
 /**
- * Conversas com um turno do bot em andamento. O turno grava o histórico inteiro quando termina;
- * uma mensagem apagada ou editada no meio dele voltaria nessa gravação. Por isso só um escreve por vez.
+ * Só um turno do bot por conversa, em qualquer instância da Vercel. O turno grava o histórico inteiro quando
+ * termina; uma mensagem apagada ou editada no meio dele voltaria nessa gravação.
+ * O aluguel dura mais que os 300 s que a função pode rodar: uma instância que morre sem soltar a conversa
+ * deixa de travá-la quando ele vence.
  */
-const respondendo = new Set<string>();
+const ALUGUEL_MS = 330_000;
+const VIGIA_MS = 1000;
+/** Quanto a mensagem seguinte espera um turno que recebeu Parar soltar a conversa, antes de dar 409. */
+const ESPERA_PARADA_MS = 5000;
 
 export const AINDA_RESPONDENDO = "O bot ainda está respondendo nesta conversa. Espere a resposta terminar.";
+export const PARADO_PELO_USUARIO = "Parado pelo usuário antes de terminar.";
 
-/** false se a conversa já tem um turno em andamento. Quem recebe true chama terminarTurno no fim. */
-export function comecarTurno(id: string): boolean {
-  if (respondendo.has(id)) return false;
-  respondendo.add(id);
-  return true;
+export interface Turno {
+  /** Aborta quando alguém aperta Parar nesta conversa (pararTurno), de qualquer instância. */
+  sinal: AbortSignal;
+  /** Solta a conversa. Se o aluguel venceu e outro turno pegou a conversa, não solta o dele. */
+  terminar(): Promise<void>;
 }
 
-export function terminarTurno(id: string): void {
-  respondendo.delete(id);
+/** null se a conversa já tem um turno em andamento. Quem recebe o turno chama terminar no fim. */
+export async function comecarTurno(id: string): Promise<Turno | null> {
+  const desiste = Date.now() + ESPERA_PARADA_MS;
+  for (;;) {
+    const agora = Date.now();
+    const ate = agora + ALUGUEL_MS;
+    const pegou = await q`UPDATE conversas SET turno_ate = ${ate}, parar_em = NULL
+      WHERE id = ${id} AND (turno_ate IS NULL OR turno_ate < ${agora}) RETURNING id`;
+    if (pegou.length > 0) return vigiar(id, ate);
+    const parando = await primeira(q`SELECT 1 FROM conversas WHERE id = ${id} AND parar_em IS NOT NULL`);
+    if (!parando || agora > desiste) return null;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+}
+
+function vigiar(id: string, ate: number): Turno {
+  const parar = new AbortController();
+  const vigia = setInterval(() => {
+    // Uma leitura que falha não para o turno; a próxima tenta de novo.
+    primeira(q`SELECT 1 FROM conversas WHERE id = ${id} AND turno_ate = ${ate} AND parar_em IS NOT NULL`).then(
+      (parado) => parado && parar.abort(),
+      () => {},
+    );
+  }, VIGIA_MS);
+  return {
+    sinal: parar.signal,
+    async terminar() {
+      clearInterval(vigia);
+      await q`UPDATE conversas SET turno_ate = NULL, parar_em = NULL WHERE id = ${id} AND turno_ate = ${ate}`;
+    },
+  };
+}
+
+/** Pede ao turno em andamento que pare. false se a conversa não é do usuário. */
+export async function pararTurno(userId: string, id: string): Promise<boolean> {
+  return (await q`UPDATE conversas SET parar_em = ${Date.now()} WHERE id = ${id} AND user_id = ${userId} RETURNING id`).length > 0;
 }
 
 export type Recusa = { ok: false; status: 404 | 409; erro: string };
 
 const NAO_ENCONTRADA: Recusa = { ok: false, status: 404, erro: "Não encontrado." };
 const OCUPADA: Recusa = { ok: false, status: 409, erro: AINDA_RESPONDENDO };
+
+/**
+ * Apagar e restaurar mensagens leem o histórico com a linha da conversa travada: um turno que começa no meio
+ * espera a transação e já lê o histórico novo. Com um turno em andamento, recusa.
+ */
+function comHistorico<T>(userId: string, conversaId: string, fn: (mensagens: UIMessage[]) => Promise<T | Recusa>): Promise<T | Recusa> {
+  return transacao(async () => {
+    const r = await primeira(
+      q<{ mensagens: string; ocupada: boolean }>`SELECT mensagens, coalesce(turno_ate >= ${Date.now()}, false) AS ocupada
+        FROM conversas WHERE id = ${conversaId} AND user_id = ${userId} FOR UPDATE`,
+    );
+    if (!r) return NAO_ENCONTRADA;
+    if (r.ocupada) return OCUPADA;
+    return fn(JSON.parse(r.mensagens) as UIMessage[]);
+  });
+}
 
 /** O que DELETE /api/conversas/:id/mensagens/:mensagemId tirou e entre quais mensagens estava. O restaurar recebe este mesmo objeto. */
 export interface Remocao {
@@ -196,16 +252,15 @@ export interface Remocao {
  * Apagar a mensagem do usuário tira o turno: ela e as respostas do bot até a próxima mensagem do usuário.
  * Apagar uma mensagem do bot tira só ela. Tarefas, posts, fila e artes ficam como estão.
  */
-export async function apagarMensagem(userId: string, conversaId: string, mensagemId: string): Promise<({ ok: true } & Remocao) | Recusa> {
-  if (!(await conversaDoUsuario(userId, conversaId))) return NAO_ENCONTRADA;
-  if (respondendo.has(conversaId)) return OCUPADA;
-  const mensagens = await mensagensDaConversa(conversaId);
-  const i = mensagens.findIndex((m) => m.id === mensagemId);
-  if (i === -1) return NAO_ENCONTRADA;
-  const proximaDoUsuario = mensagens.findIndex((m, j) => j > i && m.role === "user");
-  const fim = mensagens[i]!.role !== "user" ? i + 1 : proximaDoUsuario === -1 ? mensagens.length : proximaDoUsuario;
-  await trocarMensagens(conversaId, mensagens.toSpliced(i, fim - i));
-  return { ok: true, removidas: mensagens.slice(i, fim), depoisDe: mensagens[i - 1]?.id ?? null, antesDe: mensagens[fim]?.id ?? null };
+export function apagarMensagem(userId: string, conversaId: string, mensagemId: string): Promise<({ ok: true } & Remocao) | Recusa> {
+  return comHistorico(userId, conversaId, async (mensagens) => {
+    const i = mensagens.findIndex((m) => m.id === mensagemId);
+    if (i === -1) return NAO_ENCONTRADA;
+    const proximaDoUsuario = mensagens.findIndex((m, j) => j > i && m.role === "user");
+    const fim = mensagens[i]!.role !== "user" ? i + 1 : proximaDoUsuario === -1 ? mensagens.length : proximaDoUsuario;
+    await trocarMensagens(conversaId, mensagens.toSpliced(i, fim - i));
+    return { ok: true as const, removidas: mensagens.slice(i, fim), depoisDe: mensagens[i - 1]?.id ?? null, antesDe: mensagens[fim]?.id ?? null };
+  });
 }
 
 const MUDOU: Recusa = { ok: false, status: 409, erro: "A conversa mudou depois dessas mensagens. Não dá para pôr de volta no mesmo lugar." };
@@ -214,21 +269,20 @@ const MUDOU: Recusa = { ok: false, status: 409, erro: "A conversa mudou depois d
  * Põe de volta o que apagarMensagem tirou, entre depoisDe e antesDe. Se elas já estão lá, não muda nada.
  * Se as vizinhas não estão mais lado a lado, a posição é ambígua e o pedido é recusado.
  */
-export async function restaurarMensagens(
+export function restaurarMensagens(
   userId: string,
   conversaId: string,
   { removidas, depoisDe, antesDe }: Remocao,
 ): Promise<{ ok: true; mensagens: UIMessage[] } | Recusa> {
-  if (!(await conversaDoUsuario(userId, conversaId))) return NAO_ENCONTRADA;
-  if (respondendo.has(conversaId)) return OCUPADA;
-  const mensagens = await mensagensDaConversa(conversaId);
-  const idEm = (j: number) => mensagens[j]?.id ?? null;
-  const inicio = depoisDe === null ? 0 : mensagens.findIndex((m) => m.id === depoisDe) + 1;
-  if (depoisDe !== null && inicio === 0) return MUDOU;
-  const ids = removidas.map((m) => m.id);
-  if (ids.every((id, k) => idEm(inicio + k) === id) && idEm(inicio + ids.length) === antesDe) return { ok: true, mensagens };
-  if (idEm(inicio) !== antesDe || mensagens.some((m) => ids.includes(m.id))) return MUDOU;
-  const restauradas = mensagens.toSpliced(inicio, 0, ...removidas);
-  await trocarMensagens(conversaId, restauradas);
-  return { ok: true, mensagens: restauradas };
+  return comHistorico(userId, conversaId, async (mensagens) => {
+    const idEm = (j: number) => mensagens[j]?.id ?? null;
+    const inicio = depoisDe === null ? 0 : mensagens.findIndex((m) => m.id === depoisDe) + 1;
+    if (depoisDe !== null && inicio === 0) return MUDOU;
+    const ids = removidas.map((m) => m.id);
+    if (ids.every((id, k) => idEm(inicio + k) === id) && idEm(inicio + ids.length) === antesDe) return { ok: true as const, mensagens };
+    if (idEm(inicio) !== antesDe || mensagens.some((m) => ids.includes(m.id))) return MUDOU;
+    const restauradas = mensagens.toSpliced(inicio, 0, ...removidas);
+    await trocarMensagens(conversaId, restauradas);
+    return { ok: true as const, mensagens: restauradas };
+  });
 }

@@ -2,6 +2,7 @@ import { isToolUIPart, readUIMessageStream, toUIMessageStream, tool, type TextSt
 import { z } from "zod";
 import { BOTS, type Especialista } from "../bots";
 import { configDoBot } from "../config";
+import { PARADO_PELO_USUARIO } from "../conversas";
 import { explicarErro } from "../erros";
 import { avancarTarefa, criarTarefa, type Tarefa } from "../tarefas";
 import { toolsDePost } from "./post";
@@ -90,11 +91,12 @@ async function delegar(conversaId: string, botId: Especialista, rodar: RodarEspe
           if (avancou) tarefa = await avancarTarefa(tarefa, { status: "trabalhando", mensagens: mensagens() });
           yield { tarefaId: tarefa.id, status: "trabalhando", mensagem: m };
         }
+        abortSignal?.throwIfAborted();
         const resumo = ultimoTexto(resposta);
         tarefa = await avancarTarefa(tarefa, { status: "concluida", resumo, mensagens: mensagens() });
         yield { tarefaId: tarefa.id, status: "concluida", resumo };
       } catch (e) {
-        const erro = explicado ?? explicarErro(e);
+        const erro = abortSignal?.aborted ? PARADO_PELO_USUARIO : (explicado ?? explicarErro(e));
         tarefa = await avancarTarefa(tarefa, { status: "falhou", erro, mensagens: mensagens() });
         yield { tarefaId: tarefa.id, status: "falhou", erro };
       } finally {
