@@ -5,6 +5,7 @@ import { apiConversas, useApi } from "./api";
 import { auth } from "./auth";
 import { BOT_IDS, useEquipe } from "./bots";
 import { Barra } from "./componentes/Barra";
+import { BotaoMenu } from "./componentes/BotaoMenu";
 import { LimiteDeErro } from "./componentes/LimiteDeErro";
 import { Avisos, fecharAviso, mostrarAviso } from "./componentes/menu/Avisos";
 import { criarConversas } from "./componentes/menu/conversas";
@@ -321,8 +322,9 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
           ) : rota.tela === "novo-bot" ? (
             <NovoBot abrirMenu={abrirMenu} />
           ) : (
-            <main id="conteudo" className="grid flex-1 place-items-center px-6 text-center">
-              <div className="flex flex-col items-center gap-3">
+            <main id="conteudo" className="flex min-w-0 flex-1 flex-col px-4 pt-3 sm:px-6">
+              <BotaoMenu abrir={abrirMenu} />
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 pb-16 text-center">
                 <h1 className="text-lg font-semibold">Página não encontrada</h1>
                 <a
                   href="/"
