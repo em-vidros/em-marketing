@@ -18,6 +18,14 @@ const cor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "A cor precisa ser um hex como
 const px = z.number().int().min(-2000).max(4000);
 const id = z.string().min(1).max(40);
 
+/** Os limites do schema que o editor também respeita, para nunca gerar uma camada que o PUT recusa. */
+export const LIMITES = {
+  posicao: [-2000, 4000],
+  largura: { texto: [20, 4000], logo: [40, 1080], imagem: [20, 4000], forma: [1, 4000] },
+  altura: [1, 4000],
+  caracteres: 400,
+} as const;
+
 /**
  * O que toda camada tem além do tipo. Rotação gira em graus em torno do centro, e x e y continuam sendo o canto
  * da caixa sem giro. Os dois são opcionais porque as artes gravadas antes deles não os têm; `transformacaoDa` dá o valor em vigor.
@@ -36,17 +44,17 @@ const comum = {
 const Texto = z.object({
   ...comum,
   tipo: z.literal("texto"),
-  texto: z.string().min(1, "O texto não pode ficar vazio.").max(400),
+  texto: z.string().min(1, "O texto não pode ficar vazio.").max(LIMITES.caracteres),
   fonte: z.string().max(60).regex(NOME_DE_FAMILIA, "Nome de fonte inválido."),
   peso: z.literal(PESOS, "O peso vai de 100 a 900, de 100 em 100."),
   tamanho: z.number().int().min(12).max(400),
   entrelinha: z.number().min(0.8).max(2.5),
   cor,
   alinhamento: z.enum(["esquerda", "centro", "direita"]),
-  largura: z.number().int().min(20).max(4000),
+  largura: z.number().int().min(LIMITES.largura.texto[0]).max(LIMITES.largura.texto[1]),
 });
 
-const Logo = z.object({ ...comum, tipo: z.literal("logo"), variante: z.enum(["cor", "branca"]), largura: z.number().int().min(40).max(1080) });
+const Logo = z.object({ ...comum, tipo: z.literal("logo"), variante: z.enum(["cor", "branca"]), largura: z.number().int().min(LIMITES.largura.logo[0]).max(LIMITES.largura.logo[1]) });
 
 /** Imagem ou SVG enviado pelo usuário, guardado como PNG. `proporcao` é altura sobre largura. */
 const Imagem = z.object({
@@ -54,21 +62,36 @@ const Imagem = z.object({
   tipo: z.literal("imagem"),
   chave: z.string().regex(/^[0-9a-f-]{36}\.(png|jpg|webp)$/, "Arquivo de imagem inválido."),
   proporcao: z.number().positive().max(20),
-  largura: z.number().int().min(20).max(4000),
+  largura: z.number().int().min(LIMITES.largura.imagem[0]).max(LIMITES.largura.imagem[1]),
 });
 
 const Forma = z.object({
   ...comum,
   tipo: z.literal("forma"),
   cor,
-  largura: z.number().int().min(1).max(4000),
-  altura: z.number().int().min(1).max(4000),
+  largura: z.number().int().min(LIMITES.largura.forma[0]).max(LIMITES.largura.forma[1]),
+  altura: z.number().int().min(LIMITES.altura[0]).max(LIMITES.altura[1]),
   raio: z.number().int().min(0).max(12),
 });
 
 /** A ordem do array é a ordem de empilhamento: a primeira camada fica logo acima da cena. */
 export const Camadas = z.array(z.union([Texto, Logo, Imagem, Forma])).max(30, "Uma arte tem no máximo 30 camadas.");
 export type Camada = z.infer<typeof Camadas>[number];
+
+const limitar = (v: number, [minimo, maximo]: readonly [number, number]) => Math.min(maximo, Math.max(minimo, Math.round(v)));
+
+/** Prende posição, tamanho e texto aos limites do schema. */
+export function dentroDosLimites(camada: Camada): Camada {
+  const base = { ...camada, x: limitar(camada.x, LIMITES.posicao), y: limitar(camada.y, LIMITES.posicao), largura: limitar(camada.largura, LIMITES.largura[camada.tipo]) };
+  switch (base.tipo) {
+    case "texto":
+      return { ...base, texto: base.texto.slice(0, LIMITES.caracteres) };
+    case "forma":
+      return { ...base, altura: limitar(base.altura, LIMITES.altura) };
+    default:
+      return base;
+  }
+}
 
 export const transformacaoDa = (camada: Camada) => ({ rotacao: camada.rotacao ?? 0, opacidade: camada.opacidade ?? 1 });
 

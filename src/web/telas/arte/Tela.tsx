@@ -20,7 +20,7 @@ export interface PropsDaTela {
   ajustes: Ajustes;
   selecionada: string | null;
   selecionar: (id: string | null) => void;
-  mudar: (camada: Camada) => void;
+  mudar: (camada: Camada, campo?: string) => void;
   ref?: Ref<ControleDaTela>;
 }
 
@@ -168,7 +168,7 @@ function usePalco(caixa: RefObject<HTMLDivElement | null>, formato: Formato, atu
     });
     snap.enable(true);
 
-    const desligar = [ligarEditor(app, montagem, atuais), desligarImaComTecla(snap)];
+    const desligar = [ligarEditor(app, montagem, atuais, view), desligarImaComTecla(snap)];
     let viva = true;
     void carregarFontes(atuais.current.camadas).then(() => viva && setPalco({ app, montagem, snap, view }));
 
@@ -188,7 +188,7 @@ function usePalco(caixa: RefObject<HTMLDivElement | null>, formato: Formato, atu
  * Um gesto solta dezenas de eventos; a camada só é escrita quando o dedo sai, para o gesto inteiro virar um passo
  * do desfazer. A edição de texto na arte é escrita ao fechar.
  */
-function ligarEditor(app: App, montagem: Montagem, atuais: RefObject<PropsDaTela>) {
+function ligarEditor(app: App, montagem: Montagem, atuais: RefObject<PropsDaTela>, view: HTMLDivElement) {
   const editor = app.editor;
   const mexidos = new Set<string>();
 
@@ -220,7 +220,19 @@ function ligarEditor(app: App, montagem: Montagem, atuais: RefObject<PropsDaTela
     escrever();
   });
 
-  return escrever;
+  // O texto digitado na arte entra no estado a cada tecla: sair da tela com o editor aberto não dispara o CLOSE.
+  const aoDigitar = () => {
+    const id = editor.innerEditing ? idDo(editor.element) : null;
+    const no = id ? montagem.nos.get(id) : undefined;
+    const camada = atuais.current.camadas.find((c) => c.id === id);
+    if (no && camada) atuais.current.mudar(camadaDoNo(no, camada), "texto");
+  };
+  view.addEventListener("input", aoDigitar);
+
+  return () => {
+    view.removeEventListener("input", aoDigitar);
+    escrever();
+  };
 }
 
 /** Segurar ⌘ (Ctrl fora do Mac) enquanto arrasta solta a camada do ímã, como no Canva e no Figma. */

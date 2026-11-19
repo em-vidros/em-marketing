@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Edicao } from "../../../v2/artes";
-import type { Ajustes, Camada, Formato } from "../../../v2/camadas";
+import { dentroDosLimites, type Ajustes, type Camada, type Formato } from "../../../v2/camadas";
 import { useHistorico } from "./historico";
 import * as operacoes from "./operacoes";
 
@@ -36,7 +36,7 @@ export function useEditor({ inicial, formato, gravar }: { inicial: Edicao; forma
   const cheia = camadas.length >= operacoes.MAXIMO_DE_CAMADAS;
 
   const editarCamadas = (mudanca: (atuais: Camada[]) => Camada[], grupo?: string, gesto?: string) =>
-    editar((e) => ({ ...e, camadas: mudanca(e.camadas) }), gesto ? `${grupo}:${gesto}` : grupo, !!gesto);
+    editar((e) => ({ ...e, camadas: mudanca(e.camadas).map(dentroDosLimites) }), gesto ? `${grupo}:${gesto}` : grupo, !!gesto);
 
   function entrar(nova: Camada, mudanca: (atuais: Camada[]) => Camada[]) {
     if (cheia) return;

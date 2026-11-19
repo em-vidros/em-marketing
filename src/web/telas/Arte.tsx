@@ -22,7 +22,34 @@ import { useEditor, type Painel } from "./arte/useEditor";
 import { tituloDa } from "./Artes";
 
 // O Leafer só baixa quando uma arte abre.
-const Tela = lazy(() => import("./arte/Tela"));
+const Tela = lazy(() =>
+  import("./arte/Tela").then((modulo) => {
+    guardar(() => sessionStorage.removeItem(CHAVE_DA_RECARGA));
+    return modulo;
+  }, recarregarUmaVez),
+);
+
+const CHAVE_DA_RECARGA = "arte:recarregou-por-chunk";
+
+const guardar = (acao: () => void) => {
+  try {
+    acao();
+  } catch {}
+};
+
+/**
+ * Depois de um deploy, uma aba aberta antes dele pede um chunk que não existe mais. Recarregar uma vez traz o
+ * index.html novo; se falhar de novo, o erro vai para o LimiteDeErro.
+ */
+function recarregarUmaVez(erro: unknown): never {
+  let jaRecarregou = true;
+  guardar(() => (jaRecarregou = sessionStorage.getItem(CHAVE_DA_RECARGA) === "1"));
+  if (!jaRecarregou) {
+    guardar(() => sessionStorage.setItem(CHAVE_DA_RECARGA, "1"));
+    location.reload();
+  }
+  throw erro;
+}
 
 const ESPERA_PARA_GRAVAR = 450;
 

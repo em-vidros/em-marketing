@@ -154,16 +154,12 @@ function paddingDoTexto(camada: Extract<Camada, { tipo: "texto" }>): [number, nu
   return [deslocamento, 0, -deslocamento, 0];
 }
 
-const LIMITES_DA_LARGURA = { texto: [20, 4000], logo: [40, 1080], imagem: [20, 4000], forma: [1, 4000] } as const;
-
-/** Preso aos limites do schema: o editor deixa esticar além deles, e o PUT recusaria a camada. */
 export function camadaDoNo(no: IUI, camada: Camada): Camada {
-  const [minimo, maximo] = LIMITES_DA_LARGURA[camada.tipo];
   const medida = (v: number | undefined, escala: number | undefined) => Math.round((v ?? 0) * (escala ?? 1));
-  const largura = limitar(medida(no.width, no.scaleX), minimo, maximo);
+  const largura = medida(no.width, no.scaleX);
   const lida = {
-    x: limitar(Math.round(no.x ?? 0), -2000, 4000),
-    y: limitar(Math.round(no.y ?? 0), -2000, 4000),
+    x: Math.round(no.x ?? 0),
+    y: Math.round(no.y ?? 0),
     rotacao: Math.round(normalizarGraus(no.rotation ?? 0) * 10) / 10,
     largura,
   };
@@ -172,13 +168,11 @@ export function camadaDoNo(no: IUI, camada: Camada): Camada {
     case "texto":
       return { ...camada, ...lida, texto: no instanceof Text && String(no.text).trim() ? String(no.text) : camada.texto };
     case "forma":
-      return { ...camada, ...lida, altura: limitar(medida(no.height, no.scaleY), 1, 4000) };
+      return { ...camada, ...lida, altura: medida(no.height, no.scaleY) };
     case "logo":
     case "imagem":
       return { ...camada, ...lida };
   }
 }
-
-const limitar = (v: number, minimo: number, maximo: number) => Math.min(maximo, Math.max(minimo, v));
 
 const normalizarGraus = (graus: number) => ((((graus + 180) % 360) + 360) % 360) - 180;

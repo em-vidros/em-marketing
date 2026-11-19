@@ -11,7 +11,7 @@ import {
   LayerSendToBackIcon
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import { transformacaoDa, type Camada } from "../../../v2/camadas";
+import { LIMITES, transformacaoDa, type Camada } from "../../../v2/camadas";
 import { Numero } from "./Campos";
 import type { Borda, Caixa, Destino } from "./operacoes";
 import type { AcoesDoEditor } from "./useEditor";
@@ -73,7 +73,7 @@ export function PainelPosicao(props: { camada: Camada | null; acoes: AcoesDoEdit
         <div className="grid grid-cols-2 gap-2">
           <Numero rotulo="X" valor={c.x} min={-2000} max={4000} aoMudar={(x) => acoes.mudar({ ...c, x }, "x")} />
           <Numero rotulo="Y" valor={c.y} min={-2000} max={4000} aoMudar={(y) => acoes.mudar({ ...c, y }, "y")} />
-          <Numero rotulo="Largura" valor={c.largura} min={20} max={4000} aoMudar={(largura) => acoes.mudar({ ...c, largura }, "largura")} />
+          <Numero rotulo="Largura" valor={c.largura} min={LIMITES.largura[c.tipo][0]} max={LIMITES.largura[c.tipo][1]} aoMudar={(largura) => acoes.mudar({ ...c, largura }, "largura")} />
           {c.tipo === "forma" && <Numero rotulo="Altura" valor={c.altura} min={1} max={4000} aoMudar={(altura) => acoes.mudar({ ...c, altura }, "altura")} />}
           <Numero rotulo="Rotação (graus)" valor={rotacao} min={-180} max={180} passo={0.1} aoMudar={(v) => acoes.mudar({ ...c, rotacao: v }, "rotacao")} />
         </div>
