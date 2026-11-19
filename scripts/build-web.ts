@@ -6,6 +6,8 @@ await rm("dist", { recursive: true, force: true });
 const r = await Bun.build({
   entrypoints: ["src/web/index.html"],
   outdir: "dist",
+  // Caminho absoluto: em /c/:id um "./chunk.js" vira /c/chunk.js, que o rewrite da SPA responde com HTML.
+  publicPath: "/",
   minify: true,
   sourcemap: "linked",
   plugins: [tailwind],
