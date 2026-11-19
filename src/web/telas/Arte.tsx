@@ -19,7 +19,8 @@ import { PainelPosicao } from "./arte/PainelPosicao";
 import type { ControleDaTela } from "./arte/Tela";
 import { Gaveta, Trilho } from "./arte/Trilho";
 import { useEditor, type Painel } from "./arte/useEditor";
-import { tituloDa } from "./Artes";
+
+const tituloDa = (arte: ArteDaApi) => arte.camadas.find((c) => c.tipo === "texto")?.texto ?? "Arte sem texto";
 
 // O Leafer só baixa quando uma arte abre.
 const Tela = lazy(() =>
@@ -167,8 +168,8 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
       <header className="flex flex-wrap items-center gap-2.5 border-b border-linha px-4 py-3 sm:px-6">
         <BotaoMenu abrir={abrirMenu} />
         <nav aria-label="Caminho" className="flex items-center gap-1.5 text-sm">
-          <a href="/artes" onClick={aoClicarLink} className="rounded-md px-1.5 py-1 text-tinta-3 hover:bg-hover hover:text-tinta">
-            Artes
+          <a href="/biblioteca" onClick={aoClicarLink} className="rounded-md px-1.5 py-1 text-tinta-3 hover:bg-hover hover:text-tinta">
+            Biblioteca
           </a>
           <span aria-hidden="true" className="text-tinta-4">
             /

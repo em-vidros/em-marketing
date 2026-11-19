@@ -126,8 +126,8 @@ function Escolha({ prontos, veioDe, escolher, fechar }: PropsDaEscolha) {
         <OpcaoDeCriar icone={<Estrela tamanho={16} />} titulo="Feriado ou data" detalhe="Os bots usam para sugerir post" focar={veioDe === "data"} aoEscolher={() => escolher("data")} />
       </ul>
       {prontos?.length === 0 && (
-        <button type="button" onClick={() => (fechar(), navegar("/artes"))} className={`${botaoSecundario} self-end`}>
-          Abrir Artes
+        <button type="button" onClick={() => (fechar(), navegar("/biblioteca"))} className={`${botaoSecundario} self-end`}>
+          Abrir a Biblioteca
         </button>
       )}
     </>

@@ -291,15 +291,6 @@ export function Barra({
             Biblioteca
           </a>
         </Dica>
-        <Dica rotulo="Artes">
-          <a
-            href="/artes"
-            aria-current={telaAtual.startsWith("/artes") ? "page" : undefined}
-            onClick={(e) => (aoClicarLink(e), aoNavegar())}
-            className={linkDe(telaAtual.startsWith("/artes"))}>
-            Artes
-          </a>
-        </Dica>
         <Dica rotulo="Calendário" atalho="ir-calendario">
           <a
             href="/calendario"

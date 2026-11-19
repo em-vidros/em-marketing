@@ -18,6 +18,21 @@ const ARTES_QUE_A_ROTACAO_OLHA = 5;
 
 export const listarArtes = (banco: Banco) => banco.select().from(artes).orderBy(desc(artes.criadaEm)).limit(50);
 
+/**
+ * O pedido da arte que nasce de uma imagem de post (arteDaImagem). É a chave que reabre a mesma arte,
+ * então o texto não pode mudar: as artes já abertas no editor guardam este formato.
+ */
+export const pedidoDaImagem = (i: { postId: number; variante: number | null; path: string }) =>
+  i.variante === null ? `Post ${i.postId}, story: ${i.path}` : `Post ${i.postId}, variação ${i.variante}: ${i.path}`;
+
+/** As artes criadas direto no estúdio, sem as que nasceram de uma imagem de post: essas a Biblioteca já mostra pela imagem. */
+export const artesDoEstudio = (banco: Banco) =>
+  banco
+    .select()
+    .from(artes)
+    .where(sql`${artes.pedido} !~ '^Post [0-9]+, (variação [0-9]+|story): '`)
+    .orderBy(desc(artes.criadaEm));
+
 /** O que o calendário e a fila mostram de uma arte. */
 export interface ResumoDaArte {
   id: string;

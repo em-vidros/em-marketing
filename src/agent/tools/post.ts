@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import sharp from "sharp";
 import { z } from "zod";
-import { emOrdem, urlDaMidia } from "../../db";
+import { emOrdem, idDaImagem, urlDaMidia } from "../../db";
 import { q } from "../../v2/banco";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief } from "../../domain/art/pipeline";
@@ -60,6 +60,8 @@ const artePublica = async (a: { variant: number; style: string; path: string; pr
   variante: a.variant,
   estilo: a.style,
   url: await urlDaMidia(a.path),
+  /** A chave de POST /api/imagens/:id/editar. gravarPost registra a imagem antes de a tool responder. */
+  imagemId: await idDaImagem(a.path),
   problemas: a.problemas,
 });
 

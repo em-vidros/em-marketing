@@ -7,7 +7,6 @@ export type Rota =
   | { tela: "conversa"; id: string }
   | { tela: "atividade" }
   | { tela: "biblioteca" }
-  | { tela: "artes" }
   | { tela: "arte"; id: string }
   | { tela: "calendario" }
   | { tela: "uso" }
@@ -18,10 +17,10 @@ export function lerRota(caminho: string): Rota {
   if (caminho === "/") return { tela: "nova" };
   if (caminho === "/entrar") return { tela: "entrar" };
   if (caminho === "/atividade") return { tela: "atividade" };
-  if (caminho === "/biblioteca") return { tela: "biblioteca" };
+  // /artes era a tela das artes do estúdio, que agora moram na Biblioteca; o endereço antigo continua abrindo.
+  if (caminho === "/biblioteca" || caminho === "/artes") return { tela: "biblioteca" };
   if (caminho === "/calendario") return { tela: "calendario" };
   if (caminho === "/uso") return { tela: "uso" };
-  if (caminho === "/artes") return { tela: "artes" };
   const arte = /^\/artes\/([0-9a-f-]{36})$/.exec(caminho);
   if (arte?.[1]) return { tela: "arte", id: arte[1] };
   const bot = /^\/bots\/([^/]+)(\/config)?$/.exec(caminho);

@@ -179,6 +179,33 @@ export async function criarTabelas(): Promise<void> {
     )`;
     await q`CREATE INDEX IF NOT EXISTS uso_api_em ON uso_api(em)`;
 
+    // Toda imagem que o fluxo de posts já gravou: variações, versões 9:16 e fotos recortadas. Só cresce.
+    // posts.arts guarda só a última geração, e gerar de novo apagaria as anteriores da Biblioteca.
+    await q`CREATE TABLE IF NOT EXISTS imagens_geradas (
+      id serial PRIMARY KEY,
+      post_id integer NOT NULL REFERENCES posts(id),
+      path text NOT NULL UNIQUE,
+      tipo text NOT NULL CHECK (tipo IN ('variacao','story','foto')),
+      variante integer,               -- 1..3 nas variações e fotos; NULL no story
+      estilo text,
+      formato text NOT NULL CHECK (formato IN ('feed','stories')),
+      criada_em double precision NOT NULL     -- epoch ms
+    )`;
+    await q`CREATE INDEX IF NOT EXISTS imagens_geradas_criada ON imagens_geradas(criada_em)`;
+    const { vazia } = (await primeira(q<{ vazia: boolean }>`SELECT NOT EXISTS (SELECT 1 FROM imagens_geradas) AS vazia`))!;
+    if (vazia) {
+      // Os posts de antes desta tabela: entra o que ainda está em posts.arts e posts.story_path.
+      await q`INSERT INTO imagens_geradas (post_id, path, tipo, variante, estilo, formato, criada_em)
+        SELECT p.id, a->>'path', CASE WHEN a->>'style' = 'foto-real' THEN 'foto' ELSE 'variacao' END, (a->>'variant')::int, a->>'style',
+          CASE WHEN p.formato = 'stories' THEN 'stories' ELSE 'feed' END, extract(epoch FROM p.created_at::timestamp) * 1000
+        FROM posts p, jsonb_array_elements(p.arts::jsonb) a
+        WHERE p.arts IS NOT NULL
+        ON CONFLICT (path) DO NOTHING`;
+      await q`INSERT INTO imagens_geradas (post_id, path, tipo, formato, criada_em)
+        SELECT id, story_path, 'story', 'stories', extract(epoch FROM created_at::timestamp) * 1000 FROM posts WHERE story_path IS NOT NULL
+        ON CONFLICT (path) DO NOTHING`;
+    }
+
     // Valores soltos que o servidor grava em tempo de execução, como as credenciais do login da Meta.
     await q`CREATE TABLE IF NOT EXISTS configuracoes (
       chave text PRIMARY KEY,
@@ -316,6 +343,87 @@ export async function pecasDoUsuario(userId: string): Promise<Peca[]> {
     artes: await artesDo(r),
     conversaId: r.conversa_id,
   }));
+}
+
+export type TipoImagem = "variacao" | "story" | "foto";
+
+export interface ImagemNova {
+  path: string;
+  tipo: TipoImagem;
+  variante: number | null;
+  estilo: string | null;
+  formato: "feed" | "stories";
+}
+
+/** Registra as imagens de um post na Biblioteca. Um caminho já registrado fica como está, com a data de quando apareceu. */
+export async function guardarImagens(postId: number, imagens: readonly ImagemNova[], agora = Date.now()): Promise<void> {
+  for (const i of imagens)
+    await q`INSERT INTO imagens_geradas (post_id, path, tipo, variante, estilo, formato, criada_em)
+      VALUES (${postId}, ${i.path}, ${i.tipo}, ${i.variante}, ${i.estilo}, ${i.formato}, ${agora}) ON CONFLICT (path) DO NOTHING`;
+}
+
+export const idDaImagem = async (path: string): Promise<number | null> =>
+  (await primeira(q<{ id: number }>`SELECT id FROM imagens_geradas WHERE path = ${path}`))?.id ?? null;
+
+/** Uma imagem do fluxo de posts como a Biblioteca mostra. `conversaId` é a conversa do usuário que trabalhou no post, se houver. */
+export interface ImagemGerada {
+  id: number;
+  postId: number;
+  path: string;
+  url: string;
+  tipo: TipoImagem;
+  variante: number | null;
+  formato: "feed" | "stories";
+  headline: string | null;
+  tema: string | null;
+  angulo: string | null;
+  conversaId: string | null;
+  criadaEm: number;
+}
+
+type LinhaDaImagem = {
+  id: number;
+  post_id: number;
+  path: string;
+  tipo: TipoImagem;
+  variante: number | null;
+  formato: "feed" | "stories";
+  headline: string | null;
+  brief: string | null;
+  conversa_id: string | null;
+  criada_em: number;
+};
+
+async function imagemDa(r: LinhaDaImagem): Promise<ImagemGerada> {
+  const brief = r.brief ? (JSON.parse(r.brief) as { tema?: string; angulo?: string }) : {};
+  return {
+    id: r.id,
+    postId: r.post_id,
+    path: r.path,
+    url: await urlDaMidia(r.path),
+    tipo: r.tipo,
+    variante: r.variante,
+    formato: r.formato,
+    headline: headlineDo(r.headline),
+    tema: brief.tema ?? null,
+    angulo: brief.angulo ?? null,
+    conversaId: r.conversa_id,
+    criadaEm: r.criada_em,
+  };
+}
+
+/** Todas as imagens geradas, da equipe inteira, as mais novas primeiro e as variações de uma geração em ordem. */
+export async function imagensGeradas(userId: string): Promise<ImagemGerada[]> {
+  const linhas = await q<LinhaDaImagem>`SELECT i.id, i.post_id, i.path, i.tipo, i.variante, i.formato, i.criada_em, p.headline, p.brief,
+      (SELECT c.id FROM conversas c WHERE c.post_id = p.id AND c.user_id = ${userId} AND c.apagada_em IS NULL ORDER BY c.updated_at DESC LIMIT 1) AS conversa_id
+    FROM imagens_geradas i JOIN posts p ON p.id = i.post_id ORDER BY i.criada_em DESC, i.id`;
+  return emOrdem(linhas, imagemDa);
+}
+
+export async function imagemGerada(id: number): Promise<ImagemGerada | null> {
+  const linha = await primeira(q<LinhaDaImagem>`SELECT i.id, i.post_id, i.path, i.tipo, i.variante, i.formato, i.criada_em, p.headline, p.brief, NULL AS conversa_id
+    FROM imagens_geradas i JOIN posts p ON p.id = i.post_id WHERE i.id = ${id}`);
+  return linha && imagemDa(linha);
 }
 
 export type StatusFila = "pending" | "publishing" | "done" | "failed" | "cancelled";

@@ -42,6 +42,10 @@ _Evite_: opção, versão
 O tamanho de publicação de uma arte: feed (1080×1350) ou story (1080×1920).
 _Evite_: proporção, tamanho
 
+**Biblioteca**:
+A tela onde fica tudo o que foi gerado: toda variação de toda geração, inclusive as que ninguém escolheu, as versões story e as artes do estúdio. Cada imagem abre no editor ou é baixada dali. A mesma tela guarda as referências.
+_Evite_: galeria, tela de artes
+
 **Pilar**:
 A categoria editorial do brandbook (§12.1) que todo post declara: PROVA, AUTORIDADE, GENTE ou MARCA.
 _Evite_: tema, categoria
