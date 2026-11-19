@@ -337,7 +337,8 @@ export function TimeGrid({
         container.clientHeight / visibleHourCount,
       );
       const hour = Math.min(Math.max(scrollToHour, dayStartHour), dayEndHour);
-      container.scrollTop = (hour - dayStartHour) * rowHeight;
+      // A few pixels above the hour line, or its label (centered on the line) is cut in half
+      container.scrollTop = Math.max(0, (hour - dayStartHour) * rowHeight - 12);
     };
 
     applyScroll();
