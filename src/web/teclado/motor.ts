@@ -68,6 +68,7 @@ export function ehCampo(el: Alvo | null): boolean {
 
 export function escoposDe(el: Alvo | null): Escopo[] {
   if (el?.closest?.('[data-escopo="calendario"]')) return ["calendario", "global"];
+  if (el?.closest?.('[data-escopo="arte"]')) return ["arte", "global"];
   return el?.closest?.('[data-escopo="conversa"]') ? ["conversa", "global"] : ["lista", "global"];
 }
 

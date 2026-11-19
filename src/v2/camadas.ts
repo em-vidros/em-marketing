@@ -31,6 +31,7 @@ const id = z.string().min(1).max(40);
 /**
  * O que toda camada tem além do tipo. Rotação gira em graus em torno do centro, e x e y continuam sendo o canto
  * da caixa sem giro. Os dois são opcionais porque as artes gravadas antes deles não os têm; `transformacaoDa` dá o valor em vigor.
+ * `bloqueada` só vale no editor, que não deixa mexer na camada; o PNG a desenha igual.
  */
 const comum = {
   id,
@@ -38,6 +39,7 @@ const comum = {
   y: px,
   rotacao: z.number().min(-360).max(360).optional(),
   opacidade: z.number().min(0).max(1).optional(),
+  bloqueada: z.boolean().optional(),
 };
 
 const Texto = z

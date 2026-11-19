@@ -9,10 +9,12 @@ import { BOTS, type BotId } from "../bots";
  * tecla é o próprio composer, já que num campo uma tecla sem modificador é texto.
  * `calendario` vale com o foco dentro de `data-escopo="calendario"` e, como `conversa`, tira
  * a `lista`: ali as setas andam pelos dias, não pelas conversas.
+ * `arte` vale com o foco dentro do editor de arte (`data-escopo="arte"`) e também tira a `lista`:
+ * ali as setas empurram a camada selecionada.
  */
-export type Escopo = "global" | "lista" | "conversa" | "composer" | "calendario";
+export type Escopo = "global" | "lista" | "conversa" | "composer" | "calendario" | "arte";
 
-export type Grupo = "Geral" | "Navegação" | "Conversas" | "Bots" | "Aprovação" | "Calendário";
+export type Grupo = "Geral" | "Navegação" | "Conversas" | "Bots" | "Aprovação" | "Calendário" | "Editor de arte";
 
 /**
  * Uma tecla é uma sequência de acordes separados por espaço ("g a"); um acorde junta
@@ -92,13 +94,24 @@ export const ATALHOS = {
   "mensagem-apagar": { teclas: ["mod+backspace"], rotulo: "Apagar a mensagem focada", grupo: "Conversas", escopo: "conversa" },
   "mensagem-refazer": { teclas: ["shift+r"], rotulo: "Refazer a resposta focada", grupo: "Conversas", escopo: "conversa" },
   "mensagem-editar-ultima": { teclas: ["arrowup"], rotulo: "Editar sua última mensagem", grupo: "Conversas", escopo: "composer" },
+  refazer: { teclas: ["mod+shift+z", "mod+y"], rotulo: "Refazer a edição desfeita", grupo: "Editor de arte", escopo: "global" },
+  "arte-apagar": { teclas: ["backspace", "delete"], rotulo: "Apagar a camada selecionada", grupo: "Editor de arte", escopo: "arte" },
+  "arte-duplicar": { teclas: ["mod+d"], rotulo: "Duplicar a camada selecionada", grupo: "Editor de arte", escopo: "arte" },
+  "arte-copiar": { teclas: ["mod+c"], rotulo: "Copiar a camada selecionada", grupo: "Editor de arte", escopo: "arte" },
+  "arte-colar": { teclas: ["mod+v"], rotulo: "Colar a camada copiada", grupo: "Editor de arte", escopo: "arte" },
+  "arte-esquerda": { teclas: ["arrowleft", "shift+arrowleft"], rotulo: "Mover 1 px para a esquerda, ou 10 px com Shift", grupo: "Editor de arte", escopo: "arte", repete: true },
+  "arte-direita": { teclas: ["arrowright", "shift+arrowright"], rotulo: "Mover 1 px para a direita, ou 10 px com Shift", grupo: "Editor de arte", escopo: "arte", repete: true },
+  "arte-cima": { teclas: ["arrowup", "shift+arrowup"], rotulo: "Mover 1 px para cima, ou 10 px com Shift", grupo: "Editor de arte", escopo: "arte", repete: true },
+  "arte-baixo": { teclas: ["arrowdown", "shift+arrowdown"], rotulo: "Mover 1 px para baixo, ou 10 px com Shift", grupo: "Editor de arte", escopo: "arte", repete: true },
+  "arte-desselecionar": { teclas: ["escape"], rotulo: "Tirar a seleção", grupo: "Editor de arte", escopo: "arte" },
+  "arte-reguas": { teclas: ["shift+r"], rotulo: "Mostrar ou esconder réguas e guias", grupo: "Editor de arte", escopo: "arte" },
 } satisfies Record<string, Atalho>;
 
 export type AtalhoId = keyof typeof ATALHOS;
 
 export const IDS_DE_ATALHO = Object.keys(ATALHOS) as AtalhoId[];
 
-export const GRUPOS: readonly Grupo[] = ["Geral", "Navegação", "Conversas", "Bots", "Aprovação", "Calendário"];
+export const GRUPOS: readonly Grupo[] = ["Geral", "Navegação", "Conversas", "Bots", "Aprovação", "Calendário", "Editor de arte"];
 
 export const atalhoDoBot = (id: BotId) => `abrir-bot-${id}` as const satisfies AtalhoId;
 
