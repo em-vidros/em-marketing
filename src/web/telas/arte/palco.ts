@@ -1,11 +1,16 @@
 import { Box, Canvas, Image, Rect, Text, type IFontWeight, type IGroup, type ITextAlign, type IUI, type IUIInputData } from "leafer-ui";
 import { FORMATOS, PROPORCAO_DO_LOGO, recorteDaCena, transformacaoDa, type Ajustes, type Camada, type Formato } from "../../../v2/camadas";
+import type { Guia } from "./reguas";
 
-/** A arte montada no Leafer: um quadro que corta o que sai da arte, a cena tratada no fundo e um nó por camada, em px da arte. */
+/**
+ * A arte montada no Leafer: um quadro que corta o que sai da arte, a cena tratada no fundo e um nó por camada, em px da arte.
+ * Cada guia vira uma linha invisível dentro do quadro, só para o ímã do arraste achar a guia como acha as bordas.
+ */
 export interface Montagem {
   quadro: Box;
   cena: Canvas;
   nos: Map<string, IUI>;
+  guias: Rect[];
   formato: Formato;
 }
 
@@ -23,7 +28,19 @@ export function montar(alvo: IGroup, formato: Formato): Montagem {
   quadro.add(cena);
   alvo.add(quadro);
 
-  return { quadro, cena, nos: new Map(), formato };
+  return { quadro, cena, nos: new Map(), guias: [], formato };
+}
+
+export function sincronizarGuias(montagem: Montagem, guias: Guia[]) {
+  const { largura, altura } = FORMATOS[montagem.formato];
+  for (const linha of montagem.guias) linha.destroy();
+  montagem.guias = guias.map((guia) => {
+    const vertical = guia.orientacao === "vertical";
+    const linha = new Rect({ x: vertical ? guia.posicao : 0, y: vertical ? 0 : guia.posicao, width: vertical ? 0 : largura, height: vertical ? altura : 0, hittable: false });
+    montagem.quadro.add(linha);
+
+    return linha;
+  });
 }
 
 export function sincronizar(montagem: Montagem, camadas: Camada[]) {
@@ -75,7 +92,7 @@ function criarNo(camada: Camada): IUI {
       return new Text(comum);
     case "logo":
     case "imagem":
-      return new Image({ ...comum, editConfig: { lockRatio: true } });
+      return new Image(comum);
     case "forma":
       return new Rect(comum);
   }
@@ -84,7 +101,10 @@ function criarNo(camada: Camada): IUI {
 /** O giro é em torno do centro (origin "center"), então x e y seguem sendo o canto da caixa sem giro, como no CSS do render. */
 function atributosDa(camada: Camada): IUIInputData {
   const { rotacao, opacidade } = transformacaoDa(camada);
-  return { x: camada.x, y: camada.y, rotation: rotacao, opacity: opacidade, scaleX: 1, scaleY: 1, ...atributosDoTipo(camada) };
+  const solta = !camada.bloqueada;
+  const editConfig = { lockRatio: camada.tipo === "logo" || camada.tipo === "imagem", moveable: solta, resizeable: solta, rotateable: solta, preventEditInner: !solta };
+
+  return { x: camada.x, y: camada.y, rotation: rotacao, opacity: opacidade, scaleX: 1, scaleY: 1, editConfig, ...atributosDoTipo(camada) };
 }
 
 function atributosDoTipo(camada: Camada): IUIInputData {

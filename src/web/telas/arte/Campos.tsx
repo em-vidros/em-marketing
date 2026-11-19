@@ -1,4 +1,4 @@
-import { useEffect, useId, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 /** As cores do brandbook (tokens.json, `color`), com o nome que o manual dá a cada uma. */
 const PALETA = [
@@ -84,7 +84,9 @@ export function Cor({ valor, aoMudar }: { valor: string; aoMudar: (cor: string) 
   );
 }
 
-export function Deslizante(props: { rotulo: string; valor: number; min: number; max: number; passo: number; formatar: (v: number) => string; aoMudar: (v: number) => void }) {
+/** `aoMudar` recebe o id do arraste em curso, para o arraste inteiro virar um passo do desfazer. */
+export function Deslizante(props: { rotulo: string; valor: number; min: number; max: number; passo: number; formatar: (v: number) => string; aoMudar: (v: number, gesto?: string) => void }) {
+  const gesto = useRef<string | undefined>(undefined);
   return (
     <Campo rotulo={props.rotulo}>
       {(id) => (
@@ -96,7 +98,10 @@ export function Deslizante(props: { rotulo: string; valor: number; min: number; 
             max={props.max}
             step={props.passo}
             value={props.valor}
-            onChange={(e) => props.aoMudar(e.target.valueAsNumber)}
+            onChange={(e) => props.aoMudar(e.target.valueAsNumber, gesto.current)}
+            onPointerDown={() => (gesto.current = crypto.randomUUID())}
+            onPointerUp={() => (gesto.current = undefined)}
+            onPointerCancel={() => (gesto.current = undefined)}
             className="min-w-0 flex-1 cursor-pointer accent-[#2F646A]"
           />
           <output htmlFor={id} className="w-12 flex-none text-right text-[13px] text-tinta-2 tabular">

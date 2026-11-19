@@ -1,21 +1,30 @@
+import { Redo02Icon, Undo02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import type { Edicao } from "../../v2/artes";
-import { FORMATOS, type Ajustes, type Camada } from "../../v2/camadas";
+import { FORMATOS } from "../../v2/camadas";
 import { apiArtes, useApi, type ArteDaApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Falha } from "../componentes/Falha";
+import { Dica } from "../componentes/menu/Teclas";
 import { aoClicarLink } from "../rota";
-import { Controles } from "./arte/Controles";
+import type { AtalhoId } from "../teclado/atalhos";
+import { useAtalhosDoEditor } from "./arte/atalhosDoEditor";
+import { BarraDeContexto } from "./arte/BarraDeContexto";
 import { ControlesDaCena } from "./arte/ControlesDaCena";
+import { PainelElementos, PainelTexto, PainelUploads } from "./arte/Insercao";
 import { ListaDeCamadas } from "./arte/ListaDeCamadas";
+import type { Caixa } from "./arte/operacoes";
+import { PainelPosicao } from "./arte/PainelPosicao";
+import type { ControleDaTela } from "./arte/Tela";
+import { Gaveta, Trilho } from "./arte/Trilho";
+import { useEditor, type Painel } from "./arte/useEditor";
 import { tituloDa } from "./Artes";
 
 // O Leafer só baixa quando uma arte abre.
 const Tela = lazy(() => import("./arte/Tela"));
 
 const ESPERA_PARA_GRAVAR = 450;
-
-const REMOVIDO = { texto: "Texto removido.", logo: "Logo removido.", imagem: "Imagem removida.", forma: "Faixa removida." } as const;
 
 type Gravacao = { tipo: "salvo" } | { tipo: "pendente" } | { tipo: "salvando" } | { tipo: "erro"; mensagem: string };
 
@@ -90,39 +99,14 @@ function useGravacao(id: string, aoGravar: (arte: ArteDaApi) => void) {
 
 function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => void }) {
   const [arte, setArte] = useState(inicial);
-  const [camadas, setCamadas] = useState(inicial.camadas);
-  const [ajustes, setAjustes] = useState(inicial.ajustes);
-  const [selecionada, setSelecionada] = useState<string | null>(inicial.camadas[0]?.id ?? null);
-  const [removida, setRemovida] = useState<{ antes: Camada[]; camada: Camada } | null>(null);
+  const [painel, setPainel] = useState<Painel | null>(null);
   const [cena, setCena] = useState<{ tipo: "parada" } | { tipo: "gerando" } | { tipo: "erro"; mensagem: string }>({ tipo: "parada" });
   const { gravacao, agendar, gravarAgora } = useGravacao(arte.id, setArte);
-  const camada = camadas.find((c) => c.id === selecionada) ?? null;
-  const titulo = tituloDa({ ...arte, camadas });
-
-  function mudarCamadas(novas: Camada[]) {
-    setCamadas(novas);
-    setRemovida(null);
-    agendar({ camadas: novas, ajustes });
-  }
-  function mudarAjustes(novos: Ajustes) {
-    setAjustes(novos);
-    agendar({ camadas, ajustes: novos });
-  }
-  const mudar = (nova: Camada) => mudarCamadas(camadas.map((c) => (c.id === nova.id ? nova : c)));
-  function acrescentar(nova: Camada) {
-    mudarCamadas(nova.tipo === "forma" ? [nova, ...camadas] : [...camadas, nova]);
-    setSelecionada(nova.id);
-  }
-  function remover(alvo: Camada) {
-    mudarCamadas(camadas.filter((c) => c.id !== alvo.id));
-    setRemovida({ antes: camadas, camada: alvo });
-    setSelecionada(null);
-  }
-  function desfazerRemocao() {
-    if (!removida) return;
-    mudarCamadas(removida.antes);
-    setSelecionada(removida.camada.id);
-  }
+  const editor = useEditor({ inicial: { camadas: inicial.camadas, ajustes: inicial.ajustes }, formato: arte.formato, gravar: agendar });
+  const tela = useRef<ControleDaTela>(null);
+  const focarPalco = () => tela.current?.focar();
+  const titulo = tituloDa({ ...arte, camadas: editor.camadas });
+  useAtalhosDoEditor(editor, focarPalco);
 
   async function gerarNovaCena() {
     setCena({ tipo: "gerando" });
@@ -146,7 +130,7 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
   }
 
   return (
-    <main id="conteudo" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
+    <main id="conteudo" data-escopo="arte" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
       <header className="flex flex-wrap items-center gap-2.5 border-b border-linha px-4 py-3 sm:px-6">
         <BotaoMenu abrir={abrirMenu} />
         <nav aria-label="Caminho" className="flex items-center gap-1.5 text-sm">
@@ -160,7 +144,11 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
         <h1 title={titulo} className="min-w-0 max-w-[40ch] truncate text-sm font-medium">
           {titulo}
         </h1>
-        <span aria-live="off" className={`mr-auto ml-2 text-[13px] text-tinta-3 ${gravacao.tipo === "erro" ? "invisible" : ""}`}>
+        <div className="ml-2 flex items-center gap-0.5">
+          <BotaoDoHistorico rotulo="Desfazer" atalho="desfazer" icone={Undo02Icon} disabled={!editor.podeDesfazer} onClick={editor.desfazer} />
+          <BotaoDoHistorico rotulo="Refazer" atalho="refazer" icone={Redo02Icon} disabled={!editor.podeRefazer} onClick={editor.refazer} />
+        </div>
+        <span aria-live="off" className={`mr-auto ml-1 text-[13px] text-tinta-3 ${gravacao.tipo === "erro" ? "invisible" : ""}`}>
           {gravacao.tipo === "salvo" ? "Salvo" : "Salvando…"}
         </span>
         <button
@@ -188,42 +176,74 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
         {cena.tipo === "gerando" ? "Gerando outra cena com o mesmo pedido. Leva uns 30 segundos, e as camadas ficam como estão." : ""}
       </p>
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <div className={`relative flex min-h-[60dvh] min-w-0 flex-1 items-center justify-center bg-painel p-7 transition-opacity duration-200 lg:min-h-0 ${cena.tipo === "gerando" ? "opacity-50" : ""}`}>
+        <Trilho aberto={painel} abrir={setPainel} />
+        {painel && (
+          <Gaveta painel={painel} fechar={() => setPainel(null)}>
+            <ConteudoDoPainel painel={painel} arte={arte} editor={editor} medir={(id) => tela.current?.medir(id) ?? null} />
+          </Gaveta>
+        )}
+        <div className="flex min-h-[70dvh] min-w-0 flex-1 flex-col max-lg:order-1 lg:min-h-0">
+          <BarraDeContexto
+            camada={editor.camada}
+            acoes={editor.acoes}
+            cheia={editor.cheia}
+            posicaoAberta={painel === "posicao"}
+            alternarPosicao={() => setPainel((p) => (p === "posicao" ? null : "posicao"))}
+            aoAgir={focarPalco}
+          />
+          <div className={`relative min-h-0 flex-1 bg-painel transition-opacity duration-200 ${cena.tipo === "gerando" ? "opacity-50" : ""}`}>
             <Suspense fallback={<Previa arte={arte} />}>
               <Tela
+                ref={tela}
+                arteId={arte.id}
                 formato={arte.formato}
                 cena={arte.cena}
-                camadas={camadas}
-                ajustes={ajustes}
-                selecionada={selecionada}
-                selecionar={setSelecionada}
-                mudar={mudar}
+                camadas={editor.camadas}
+                ajustes={editor.ajustes}
+                selecionada={editor.selecionada}
+                selecionar={editor.selecionar}
+                mudar={editor.acoes.mudar}
               />
             </Suspense>
+          </div>
         </div>
-        <aside aria-label="Camadas" className="flex w-full flex-col gap-5 border-linha p-4 lg:w-[340px] lg:flex-none lg:overflow-y-auto lg:border-l">
-          <ListaDeCamadas arteId={arte.id} camadas={camadas} selecionada={selecionada} selecionar={setSelecionada} acrescentar={acrescentar} formato={arte.formato} />
-          {camada ? (
-            <Controles key={camada.id} camada={camada} mudar={mudar} remover={() => remover(camada)} />
-          ) : removida ? (
-            <div className="flex items-center gap-3 border-t border-linha pt-4 text-sm">
-              <span className="mr-auto min-w-0 truncate">{REMOVIDO[removida.camada.tipo]}</span>
-              <button
-                type="button"
-                autoFocus
-                onClick={desfazerRemocao}
-                className="pressiona cursor-pointer rounded-full bg-linha px-3 py-1.5 text-[13px] font-medium hover:bg-linha-forte"
-              >
-                Desfazer
-              </button>
-            </div>
-          ) : (
-            <p className="border-t border-linha pt-4 text-sm text-tinta-3">Clique numa camada da arte ou da lista para editar. Dois cliques num texto editam direto na arte.</p>
-          )}
-          <ControlesDaCena ajustes={ajustes} mudar={mudarAjustes} />
-        </aside>
       </div>
     </main>
+  );
+}
+
+function ConteudoDoPainel({ painel, arte, editor, medir }: { painel: Painel; arte: ArteDaApi; editor: ReturnType<typeof useEditor>; medir: (id: string) => Caixa | null }) {
+  const insercao = { formato: arte.formato, camadas: editor.camadas, cheia: editor.cheia, acrescentar: editor.acoes.acrescentar };
+  switch (painel) {
+    case "elementos":
+      return <PainelElementos {...insercao} />;
+    case "texto":
+      return <PainelTexto {...insercao} />;
+    case "uploads":
+      return <PainelUploads {...insercao} arteId={arte.id} />;
+    case "camadas":
+      return <ListaDeCamadas camadas={editor.camadas} selecionada={editor.selecionada} selecionar={editor.selecionar} reordenar={editor.acoes.reordenar} />;
+    case "cena":
+      return <ControlesDaCena ajustes={editor.ajustes} mudar={editor.acoes.mudarAjustes} />;
+    case "posicao": {
+      const indice = editor.camadas.findIndex((c) => c.id === editor.selecionada);
+      return <PainelPosicao camada={editor.camada} acoes={editor.acoes} total={editor.camadas.length} indice={indice} medir={medir} />;
+    }
+  }
+}
+
+function BotaoDoHistorico({ rotulo, atalho, icone, ...resto }: { rotulo: string; atalho: AtalhoId; icone: IconSvgElement; disabled: boolean; onClick: () => void }) {
+  return (
+    <Dica rotulo={rotulo} atalho={atalho} lado="bottom">
+      <button
+        type="button"
+        aria-label={rotulo}
+        {...resto}
+        className="pressiona grid size-9 cursor-pointer place-items-center rounded-full text-tinta-2 hover:bg-hover hover:text-tinta disabled:cursor-default disabled:text-tinta-4 disabled:hover:bg-transparent"
+      >
+        <HugeiconsIcon icon={icone} size={18} strokeWidth={1.6} />
+      </button>
+    </Dica>
   );
 }
 

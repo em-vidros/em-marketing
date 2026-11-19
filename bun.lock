@@ -15,6 +15,7 @@
         "@hugeicons/react": "1.1.10",
         "@leafer-in/editor": "2.3.4",
         "@leafer-in/text-editor": "2.3.4",
+        "@leafer-in/viewport": "2.3.4",
         "@resvg/resvg-js": "2.6.2",
         "@vercel/blob": "2",
         "ai": "7.0.138",
@@ -27,6 +28,7 @@
         "drizzle-orm": "0.45.4",
         "hono": "4.13.18",
         "leafer-ui": "2.3.4",
+        "leafer-x-easy-snap": "1.11.0",
         "lucide-react": "1.74.0",
         "motion": "14.2.0",
         "openai": "7.57.0",
@@ -232,6 +234,8 @@
     "@leafer-in/resize": ["@leafer-in/resize@2.3.4", "", { "peerDependencies": { "@leafer-in/interface": "^2.3.4", "@leafer-ui/draw": "^2.3.4", "@leafer-ui/interface": "^2.3.4" } }, "sha512-O8lPSGCW/lVx4cUsEJWG0Eud57Tm1SexNJKU0BPabP1rQ4rxkNnVZ75xmBpmp+Z0cDtdImKKG2smmo/kE9UdDQ=="],
 
     "@leafer-in/text-editor": ["@leafer-in/text-editor@2.3.4", "", { "peerDependencies": { "@leafer-in/editor": "^2.3.4", "@leafer-in/interface": "^2.3.4", "@leafer-ui/core": "^2.3.4", "@leafer-ui/interface": "^2.3.4" } }, "sha512-gzTESqGgZ8PY2XZ8jgFk369NyQDe02z/NDDNTiSFyZstluwoc7W9VJgrOIHq5c9vEhPN3VlzF15PW1P7cbQMNA=="],
+
+    "@leafer-in/viewport": ["@leafer-in/viewport@2.3.4", "", { "peerDependencies": { "@leafer-in/interface": "^2.3.4", "@leafer-ui/core": "^2.3.4", "@leafer-ui/interface": "^2.3.4" } }, "sha512-h6IEValZh4J9FiUiXCky4uq39jrmxsfoSmO9SSQMIbMgOG1iNfKDU2oP6rbMsrF4zomEkG3QI2xMT4rQHWH4lA=="],
 
     "@leafer-ui/app": ["@leafer-ui/app@2.3.4", "", { "dependencies": { "@leafer-ui/data": "2.3.4", "@leafer-ui/display": "2.3.4", "@leafer/core": "2.3.4" } }, "sha512-3qhAX7qc103KdUgJAc3LDywKWqq+jtxS6rYFV7dQQphEZ//y+rrHyXJSbZXG5EM+8RCoZOiWVe8FOG0MlSTyaQ=="],
 
@@ -622,6 +626,8 @@
     "kysely": ["kysely@0.29.6", "", {}, "sha512-hHaB8C/rfzDDtr/t8YZwxAuPJTT0zHyaPoVzcXwDYhYNAgH/4sIfVhi/XLLIY+bL/FqaIJnjATDbi8ObSELmxg=="],
 
     "leafer-ui": ["leafer-ui@2.3.4", "", { "dependencies": { "@leafer-in/interface": "2.3.4", "@leafer-ui/core": "2.3.4", "@leafer-ui/draw": "2.3.4", "@leafer-ui/interaction-web": "2.3.4", "@leafer-ui/interface": "2.3.4", "@leafer-ui/partner": "2.3.4", "@leafer-ui/web": "2.3.4", "@leafer/core": "2.3.4", "@leafer/interface": "2.3.4", "@leafer/partner": "2.3.4" } }, "sha512-q+hNzBcHIakjlWEaq5jBEOrydExWpsN0KYLj/y9X7an60URXfU7oK9dfaL2eK4qcE1LAaFEc1PtXdVBm7K/sBQ=="],
+
+    "leafer-x-easy-snap": ["leafer-x-easy-snap@1.11.0", "", {}, "sha512-gR/G+6iVbzCz8MLOf9WjGFF5IEkObDjKMbmBiiHSh4vyQoZsoaukV26ETJcfmtmqKf47Hx4ZOxiyZazSuXMZVw=="],
 
     "linebreak": ["linebreak@1.1.0", "", { "dependencies": { "base64-js": "0.0.8", "unicode-trie": "^2.0.0" } }, "sha512-MHp03UImeVhB7XZtjd0E4n6+3xr5Dq/9xI/5FptGk5FrbDR3zagPa2DS6U8ks/3HjbKWG9Q1M2ufOzxV2qLYSQ=="],
 
