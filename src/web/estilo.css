@@ -254,7 +254,8 @@
 }
 /* O anel de foco fica na linha inteira, por dentro, para não encostar na vizinha. */
 .linha:has(> a:focus-visible),
-a.linha:focus-visible {
+a.linha:focus-visible,
+button.linha:focus-visible {
   outline: 2px solid var(--color-tinta);
   outline-offset: -2px;
 }
