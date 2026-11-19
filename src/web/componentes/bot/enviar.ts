@@ -1,8 +1,8 @@
 import { ErroDeApi } from "../../api";
 import { navegar } from "../../rota";
 
-/** PUT ou POST com JSON. O erro traz o {erro} do servidor, já em português. */
-export async function enviar<T>(caminho: string, metodo: "PUT" | "POST", corpo?: unknown): Promise<T> {
+/** PUT, POST ou DELETE com JSON. O erro traz o {erro} do servidor, já em português. Um 204 devolve undefined. */
+export async function enviar<T>(caminho: string, metodo: "PUT" | "POST" | "DELETE", corpo?: unknown): Promise<T> {
   const res = await fetch(caminho, {
     method: metodo,
     headers: { accept: "application/json", ...(corpo === undefined ? {} : { "content-type": "application/json" }) },
@@ -13,5 +13,5 @@ export async function enviar<T>(caminho: string, metodo: "PUT" | "POST", corpo?:
     const json = (await res.json().catch(() => null)) as { erro?: string } | null;
     throw new ErroDeApi(res.status, json?.erro ?? `O servidor respondeu ${res.status}. Tente de novo.`);
   }
-  return res.json() as Promise<T>;
+  return (res.status === 204 ? undefined : res.json()) as Promise<T>;
 }

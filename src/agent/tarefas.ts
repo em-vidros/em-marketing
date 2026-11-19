@@ -1,7 +1,7 @@
 import type { UIMessage } from "ai";
 import { primeira } from "../db";
 import { q } from "../v2/banco";
-import type { BotId } from "./bots";
+import { ehEspecialista, type BotId } from "./bots";
 import { conversasDoBot, type Conversa } from "./conversas";
 
 /**
@@ -122,7 +122,7 @@ export async function tarefasAtivas(userId: string): Promise<ResumoTarefa[]> {
 
 /**
  * GET /api/bots/:id/tarefas. O que o bot fez nas conversas do usuário, do mais recente para trás.
- * Um especialista trabalha em tarefas; o Chefe, em conversas. `proximo` é o offset da página seguinte.
+ * Um especialista trabalha em tarefas; o Chefe e os bots criados pela equipe, em conversas. `proximo` é o offset da página seguinte.
  */
 export type TrabalhoDoBot =
   | { tipo: "tarefas"; itens: ResumoTarefa[]; proximo: number | null }
@@ -130,7 +130,7 @@ export type TrabalhoDoBot =
 
 export async function trabalhoDoBot(userId: string, botId: BotId, offset: number, limite: number): Promise<TrabalhoDoBot> {
   const pagina = <T>(linhas: T[]) => ({ itens: linhas.slice(0, limite), proximo: linhas.length > limite ? offset + limite : null });
-  if (botId === "chefe") return { tipo: "conversas", ...pagina(await conversasDoBot(userId, botId, offset, limite + 1)) };
+  if (!ehEspecialista(botId)) return { tipo: "conversas", ...pagina(await conversasDoBot(userId, botId, offset, limite + 1)) };
   const linhas = await q<Omit<Linha, "mensagens">>`SELECT t.id, t.conversa_id, t.bot_id, t.pedido, t.status, t.resumo, t.erro, t.criada_em, t.atualizada_em
     FROM tarefas t JOIN conversas c ON c.id = t.conversa_id
     WHERE c.user_id = ${userId} AND t.bot_id = ${botId} ORDER BY t.criada_em DESC, t.id LIMIT ${limite + 1} OFFSET ${offset}`;

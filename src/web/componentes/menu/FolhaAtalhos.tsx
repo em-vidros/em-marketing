@@ -1,6 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useRef, useState } from "react";
-import type { NomesDosBots } from "../../api";
+import type { Equipe } from "../../bots";
 import { type Atalho, ATALHOS, GRUPOS, IDS_DE_ATALHO, rotuloDe } from "../../teclado/atalhos";
 import { Teclas } from "./Teclas";
 
@@ -11,7 +11,7 @@ const normalizar = (s: string) =>
     .toLowerCase();
 
 /** A folha do "?": todos os atalhos da tabela, por grupo, com busca. Painel à direita. */
-export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar: () => void; bots: NomesDosBots }) {
+export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar: () => void; bots: Equipe }) {
   const [busca, setBusca] = useState("");
   const campo = useRef<HTMLInputElement>(null);
   const termo = normalizar(busca.trim());

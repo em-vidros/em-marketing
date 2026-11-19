@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { safeValidateUIMessages } from "ai";
 import type { BunRequest } from "bun";
 import { z } from "zod";
-import { BOTS, ehBotId, type BotId } from "../agent/bots";
+import { ehBotFixo, FORMAS, LIVRES, type BotId, type Livre } from "../agent/bots";
 import {
   apagarPauta,
   agendadoPorId,
@@ -16,7 +16,23 @@ import {
   restaurarPauta,
   type Dia,
 } from "../agent/calendario";
-import { configDoBot, detalheDoBot, gravarVersao, restaurarPadrao, restaurarVersao, versaoDoBot, versoesDoBot } from "../agent/config";
+import {
+  apagarBot,
+  criarBot,
+  detalheDoBot,
+  ferramentasLivres,
+  gravarMemoria,
+  gravarVersao,
+  instrucoesDe,
+  LIMITE_DA_MEMORIA,
+  listarBots,
+  restaurarBot,
+  restaurarPadrao,
+  restaurarVersao,
+  situacaoDoBot,
+  versaoDoBot,
+  versoesDoBot,
+} from "../agent/config";
 import {
   apagarConversa,
   apagarMensagem,
@@ -76,11 +92,20 @@ function comSessao<P extends string>(rota: (req: BunRequest<P>, usuario: Usuario
   };
 }
 
-/** Uma rota de /api/bots/:id. Bot desconhecido dá 404 antes de chegar à rota. */
+/** Uma rota de /api/bots/:id. Bot desconhecido ou apagado dá 404 antes de chegar à rota. */
 function doBot<P extends `/api/bots/:id${string}`>(rota: (req: BunRequest<P>, usuario: Usuario, botId: BotId) => Response | Promise<Response>) {
-  return comSessao<P>((req, usuario) => {
+  return comSessao<P>(async (req, usuario) => {
     const { id } = req.params as Record<string, string>;
-    return id !== undefined && ehBotId(id) ? rota(req, usuario, id) : naoEncontrado();
+    return id !== undefined && (await situacaoDoBot(id)) === "ativo" ? rota(req, usuario, id) : naoEncontrado();
+  });
+}
+
+/** Apagar e restaurar valem só para os bots criados pela equipe. Restaurar acha o bot mesmo apagado. */
+function doBotCriado<P extends `/api/bots/:id${string}`>(rota: (botId: BotId) => Promise<Response>) {
+  return comSessao<P>(async (req) => {
+    const { id } = req.params as Record<string, string>;
+    if (id === undefined || (await situacaoDoBot(id)) === null) return naoEncontrado();
+    return ehBotFixo(id) ? invalido("Os bots que vêm com o sistema não podem ser apagados.") : rota(id);
   });
 }
 
@@ -112,13 +137,67 @@ const Modelo = z.string({ error: "O modelo precisa ser texto." }).transform((id,
   return z.NEVER;
 });
 
+/** Na ordem do catálogo e sem repetição, para a mesma escolha não virar uma versão nova. */
+const Ferramentas = z
+  .array(z.enum(LIVRES as [Livre, ...Livre[]], { error: (i) => `Ferramenta desconhecida: ${String(i.input)}.` }), { error: "tools precisa ser uma lista." })
+  .transform((ts) => LIVRES.filter((t) => ts.includes(t)));
+
+const CamposBot = {
+  nome: texto("O nome", 40),
+  descricao: texto("A descrição", 300),
+  setor: texto("O setor", 40),
+  modelo: Modelo,
+  prompt: texto("O prompt", 20_000),
+  regras: z.string({ error: "As regras precisam ser texto." }).trim().max(20_000, "As regras passam de 20.000 caracteres."),
+  marca: z.boolean({ error: "marca precisa ser true ou false." }),
+  tools: Ferramentas,
+};
+
 /** PUT /api/bots/:id/config. Só os campos mandados mudam. */
 const EdicaoBot = z
   .object(
-    { nome: texto("O nome", 40).optional(), descricao: texto("A descrição", 300).optional(), modelo: Modelo.optional(), prompt: texto("O prompt", 20_000).optional() },
+    {
+      nome: CamposBot.nome.optional(),
+      descricao: CamposBot.descricao.optional(),
+      setor: CamposBot.setor.optional(),
+      modelo: CamposBot.modelo.optional(),
+      prompt: CamposBot.prompt.optional(),
+      regras: CamposBot.regras.optional(),
+      marca: CamposBot.marca.optional(),
+      tools: CamposBot.tools.optional(),
+    },
     { error: "Mande um objeto JSON." },
   )
   .refine(algumCampo, "Mande ao menos um campo para mudar.");
+
+/** POST /api/bots */
+const NovoBot = z.object(
+  {
+    nome: CamposBot.nome,
+    descricao: CamposBot.descricao,
+    setor: CamposBot.setor,
+    forma: z.enum(FORMAS, { error: `A forma precisa ser uma destas: ${FORMAS.join(", ")}.` }),
+    cor: z.string({ error: "A cor precisa ser texto." }).regex(/^#[0-9a-fA-F]{6}$/, "A cor precisa ser hexadecimal, como #1AAE9F."),
+    prompt: CamposBot.prompt,
+    modelo: CamposBot.modelo,
+    tools: CamposBot.tools.default([]),
+  },
+  { error: "Mande um objeto JSON." },
+);
+
+/** PUT /api/bots/:id/memoria. Vazio limpa a memória. */
+const NovaMemoria = z.object(
+  {
+    texto: z
+      .string({ error: "A memória precisa ser texto." })
+      .trim()
+      .max(LIMITE_DA_MEMORIA, `A memória passa de ${LIMITE_DA_MEMORIA.toLocaleString("pt-BR")} caracteres.`),
+  },
+  { error: "Mande um objeto JSON." },
+);
+
+/** O lugar do estado do post em GET /api/bots/:id/prompt, que não tem conversa. */
+const ESTADO_DO_POST_DE_EXEMPLO = "(Aqui entra o estado do post da conversa, que muda a cada turno.)";
 
 /** PATCH /api/conversas/:id */
 const EdicaoConversa = z
@@ -128,7 +207,7 @@ const EdicaoConversa = z
   )
   .refine(algumCampo, "Mande titulo ou arquivada.");
 
-const idDeBot = z.string().refine(ehBotId, "bot desconhecido") as unknown as z.ZodType<BotId>;
+const idDeBot = z.string().min(1).max(40);
 
 /** POST /api/conversas/:id/restaurar: o corpo é a resposta do DELETE da conversa. */
 const Excluida = z.object({
@@ -243,8 +322,6 @@ const NovoAgendamento = z
 /** PATCH /api/fila/:id */
 const Reagendamento = z.object({ publicaEm: PublicaEm }, { error: "Mande um objeto JSON." });
 
-const BOT_IDS = Object.keys(BOTS) as BotId[];
-
 export interface OpcoesDasRotas extends OpcoesChat {
   /** O estúdio de src/v2: as artes que a fila agenda e que o calendário mostra. */
   estudio: EstudioDaFila;
@@ -259,12 +336,44 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     "/api/auth/*": (req: Request) => auth.handler(req),
 
     "/api/modelos": { GET: comSessao(() => Response.json(modelos())) },
-    "/api/bots": { GET: comSessao(async () => Response.json(await Promise.all(BOT_IDS.map(configDoBot)))) },
+    "/api/ferramentas": { GET: comSessao(() => Response.json(ferramentasLivres())) },
+    "/api/bots": {
+      GET: comSessao(async () => Response.json(await listarBots())),
+      POST: comSessao(async (req, u) => {
+        const corpo = await lerCorpo(req, NovoBot);
+        return "resposta" in corpo ? corpo.resposta : Response.json(await criarBot(corpo.dados, u.email), { status: 201 });
+      }),
+    },
+    "/api/bots/:id": {
+      DELETE: doBotCriado<"/api/bots/:id">(async (botId) => {
+        await apagarBot(botId);
+        return new Response(null, { status: 204 });
+      }),
+    },
+    "/api/bots/:id/restaurar": {
+      POST: doBotCriado<"/api/bots/:id/restaurar">(async (botId) => {
+        await restaurarBot(botId);
+        return Response.json(await detalheDoBot(botId));
+      }),
+    },
     "/api/bots/:id/config": {
       GET: doBot<"/api/bots/:id/config">(async (_, __, botId) => Response.json(await detalheDoBot(botId))),
       PUT: doBot<"/api/bots/:id/config">(async (req, u, botId) => {
         const corpo = await lerCorpo(req, EdicaoBot);
-        return "resposta" in corpo ? corpo.resposta : Response.json(await gravarVersao(botId, corpo.dados, u.email));
+        if ("resposta" in corpo) return corpo.resposta;
+        if (corpo.dados.tools && ehBotFixo(botId)) return invalido("As ferramentas dos bots que vêm com o sistema são definidas no código.");
+        return Response.json(await gravarVersao(botId, corpo.dados, u.email));
+      }),
+    },
+    "/api/bots/:id/prompt": {
+      GET: doBot<"/api/bots/:id/prompt">(async (_, __, botId) =>
+        Response.json({ texto: instrucoesDe(await detalheDoBot(botId), { delegada: false, estadoDoPost: ESTADO_DO_POST_DE_EXEMPLO }) }),
+      ),
+    },
+    "/api/bots/:id/memoria": {
+      PUT: doBot<"/api/bots/:id/memoria">(async (req, u, botId) => {
+        const corpo = await lerCorpo(req, NovaMemoria);
+        return "resposta" in corpo ? corpo.resposta : Response.json(await gravarMemoria(botId, corpo.dados.texto, u.email));
       }),
     },
     "/api/bots/:id/versoes": { GET: doBot<"/api/bots/:id/versoes">(async (_, __, botId) => Response.json(await versoesDoBot(botId))) },

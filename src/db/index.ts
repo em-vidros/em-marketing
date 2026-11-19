@@ -96,6 +96,31 @@ export async function criarTabelas(): Promise<void> {
       autor text NOT NULL             -- e-mail de quem gravou
     )`;
     await q`CREATE INDEX IF NOT EXISTS versoes_bot_bot ON versoes_bot(bot_id, id)`;
+    // NULL é o padrão do bot: o código para os fixos, a primeira versão para os criados.
+    // Assim uma mudança nas regras do código chega aos fixos que só tiveram o prompt editado.
+    await q`ALTER TABLE versoes_bot ADD COLUMN IF NOT EXISTS setor text`;
+    await q`ALTER TABLE versoes_bot ADD COLUMN IF NOT EXISTS regras text`;
+    await q`ALTER TABLE versoes_bot ADD COLUMN IF NOT EXISTS tools text`; // JSON ToolName[]
+    await q`ALTER TABLE versoes_bot ADD COLUMN IF NOT EXISTS marca boolean`;
+
+    // Os bots que a equipe criou. Os fixos ficam no código (agent/bots.ts). A config editável
+    // fica em versoes_bot, como a dos fixos; aqui só o que não muda: a aparência e quem criou.
+    await q`CREATE TABLE IF NOT EXISTS bots (
+      id text PRIMARY KEY,
+      forma text NOT NULL,
+      cor text NOT NULL,
+      criado_por text NOT NULL,
+      criado_em double precision NOT NULL,   -- epoch ms
+      apagado_em double precision           -- epoch ms; as conversas dele continuam legíveis
+    )`;
+
+    // A memória de cada bot, a mesma para a equipe toda. Entra no prompt de todo turno.
+    await q`CREATE TABLE IF NOT EXISTS memorias_bot (
+      bot_id text PRIMARY KEY,
+      texto text NOT NULL,
+      atualizada_em double precision NOT NULL,   -- epoch ms
+      autor text                                -- e-mail; NULL quando o próprio bot gravou com lembrar
+    )`;
 
     // Uma linha por mídia efetivamente publicada. É a única chave que liga uma peça
     // deste sistema ao objeto que existe no Instagram: sem ela nenhuma métrica é

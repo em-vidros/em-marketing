@@ -8,6 +8,9 @@ const data = new Intl.DateTimeFormat("pt-BR", { timeZone: FUSO, day: "2-digit", 
 const iso = new Intl.DateTimeFormat("en-CA", { timeZone: FUSO, year: "numeric", month: "2-digit", day: "2-digit" });
 const hora = new Intl.DateTimeFormat("pt-BR", { timeZone: FUSO, hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
+/** O dia em São Paulo, "AAAA-MM-DD". */
+export const diaDe = (ms: number) => iso.format(ms);
+
 const linhaDoDia = (ms: number) => `${semana.format(ms)} ${data.format(ms)} (${iso.format(ms)})`;
 
 /**

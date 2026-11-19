@@ -1,20 +1,24 @@
-import { BOTS, type BotId } from "../bots";
+import { useEquipe, type BotId, type Visual } from "../bots";
 import type { EstadoBot } from "../equipe";
 
 /** O personagem do bot. Trabalhando flutua; esperando ganha o ponto âmbar no canto. Decorativo: o nome vem ao lado. */
 export function Avatar({
   bot,
+  visual,
   estado = "parado",
   tamanho,
   anel = "var(--color-painel)",
 }: {
   bot: BotId;
+  /** No lugar da aparência do bot, para mostrar um que ainda está sendo criado. */
+  visual?: Visual;
   estado?: EstadoBot["tipo"];
   tamanho: number;
   /** Cor da borda do ponto âmbar, igual ao fundo atrás do avatar. */
   anel?: string;
 }) {
-  const { corpo, cor, giroDoCorpo, olhos: o } = BOTS[bot];
+  const doBot = useEquipe().de(bot).visual;
+  const { corpo, cor, giroDoCorpo, olhos: o } = visual ?? doBot;
   const ponto = Math.max(8, Math.round(tamanho * 0.3));
   const olho = (x: number, y: number) => (
     <rect

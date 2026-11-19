@@ -1,11 +1,9 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { ConversaExcluida } from "../agent/conversas";
 import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
-import type { ConfigBot } from "../agent/config";
 import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
 import type { Edicao } from "../v2/artes";
 import type { Arte, Referencia } from "../v2/schema";
-import { BOT_IDS, BOTS, type BotId } from "./bots";
 import type { ApiConversas } from "./componentes/menu/conversas";
 import { navegar } from "./rota";
 import type { Conversa } from "./tipos";
@@ -131,32 +129,4 @@ export function useApi<T>(caminho: string | null, intervalo?: number) {
   }, [caminho, intervalo, versao]);
 
   return [carga, recarregar] as const;
-}
-
-/** Nome e descrição em vigor de cada bot. O usuário pode trocá-los; a forma e a cor ficam no código. */
-export type NomesDosBots = Record<BotId, { nome: string; descricao: string }>;
-
-const PADRAO = Object.fromEntries(BOT_IDS.map((id) => [id, { nome: BOTS[id].nome, descricao: BOTS[id].papel }])) as NomesDosBots;
-
-let nomes: NomesDosBots = PADRAO;
-let pedido: Promise<void> | null = null;
-const ouvintes = new Set<() => void>();
-
-/** Relê GET /api/bots. Quem grava a config de um bot chama isto para a barra e a paleta mostrarem o nome novo. */
-export function recarregarBots(): Promise<void> {
-  pedido = pegar<ConfigBot[]>("/api/bots")
-    .then((lista) => {
-      nomes = { ...PADRAO, ...Object.fromEntries(lista.map((b) => [b.id, { nome: b.nome, descricao: b.descricao }])) };
-      for (const o of ouvintes) o();
-    })
-    .catch(() => {});
-  return pedido;
-}
-
-export function useNomesDosBots(): NomesDosBots {
-  useEffect(() => void (pedido ?? recarregarBots()), []);
-  return useSyncExternalStore(
-    (o) => (ouvintes.add(o), () => ouvintes.delete(o)),
-    () => nomes,
-  );
 }

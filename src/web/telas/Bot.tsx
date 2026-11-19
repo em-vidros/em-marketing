@@ -1,8 +1,8 @@
 import { useEffect, useId, useReducer } from "react";
 import type { Agora } from "../../db";
 import type { Modelo } from "../../agent/models";
-import { type NomesDosBots, useApi, useNomesDosBots } from "../api";
-import { BOT_IDS } from "../bots";
+import { ErroDeApi, useApi } from "../api";
+import { ehBotFixo, useEquipe, type Equipe } from "../bots";
 import { Avatar } from "../componentes/Avatar";
 import { Teclas } from "../componentes/menu/Teclas";
 import { BotaoMenu } from "../componentes/BotaoMenu";
@@ -26,11 +26,11 @@ const ABAS = [
 const caminhoDa = (id: BotId, aba: Aba) => (aba === "config" ? `/bots/${id}/config` : `/bots/${id}`);
 
 /** O estado do cabeçalho, das tarefas ativas. O Chefe espera você quando há aprovação pendente. */
-function estadoDo(id: BotId, ativas: readonly ResumoTarefa[], aprovacoes: number, nomes: NomesDosBots): EstadoBot {
+function estadoDo(id: BotId, ativas: readonly ResumoTarefa[], aprovacoes: number, nomes: Equipe): EstadoBot {
   if (id === "chefe") {
     if (aprovacoes > 0) return { tipo: "esperando", texto: "Esperando você" };
     const ocupado = ativas.find((t) => t.status === "trabalhando") ?? ativas[0];
-    return ocupado ? { tipo: "delegando", texto: `Esperando ${nomes[ocupado.botId].nome}` } : { tipo: "parado", texto: "Parado" };
+    return ocupado ? { tipo: "delegando", texto: `Esperando ${nomes.de(ocupado.botId).nome}` } : { tipo: "parado", texto: "Parado" };
   }
   if (ativas.some((t) => t.status === "trabalhando")) return { tipo: "trabalhando", texto: "Trabalhando" };
   return { tipo: "parado", texto: ativas.length > 0 ? "Na fila" : "Parado" };
@@ -51,7 +51,7 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
   const [f, despachar] = useReducer(formulario, { fase: "carregando" });
   const [config, relerConfig] = useApi<DetalheBot>(`/api/bots/${id}/config`);
   const [modelos, relerModelos] = useApi<Modelo[]>("/api/modelos");
-  const nomes = useNomesDosBots();
+  const nomes = useEquipe();
   const [atividade] = useApi<ResumoTarefa[]>("/api/atividade", 3000);
   const [agora] = useApi<Agora>(id === "chefe" ? "/api/atividade/agora" : null, 5000);
   const painel = useId();
@@ -62,8 +62,8 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
   }, [config]);
 
   const salvo = f.fase === "pronto" ? f.salvo : null;
-  const nome = salvo?.nome ?? nomes[id].nome;
-  const descricao = salvo?.descricao ?? nomes[id].descricao;
+  const nome = salvo?.nome ?? nomes.de(id).nome;
+  const descricao = salvo?.descricao ?? nomes.de(id).descricao;
   const ativas =
     atividade.estado === "pronto" ? atividade.dados.filter((t) => id === "chefe" || t.botId === id) : atividade.estado === "erro" ? [] : null;
   const estado = estadoDo(id, ativas ?? [], agora.estado === "pronto" ? agora.dados.esperando.length : 0, nomes);
@@ -81,6 +81,8 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
     e.preventDefault();
     despachar({ tipo: "falhou", erro: "Salve ou descarte as alterações antes de trocar de bot." });
   };
+
+  if (config.estado === "erro" && config.erro instanceof ErroDeApi && config.erro.status === 404) return <BotNaoExiste abrirMenu={abrirMenu} />;
 
   return (
     <main id="conteudo" className="min-w-0 flex-1 overflow-y-auto">
@@ -110,13 +112,15 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
           <button
             type="button"
             onClick={conversar}
-            aria-keyshortcuts={ariaDe(atalhoDeConversa(id), ehMac) || undefined}
+            aria-keyshortcuts={(ehBotFixo(id) && ariaDe(atalhoDeConversa(id), ehMac)) || undefined}
             className="pressiona flex h-10 flex-none cursor-pointer items-center gap-2 rounded-full bg-tinta px-4 font-medium text-sobre-tinta max-sm:w-full max-sm:justify-center sm:ml-auto"
           >
             Nova conversa com {nome}
-            <span className="max-md:hidden">
-              <Teclas atalho={atalhoDeConversa(id)} tom="escuro" />
-            </span>
+            {ehBotFixo(id) && (
+              <span className="max-md:hidden">
+                <Teclas atalho={atalhoDeConversa(id)} tom="escuro" />
+              </span>
+            )}
           </button>
         </header>
 
@@ -144,9 +148,9 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
             <>
               <nav aria-label="Configurar outro bot" className="hidden lg:block">
                 <ul className="sticky top-6 flex flex-col gap-0.5">
-                  {BOT_IDS.map((b) => {
+                  {nomes.lista.map(({ id: b, nome: dele }) => {
                     const atual = b === id;
-                    const rotulo = b === id ? nome : nomes[b].nome;
+                    const rotulo = b === id ? nome : dele;
                     return (
                       <li key={b}>
                         <a
@@ -177,6 +181,24 @@ function PaginaDoBot({ id, aba, abrirMenu, conversar }: { id: BotId; aba: Aba; a
             </>
           )}
         </div>
+      </div>
+    </main>
+  );
+}
+
+function BotNaoExiste({ abrirMenu }: { abrirMenu: () => void }) {
+  useEffect(() => {
+    document.title = "Bot não encontrado · EM Marketing";
+  }, []);
+  return (
+    <main id="conteudo" className="min-w-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex max-w-5xl flex-col gap-3 px-4 pt-3 sm:px-6 md:pt-10">
+        <BotaoMenu abrir={abrirMenu} />
+        <h1 className="text-2xl/tight font-semibold tracking-[-0.02em]">Bot não encontrado</h1>
+        <p className="text-pretty text-tinta-2">Este bot não existe ou foi apagado. As conversas com um bot apagado continuam na barra lateral.</p>
+        <a href="/bots/novo" onClick={aoClicarLink} className="pressiona self-start rounded-full bg-tinta px-4 py-2 font-medium text-sobre-tinta">
+          Criar um bot
+        </a>
       </div>
     </main>
   );

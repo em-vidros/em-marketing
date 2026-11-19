@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNomesDosBots } from "../api";
+import { useEquipe } from "../bots";
 import { especialistaDa, passosDe, type ParteDelegacao, type Passo } from "../tipos";
 import { Avatar } from "./Avatar";
 import { atividadeDe, textoDa } from "./ia/atividade";
@@ -68,7 +68,7 @@ export function CartaoTarefa({
   abrir: (tarefaId: string, origem: HTMLElement) => void;
 }) {
   const bot = especialistaDa(parte);
-  const { nome } = useNomesDosBots()[bot];
+  const { nome } = useEquipe().de(bot);
   const tempoDe = useTempos();
   const vistas = useRef<LinhaDeTarefa[]>([]);
 

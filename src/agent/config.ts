@@ -1,125 +1,325 @@
 import { primeira } from "../db";
-import { q } from "../v2/banco";
-import { BOTS, type BotId } from "./bots";
+import { q, transacao } from "../v2/banco";
+import { BOTS, ehBotFixo, FERRAMENTAS, LIVRES, MARCA, SETOR_PADRAO, type BotFixo, type BotId, type Forma, type Livre } from "./bots";
+import { contextoDeData, diaDe } from "./hoje";
 import { ehModelId, type ModelId } from "./models";
 import type { ToolName } from "./tools";
 
 /**
- * A config editável de cada bot. O padrão vem do código (agent/bots.ts); cada gravação
- * vira uma linha em versoes_bot, e a mais nova vale. Nada é sobrescrito: voltar a uma
- * versão antiga, ou ao padrão, grava uma versão nova com o texto dela.
+ * A config editável de cada bot, fixo ou criado pela equipe. Cada gravação vira uma linha em
+ * versoes_bot, e a mais nova vale. Nada é sobrescrito: voltar a uma versão antiga, ou ao padrão,
+ * grava uma versão nova com o texto dela. O padrão de um fixo é o código (agent/bots.ts);
+ * o de um criado é a primeira versão, gravada junto com ele.
  */
 
-export type CampoEditavel = "nome" | "descricao" | "modelo" | "prompt";
-
-export interface VersaoBot {
-  id: number;
-  botId: BotId;
+export interface Editavel {
   nome: string;
   descricao: string;
+  /** O grupo do bot na barra lateral. Texto livre. */
+  setor: string;
   modelo: ModelId;
-  /** Só o papel. O contexto de marca entra pelo código, sempre (`DetalheBot.fixo`). */
+  /** O papel do bot. */
   prompt: string;
+  /** Como usar as tools. Entra depois do prompt. */
+  regras: string;
+  /** Liga o contexto de marca (brandbook e tokens) depois das regras. */
+  marca: boolean;
+  /** Só um bot criado escolhe as dele; os fixos usam as do código. */
+  tools: readonly ToolName[];
+}
+
+export type CampoEditavel = keyof Editavel;
+
+export interface VersaoBot extends Editavel {
+  id: number;
+  botId: BotId;
   criadaEm: number;
   autor: string;
 }
 
-export type Editavel = Pick<VersaoBot, CampoEditavel>;
+/** Só os bots criados têm. A aparência dos fixos está no front (src/web/bots.ts). */
+export interface Criado {
+  forma: Forma;
+  cor: string;
+  por: string;
+  em: number;
+}
 
-/** GET /api/bots. A config que vale agora. `padrao[campo]` é true quando o campo está igual ao do código. */
+/** GET /api/bots. A config que vale agora. `padrao[campo]` é true quando o campo está igual ao padrão. */
 export interface ConfigBot extends Editavel {
   id: BotId;
+  criado: Criado | null;
+  apagadoEm: number | null;
   sugestoes: readonly string[];
   /** A versão em vigor; null quando nunca houve gravação e vale o padrão do código. */
   versaoId: number | null;
   padrao: Record<CampoEditavel, boolean>;
 }
 
-/** GET /api/bots/:id/config. `fixo` é o que o código acrescenta depois do prompt, só para leitura. */
-export interface DetalheBot extends ConfigBot {
-  fixo: string;
-  tools: readonly ToolName[];
+export interface Memoria {
+  texto: string;
+  atualizadaEm: number | null;
+  /** E-mail de quem gravou; null quando foi o próprio bot, com lembrar. */
+  autor: string | null;
 }
 
-const CAMPOS = ["nome", "descricao", "modelo", "prompt"] as const satisfies readonly CampoEditavel[];
+/** GET /api/bots/:id/config */
+export interface DetalheBot extends ConfigBot {
+  /** O texto de marca que entra quando `marca` está ligado. Gerado de brand/, só para leitura. */
+  contexto: string;
+  /** As regras do padrão, para voltar só elas. */
+  regrasPadrao: string;
+  memoria: Memoria;
+}
 
-const padraoDe = (botId: BotId): Editavel => {
-  const { nome, descricao, modelo, papel } = BOTS[botId];
-  return { nome, descricao, modelo, prompt: papel };
+/** GET /api/ferramentas: as tools que um bot criado pode escolher, com a descrição para a tela. */
+export interface Ferramenta {
+  nome: Livre;
+  descricao: string;
+}
+
+export const ferramentasLivres = (): Ferramenta[] => LIVRES.map((nome) => ({ nome, descricao: FERRAMENTAS[nome] }));
+
+/** POST /api/bots */
+export interface NovoBot {
+  nome: string;
+  descricao: string;
+  setor: string;
+  forma: Forma;
+  cor: string;
+  prompt: string;
+  modelo: ModelId;
+  tools: readonly Livre[];
+}
+
+export const LIMITE_DA_MEMORIA = 20_000;
+
+const CAMPOS = ["nome", "descricao", "setor", "modelo", "prompt", "regras", "marca", "tools"] as const satisfies readonly CampoEditavel[];
+
+/** Os campos que NULL no banco quer dizer "igual ao padrão". */
+const OPCIONAIS = ["setor", "regras", "marca", "tools"] as const satisfies readonly CampoEditavel[];
+
+const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+
+/** O fundo da primeira versão de um bot criado. Ela grava todos os campos; daqui só sai o modelo, quando o gravado saiu de MODELOS. */
+const FUNDO_DO_CRIADO: Editavel = { nome: "", descricao: "", setor: SETOR_PADRAO, modelo: "openai:gpt-6-luna", prompt: "", regras: "", marca: true, tools: [] };
+
+const padraoDoFixo = (id: BotFixo): Editavel => {
+  const { nome, descricao, modelo, papel, regras, tools } = BOTS[id];
+  return { nome, descricao, setor: SETOR_PADRAO, modelo, prompt: papel, regras, marca: true, tools };
 };
 
-interface Linha {
+interface LinhaVersao {
   id: number;
   bot_id: BotId;
   nome: string;
   descricao: string;
   modelo: string;
   prompt: string;
+  setor: string | null;
+  regras: string | null;
+  tools: string | null;
+  marca: boolean | null;
   criada_em: number;
   autor: string;
 }
 
+interface LinhaBot {
+  id: BotId;
+  forma: Forma;
+  cor: string;
+  criado_por: string;
+  criado_em: number;
+  apagado_em: number | null;
+}
+
 /** Um modelo que saiu de MODELOS depois de gravado volta ao padrão do bot, em vez de quebrar o turno. */
-const daLinha = (r: Linha): VersaoBot => ({
+const daLinha = (r: LinhaVersao, padrao: Editavel): VersaoBot => ({
   id: r.id,
   botId: r.bot_id,
   nome: r.nome,
   descricao: r.descricao,
-  modelo: ehModelId(r.modelo) ? r.modelo : BOTS[r.bot_id].modelo,
+  setor: r.setor ?? padrao.setor,
+  modelo: ehModelId(r.modelo) ? r.modelo : padrao.modelo,
   prompt: r.prompt,
+  regras: r.regras ?? padrao.regras,
+  marca: r.marca ?? padrao.marca,
+  tools: r.tools === null ? padrao.tools : (JSON.parse(r.tools) as ToolName[]),
   criadaEm: r.criada_em,
   autor: r.autor,
 });
 
-const ultimaVersao = async (botId: BotId): Promise<VersaoBot | null> => {
-  const r = await primeira(q<Linha>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC LIMIT 1`);
-  return r && daLinha(r);
-};
+/** O que não é versionado: de onde vem o padrão, a aparência e o texto de marca. */
+interface Base {
+  id: BotId;
+  criado: Criado | null;
+  apagadoEm: number | null;
+  padrao: Editavel;
+  contexto: () => string;
+  sugestoes: readonly string[];
+}
 
-export async function configDoBot(botId: BotId): Promise<ConfigBot> {
-  const padrao = padraoDe(botId);
-  const versao = await ultimaVersao(botId);
-  const atual: Editavel = versao ?? padrao;
+async function baseDo(botId: BotId): Promise<Base | null> {
+  if (ehBotFixo(botId)) {
+    const { contexto, sugestoes } = BOTS[botId];
+    return { id: botId, criado: null, apagadoEm: null, padrao: padraoDoFixo(botId), contexto, sugestoes };
+  }
+  const bot = await primeira(q<LinhaBot>`SELECT * FROM bots WHERE id = ${botId}`);
+  if (!bot) return null;
+  // criarBot grava o bot e a primeira versão, com todos os campos, na mesma transação.
+  const primeiraVersao = (await primeira(q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id LIMIT 1`))!;
   return {
     id: botId,
-    nome: atual.nome,
-    descricao: atual.descricao,
-    modelo: atual.modelo,
-    prompt: atual.prompt,
-    sugestoes: BOTS[botId].sugestoes,
-    versaoId: versao?.id ?? null,
-    padrao: Object.fromEntries(CAMPOS.map((c) => [c, atual[c] === padrao[c]])) as ConfigBot["padrao"],
+    criado: { forma: bot.forma, cor: bot.cor, por: bot.criado_por, em: bot.criado_em },
+    apagadoEm: bot.apagado_em,
+    padrao: daLinha(primeiraVersao, FUNDO_DO_CRIADO),
+    contexto: MARCA,
+    sugestoes: [],
   };
 }
 
-export const detalheDoBot = async (botId: BotId): Promise<DetalheBot> => ({ ...(await configDoBot(botId)), fixo: BOTS[botId].fixo(), tools: BOTS[botId].tools });
+async function lerBot(botId: BotId): Promise<{ base: Base; config: ConfigBot }> {
+  const base = await baseDo(botId);
+  if (!base) throw new Error(`Bot desconhecido: ${botId}.`);
+  const r = await primeira(q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC LIMIT 1`);
+  const versao = r && daLinha(r, base.padrao);
+  const atual: Editavel = versao ?? base.padrao;
+  const editavel = Object.fromEntries(CAMPOS.map((c) => [c, atual[c]])) as unknown as Editavel;
+  // Os fixos não escolhem tools: valem sempre as do código, mesmo que uma versão antiga diga outra coisa.
+  if (!base.criado) editavel.tools = base.padrao.tools;
+  return {
+    base,
+    config: {
+      id: botId,
+      ...editavel,
+      criado: base.criado,
+      apagadoEm: base.apagadoEm,
+      sugestoes: base.sugestoes,
+      versaoId: versao?.id ?? null,
+      padrao: Object.fromEntries(CAMPOS.map((c) => [c, igual(editavel[c], base.padrao[c])])) as ConfigBot["padrao"],
+    },
+  };
+}
 
-/** O system prompt do bot: o papel em vigor e, depois dele, a parte fixa do código. */
-export const instrucoesDe = (config: ConfigBot): string => `${config.prompt}\n\n${BOTS[config.id].fixo()}`;
+/** "ativo", "apagado", ou null quando o id não é de nenhum bot. */
+export async function situacaoDoBot(botId: BotId): Promise<"ativo" | "apagado" | null> {
+  if (ehBotFixo(botId)) return "ativo";
+  const r = await primeira(q<{ apagado_em: number | null }>`SELECT apagado_em FROM bots WHERE id = ${botId}`);
+  return r ? (r.apagado_em === null ? "ativo" : "apagado") : null;
+}
+
+/** A config em vigor. Lança erro para um id desconhecido: quem chama já passou por situacaoDoBot. */
+export const configDoBot = async (botId: BotId): Promise<ConfigBot> => (await lerBot(botId)).config;
+
+export async function memoriaDo(botId: BotId): Promise<Memoria> {
+  const r = await primeira(q<{ texto: string; atualizada_em: number; autor: string | null }>`SELECT * FROM memorias_bot WHERE bot_id = ${botId}`);
+  return r ? { texto: r.texto, atualizadaEm: r.atualizada_em, autor: r.autor } : { texto: "", atualizadaEm: null, autor: null };
+}
+
+export async function detalheDoBot(botId: BotId): Promise<DetalheBot> {
+  const { base, config } = await lerBot(botId);
+  return { ...config, contexto: base.contexto().trim(), regrasPadrao: base.padrao.regras, memoria: await memoriaDo(botId) };
+}
+
+/** GET /api/bots: os fixos, depois os criados que não foram apagados, na ordem em que nasceram. */
+export async function listarBots(): Promise<ConfigBot[]> {
+  const criados = await q<{ id: string }>`SELECT id FROM bots WHERE apagado_em IS NULL ORDER BY criado_em, id`;
+  return Promise.all([...Object.keys(BOTS), ...criados.map((b) => b.id)].map(configDoBot));
+}
+
+const DELEGADA =
+  "Você está numa tarefa delegada pelo Chefe, não falando com o usuário. Não faça perguntas: decida com o que tem e siga o fluxo até onde o pedido manda. Termine com um resumo curto do que fez e do que ficou pendente; só ele volta para o Chefe.";
+
+/**
+ * O system prompt inteiro de um turno, na ordem em que o modelo lê: prompt, regras, marca,
+ * data, aviso de tarefa delegada, memória e estado do post. GET /api/bots/:id/prompt mostra o mesmo texto.
+ */
+export function instrucoesDe(bot: DetalheBot, turno: { delegada: boolean; estadoDoPost: string; agora?: number }): string {
+  const memoria = bot.memoria.texto.trim();
+  return [
+    bot.prompt,
+    bot.regras.trim(),
+    bot.marca ? bot.contexto : "",
+    contextoDeData(turno.agora),
+    turno.delegada ? DELEGADA : "",
+    memoria && `--- MEMÓRIA ---\n${memoria}`,
+    `--- ESTADO DO POST DESTA CONVERSA ---\n${turno.estadoDoPost}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
+}
 
 export async function versoesDoBot(botId: BotId): Promise<VersaoBot[]> {
-  return (await q<Linha>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC`).map(daLinha);
+  const { base } = await lerBot(botId);
+  return (await q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC`).map((r) => daLinha(r, base.padrao));
 }
 
 export async function versaoDoBot(botId: BotId, versaoId: number): Promise<VersaoBot | null> {
-  const r = await primeira(q<Linha>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} AND id = ${versaoId}`);
-  return r && daLinha(r);
+  const { base } = await lerBot(botId);
+  const r = await primeira(q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} AND id = ${versaoId}`);
+  return r && daLinha(r, base.padrao);
 }
 
 /**
  * Grava os campos mudados sobre a config em vigor. Se nada muda, não grava: repetir o mesmo
- * pedido não cria uma versão por clique. O modelo já chega validado pela rota.
+ * pedido não cria uma versão por clique. O modelo e as tools já chegam validados pela rota.
  */
 export async function gravarVersao(botId: BotId, mudanca: Partial<Editavel>, autor: string): Promise<DetalheBot> {
-  const atual = await configDoBot(botId);
-  const nova: Editavel = { nome: atual.nome, descricao: atual.descricao, modelo: atual.modelo, prompt: atual.prompt, ...mudanca };
-  if (CAMPOS.every((c) => nova[c] === atual[c])) return detalheDoBot(botId);
-  await q`INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, criada_em, autor)
-    VALUES (${botId}, ${nova.nome}, ${nova.descricao}, ${nova.modelo}, ${nova.prompt}, ${Date.now()}, ${autor})`;
+  const { base, config: atual } = await lerBot(botId);
+  const nova: Editavel = { ...atual, ...mudanca };
+  if (!base.criado) nova.tools = base.padrao.tools;
+  if (CAMPOS.every((c) => igual(nova[c], atual[c]))) return detalheDoBot(botId);
+  const [setor, regras, marca, tools] = OPCIONAIS.map((c) => (igual(nova[c], base.padrao[c]) ? null : nova[c]));
+  await q`INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, setor, regras, marca, tools, criada_em, autor)
+    VALUES (${botId}, ${nova.nome}, ${nova.descricao}, ${nova.modelo}, ${nova.prompt}, ${setor}, ${regras}, ${marca},
+      ${tools === null ? null : JSON.stringify(tools)}, ${Date.now()}, ${autor})`;
   return detalheDoBot(botId);
 }
 
-export const restaurarVersao = ({ botId, nome, descricao, modelo, prompt }: VersaoBot, autor: string): Promise<DetalheBot> =>
-  gravarVersao(botId, { nome, descricao, modelo, prompt }, autor);
+export const restaurarVersao = ({ botId, ...versao }: VersaoBot, autor: string): Promise<DetalheBot> =>
+  gravarVersao(botId, Object.fromEntries(CAMPOS.map((c) => [c, versao[c]])), autor);
 
-export const restaurarPadrao = (botId: BotId, autor: string): Promise<DetalheBot> => gravarVersao(botId, padraoDe(botId), autor);
+export const restaurarPadrao = async (botId: BotId, autor: string): Promise<DetalheBot> => gravarVersao(botId, (await lerBot(botId)).base.padrao, autor);
+
+/** Cria o bot e a primeira versão dele, que passa a ser o padrão. */
+export async function criarBot(novo: NovoBot, autor: string): Promise<DetalheBot> {
+  const id = `b-${crypto.randomUUID().replaceAll("-", "").slice(0, 8)}`;
+  const agora = Date.now();
+  await transacao(async () => {
+    await q`INSERT INTO bots (id, forma, cor, criado_por, criado_em) VALUES (${id}, ${novo.forma}, ${novo.cor}, ${autor}, ${agora})`;
+    await q`INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, setor, regras, marca, tools, criada_em, autor)
+      VALUES (${id}, ${novo.nome}, ${novo.descricao}, ${novo.modelo}, ${novo.prompt}, ${novo.setor}, ${""}, ${true},
+        ${JSON.stringify(novo.tools)}, ${agora}, ${autor})`;
+  });
+  return detalheDoBot(id);
+}
+
+/** Só bots criados. Repetir não muda a data da primeira vez. */
+export async function apagarBot(botId: BotId): Promise<void> {
+  await q`UPDATE bots SET apagado_em = ${Date.now()} WHERE id = ${botId} AND apagado_em IS NULL`;
+}
+
+export async function restaurarBot(botId: BotId): Promise<void> {
+  await q`UPDATE bots SET apagado_em = NULL WHERE id = ${botId}`;
+}
+
+export async function gravarMemoria(botId: BotId, texto: string, autor: string): Promise<Memoria> {
+  await q`INSERT INTO memorias_bot (bot_id, texto, atualizada_em, autor) VALUES (${botId}, ${texto}, ${Date.now()}, ${autor})
+    ON CONFLICT (bot_id) DO UPDATE SET texto = excluded.texto, atualizada_em = excluded.atualizada_em, autor = excluded.autor`;
+  return memoriaDo(botId);
+}
+
+/**
+ * A tool lembrar: acrescenta "AAAA-MM-DD: nota" ao fim da memória, num só comando, para duas
+ * conversas lembrando ao mesmo tempo não apagarem a nota uma da outra. false quando passaria do limite.
+ */
+export async function lembrar(botId: BotId, nota: string, agora = Date.now()): Promise<boolean> {
+  const linha = `${diaDe(agora)}: ${nota.trim().replace(/\s*\n\s*/g, " ")}`;
+  const gravada = await q`INSERT INTO memorias_bot (bot_id, texto, atualizada_em, autor) VALUES (${botId}, ${linha}, ${agora}, NULL)
+    ON CONFLICT (bot_id) DO UPDATE SET
+      texto = CASE WHEN memorias_bot.texto = '' THEN excluded.texto ELSE memorias_bot.texto || chr(10) || excluded.texto END,
+      atualizada_em = excluded.atualizada_em, autor = NULL
+    WHERE length(memorias_bot.texto) + length(excluded.texto) < ${LIMITE_DA_MEMORIA}
+    RETURNING bot_id`;
+  return gravada.length > 0;
+}

@@ -2,26 +2,65 @@ import { CONVERSA, VOZ, capitulos, tokens } from "../domain/brand";
 import type { ModelId } from "./models";
 import type { ToolName } from "./tools";
 
-export type BotId = "chefe" | "post" | "legenda" | "agenda" | "fotos" | "reels";
+/** Um bot fixo ("post") ou um criado pela equipe ("b-1a2b3c4d"). */
+export type BotId = string;
 
-/** Os bots que o Chefe pode chamar. Cada um tem uma tool delegar_<id>. */
-export type Especialista = Exclude<BotId, "chefe">;
+/** Os bots que vêm no código. */
+export type BotFixo = "chefe" | "post" | "legenda" | "agenda" | "fotos" | "reels";
+
+/** Os bots que o Chefe pode chamar. Cada um tem uma tool delegar_<id>. Os criados pela equipe só atendem conversa direta. */
+export type Especialista = Exclude<BotFixo, "chefe">;
 
 /**
- * O padrão de cada bot, no código. `papel` é o prompt que o usuário pode editar (agent/config.ts);
- * `fixo` é o contexto de marca e as regras que entram sempre depois dele, com ou sem edição.
- * As tools também são do código: editar o bot muda o papel, não o que ele pode fazer.
+ * O padrão de cada bot fixo, no código. `papel` e `regras` são o padrão do que o usuário edita
+ * (agent/config.ts); `contexto` é o texto de marca gerado de brand/, só para leitura.
+ * As tools dos fixos também são do código: editar o bot muda o texto, não o que ele pode fazer.
  */
 export interface Bot {
-  id: BotId;
+  id: BotFixo;
   nome: string;
   descricao: string;
   modelo: ModelId;
   papel: string;
-  fixo: () => string;
+  regras: string;
+  contexto: () => string;
   tools: readonly ToolName[];
   sugestoes: readonly string[];
 }
+
+export const SETOR_PADRAO = "Marketing";
+
+/** Os corpos que um bot criado pode ter. O desenho de cada um está no front (src/web/bots.ts). */
+export const FORMAS = ["circulo", "squircle", "nuvem", "triangulo"] as const;
+export type Forma = (typeof FORMAS)[number];
+
+/** As tools que um bot criado pode escolher. Delegar e publicar ficam com o Chefe; lembrar, todo bot tem. */
+export type Livre = Exclude<ToolName, `delegar_${string}` | "publicar_agora" | "agendar_publicacao" | "lembrar">;
+
+/** A descrição de cada tool na tela de configuração. */
+export const FERRAMENTAS = {
+  montar_brief: "Monta o brief de um post: pilar, tema, ângulo, data e se precisa de foto real.",
+  definir_formato: "Escolhe o formato do post: feed, stories ou os dois.",
+  definir_headline: "Escreve e valida a headline do post.",
+  gerar_3_artes: "Gera 3 artes do post para a pessoa escolher.",
+  pesquisar_referencias: "Pesquisa referências de estilo na web.",
+  mostrar_artes: "Mostra as artes geradas na conversa.",
+  escolher_arte: "Registra a arte que a pessoa escolheu.",
+  buscar_fotos: "Busca no banco de fotos reais.",
+  usar_foto: "Usa uma foto do banco como arte do post.",
+  catalogar_foto: "Descreve de novo uma foto do banco.",
+  escrever_legenda: "Escreve a legenda do post desta conversa.",
+  redigir_legenda: "Escreve uma legenda avulsa.",
+  validar_texto: "Confere um texto contra o checklist do capítulo 16.",
+  derivar_story: "Gera a versão stories do post.",
+  listar_agenda: "Lê a fila de publicações.",
+  status_do_mes: "Confere a cota de pilares do mês.",
+  cancelar_agendamento: "Cancela uma publicação agendada.",
+  proximas_datas: "Lista as próximas datas do calendário da marca.",
+  roteiro_reel: "Registra e confere o roteiro de um Reel.",
+} as const satisfies Record<Livre, string>;
+
+export const LIVRES = Object.keys(FERRAMENTAS) as Livre[];
 
 const juntar = (...partes: string[]) => partes.join("\n\n");
 
@@ -42,9 +81,9 @@ const ESTILO =
 const PEDIDO_MANDA =
   "O §12.4 diz quais datas propor por conta própria; ele não veta pedido. Quando o usuário pede post para uma data, inclusive fora de proximas_datas, faça o post. Se a data não estiver no calendário da marca, comente isso em no máximo uma frase, sem parar o fluxo e sem pedir validação a ninguém.";
 
-const MARCA = () => `\n--- BRANDBOOK (capítulos de conteúdo) ---\n${CONVERSA()}\n\n--- TOKENS ---\n${JSON.stringify(tokens)}`;
+export const MARCA = () => `\n--- BRANDBOOK (capítulos de conteúdo) ---\n${CONVERSA()}\n\n--- TOKENS ---\n${JSON.stringify(tokens)}`;
 
-export const BOTS: Record<BotId, Bot> = {
+export const BOTS: Record<BotFixo, Bot> = {
   chefe: {
     id: "chefe",
     nome: "Chefe",
@@ -56,8 +95,7 @@ export const BOTS: Record<BotId, Bot> = {
       "Post: brief, headline, artes e legenda de uma peça. Legenda: legenda avulsa ou revisão de texto. Agenda: fila, cota do mês e datas. Fotos: banco de fotos reais. Reels: pauta e roteiro de vídeo.",
       "Se uma tarefa falhar, diga ao usuário o erro em português claro e proponha o próximo passo.",
     ),
-    fixo: () =>
-      juntar(
+    regras: juntar(
         "Cada delegar_<bot> roda um especialista e devolve só o resumo do que ele fez. O especialista não vê esta conversa, então escreva o pedido completo: pilar, tema, ângulo, data, formato e o que já foi decidido.",
         "O Post trabalha no post desta conversa. Quando ele deixar o post pronto (peça escolhida, legenda no feed e versão stories no formato ambos), publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário, e esse cartão já é a confirmação.",
         "Agendamento em linguagem natural: \"posta sexta ao meio-dia nos stories\" basta. Converta a data relativa pelo calendário de DATA DE HOJE, sem perguntar dia nem ano. Se faltar a hora, use 12h; se faltar o formato, use feed. Diga na resposta a data, a hora e o formato que você assumiu, para o usuário trocar se quiser. Só pergunte o que não dá para deduzir.",
@@ -67,6 +105,7 @@ export const BOTS: Record<BotId, Bot> = {
         PEDIDO_MANDA,
         PILARES,
       ),
+    contexto: () => "",
     tools: [
       "delegar_post",
       "delegar_legenda",
@@ -91,8 +130,7 @@ export const BOTS: Record<BotId, Bot> = {
       "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed) e versão stories (só no formato ambos).",
       "Se o usuário já disse o formato, não pergunte de novo; só confirme no brief.",
     ),
-    fixo: () =>
-      juntar(
+    regras: juntar(
         "Publicar e agendar são do Chefe, com aprovação humana. Quando o usuário escolher o formato, chame definir_formato. Depois de gerar_3_artes, chame mostrar_artes para o usuário ver as 3 opções; quando ele escolher uma variação, chame escolher_arte. Em tarefa delegada a escolha não é sua: pare depois de gerar as artes e diga ao Chefe que elas esperam a escolha do usuário; o Chefe mostra as opções.",
         PILARES,
         IMAGEM,
@@ -100,8 +138,8 @@ export const BOTS: Record<BotId, Bot> = {
         PEDIDO_MANDA,
         ESTILO,
         PROBLEMAS,
-        MARCA(),
       ),
+    contexto: MARCA,
     tools: [
       "montar_brief",
       "definir_formato",
@@ -127,13 +165,8 @@ export const BOTS: Record<BotId, Bot> = {
     descricao: "Escreve e revisa legenda contra o capítulo 16.",
     modelo: "openai:gpt-6-luna",
     papel: juntar(TOM, "Você escreve e revisa legendas. Ao revisar um texto que o usuário colou, explique cada problema com a correção."),
-    fixo: () =>
-      juntar(
-        "Para escrever, chame redigir_legenda com pilar e tema. Para revisar, chame validar_texto.",
-        PILARES,
-        PROBLEMAS,
-        `\n--- BRANDBOOK (voz e legenda) ---\n${VOZ()}\n\n${capitulos(16)}`,
-      ),
+    regras: juntar("Para escrever, chame redigir_legenda com pilar e tema. Para revisar, chame validar_texto.", PILARES, PROBLEMAS),
+    contexto: () => `\n--- BRANDBOOK (voz e legenda) ---\n${VOZ()}\n\n${capitulos(16)}`,
     tools: ["redigir_legenda", "validar_texto"],
     sugestoes: ["Revise esta legenda", "Legenda de PROVA para box temperado em Imperatriz"],
   },
@@ -147,15 +180,14 @@ export const BOTS: Record<BotId, Bot> = {
       "Você cuida da agenda: fila de publicações, cota do mês e as datas que o §12.4 sugere.",
       "Depois de status_do_mes, não pare no diagnóstico. Escreva 3 pautas concretas (tema, ângulo, pilar, formato) que fechem o maior buraco da cota, e termine perguntando qual delas o usuário quer montar. Proponha, não pergunte.",
     ),
-    fixo: () =>
-      juntar(
+    regras: juntar(
         "Ao propor pauta por conta própria, use só datas de proximas_datas ou datasDoMes; não invente data.",
         PEDIDO_MANDA,
         "PROVA e GENTE quase sempre exigem foto real (§8.2). Se o banco tem fotos, ancore a pauta no que já existe; se está vazio, peça uma foto junto com a proposta.",
         "Este sistema só produz peça estática; o vídeo é feito fora dele. Diga isso quando a cota de vídeo aparecer.",
         PILARES,
-        MARCA(),
       ),
+    contexto: MARCA,
     tools: ["listar_agenda", "status_do_mes", "cancelar_agendamento", "proximas_datas"],
     sugestoes: ["O que falta postar este mês?", "O que está agendado?", "Que datas vêm aí?"],
   },
@@ -165,12 +197,12 @@ export const BOTS: Record<BotId, Bot> = {
     descricao: "Banco de fotos reais: busca e catálogo.",
     modelo: "openai:gpt-6-luna",
     papel: juntar(TOM, "Você cuida do banco de fotos reais da EM Vidros. Ao buscar, mostre id, descrição, unidade e tamanho."),
-    fixo: () =>
-      juntar(
+    regras: juntar(
         "Busque com buscar_fotos. Para descrever de novo uma foto, chame catalogar_foto; a unidade vem do que o usuário disse, nunca da imagem.",
         IMAGEM,
         "Quando faltar foto, peça com o guia do §8.3: luz natural difusa de lado, ângulo de 15 a 30° fora do eixo, fundo limpo, enquadramento vertical.",
       ),
+    contexto: () => "",
     tools: ["buscar_fotos", "catalogar_foto"],
     sugestoes: ["Que fotos de box temos?", "Fotos mais recentes"],
   },
@@ -180,17 +212,18 @@ export const BOTS: Record<BotId, Bot> = {
     descricao: "Pauta e roteiro de vídeo vertical.",
     modelo: "openai:gpt-6-luna",
     papel: juntar(TOM, "Você faz pauta e roteiro de Reel. Escreva o roteiro plano a plano."),
-    fixo: () =>
-      juntar(
+    regras: juntar(
         "Monte o brief com montar_brief e registre o roteiro com roteiro_reel, que confere ritmo, duração, capa e texto em tela. Se voltar problema, corrija e chame de novo.",
         "Este sistema não edita vídeo. O roteiro é para quem grava e edita.",
         PILARES,
         PROBLEMAS,
-        `\n--- BRANDBOOK (vídeo, pilares e voz) ---\n${capitulos(14, 12, 9)}`,
       ),
+    contexto: () => `\n--- BRANDBOOK (vídeo, pilares e voz) ---\n${capitulos(14, 12, 9)}`,
     tools: ["montar_brief", "roteiro_reel"],
     sugestoes: ["Reel de PROVA: entrega de guarda-corpo", "Roteiro de bastidor da fábrica"],
   },
 };
 
-export const ehBotId = (s: string): s is BotId => Object.hasOwn(BOTS, s);
+export const ehBotFixo = (s: string): s is BotFixo => Object.hasOwn(BOTS, s);
+
+export const ehEspecialista = (s: string): s is Especialista => ehBotFixo(s) && s !== "chefe";

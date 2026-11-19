@@ -1,9 +1,9 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { apiConversas, useApi, useNomesDosBots } from "./api";
+import { apiConversas, useApi } from "./api";
 import { auth } from "./auth";
-import { BOT_IDS } from "./bots";
+import { BOT_IDS, useEquipe } from "./bots";
 import { Barra } from "./componentes/Barra";
 import { LimiteDeErro } from "./componentes/LimiteDeErro";
 import { Avisos, fecharAviso, mostrarAviso } from "./componentes/menu/Avisos";
@@ -26,6 +26,7 @@ import { Artes } from "./telas/Artes";
 import { Biblioteca } from "./telas/Biblioteca";
 import { Calendario } from "./telas/Calendario";
 import Bot from "./telas/Bot";
+import NovoBot from "./telas/NovoBot";
 import { TelaConversa, type Vivo } from "./telas/Conversa";
 import { Entrar } from "./telas/Entrar";
 import { Uso } from "./telas/Uso";
@@ -60,6 +61,7 @@ const NOME_DA_TELA: Record<Exclude<Rota["tela"], "entrar">, string> = {
   calendario: "o calendário",
   uso: "o uso da API",
   bot: "a página do bot",
+  "novo-bot": "a criação do bot",
   "nao-encontrada": "esta página",
 };
 
@@ -120,16 +122,16 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   const [conversas] = useState(() => criarConversas(apiConversas, mostrarAviso, pilhaDeDesfazer));
   const temDesfazer = useTemDesfazer();
   const lista = useSyncExternalStore(conversas.assinar, conversas.ler);
-  const bots = useNomesDosBots();
+  const bots = useEquipe();
   const [atividade, relerAtividade] = useApi<ResumoTarefa[]>("/api/atividade", respondendo ? 3000 : 15000);
   const ativas = atividade.estado === "pronto" ? atividade.dados : [];
-  const estados = estadosDaEquipe(ativas, vivo.mensagens, respondendo, bots, vivo.bot);
+  const estados = estadosDaEquipe(ativas, vivo.mensagens, respondendo, bots.de, vivo.bot);
 
   useTeclado();
   useEffect(() => void conversas.carregar(), [conversas]);
 
   const conversaId = rota.tela === "nova" ? novoId : rota.tela === "conversa" ? rota.id : null;
-  const agora = agoraDasConversas(ativas, conversaId === null ? null : { id: conversaId, bot: vivo.bot, estados, respondendo }, bots);
+  const agora = agoraDasConversas(ativas, conversaId === null ? null : { id: conversaId, bot: vivo.bot, estados, respondendo }, bots.de);
   const conhecida = (id: string) => !!conversas.achar(id);
 
   // A conversa de "/" já virou /c/:id; voltar para "/" começa outra.
@@ -306,6 +308,8 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
             <Uso abrirMenu={abrirMenu} />
           ) : rota.tela === "bot" ? (
             <Bot key={rota.id} id={rota.id} aba={rota.aba} abrirMenu={abrirMenu} conversar={() => novoPedido(rota.id)} />
+          ) : rota.tela === "novo-bot" ? (
+            <NovoBot abrirMenu={abrirMenu} />
           ) : (
             <main id="conteudo" className="grid flex-1 place-items-center px-6 text-center">
               <div className="flex flex-col items-center gap-3">

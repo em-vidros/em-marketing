@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
-import { BOT_IDS, BOTS } from "./bots";
-import { agoraDasConversas, estadosDaEquipe } from "./equipe";
+import { BOTS, type BotFixo } from "./bots";
+import { agoraDasConversas, estadoDe, estadosDaEquipe } from "./equipe";
 import type { Mensagem, Parte } from "./tipos";
 
 const delegacaoEmAndamento = {
@@ -21,7 +21,7 @@ const aprovacaoPendente = {
 } as Parte;
 
 /** O Post renomeado: o texto do Chefe usa o nome em vigor, não o do código. */
-const NOMES = { ...Object.fromEntries(BOT_IDS.map((id) => [id, { nome: BOTS[id].nome }])), post: { nome: "Designer" } } as Record<(typeof BOT_IDS)[number], { nome: string }>;
+const NOMES = (id: string) => ({ nome: id === "post" ? "Designer" : BOTS[id as BotFixo].nome });
 
 const doChefe = (...parts: Parte[]): Mensagem[] => [{ id: "m1", role: "assistant", parts }];
 
@@ -30,7 +30,7 @@ test.each([
   { caso: "esperando um especialista", parts: [delegacaoEmAndamento], ponto: false, texto: "Esperando Designer" },
   { caso: "com aprovação pendente", parts: [delegacaoEmAndamento, aprovacaoPendente], ponto: true, texto: "Esperando você" },
 ])("o Chefe $caso", ({ parts, ponto, texto }) => {
-  const { chefe } = estadosDaEquipe([], doChefe(...parts), true, NOMES);
+  const chefe = estadoDe(estadosDaEquipe([], doChefe(...parts), true, NOMES), "chefe");
 
   expect({ ponto: chefe.tipo === "esperando", texto: chefe.texto }).toEqual({ ponto, texto });
 });

@@ -1,4 +1,4 @@
-import { BOTS, type BotId } from "../bots";
+import { BOTS, type BotFixo, type Equipe } from "../bots";
 
 /**
  * Onde um atalho vale. `global` vale em qualquer lugar; `lista` vale fora de uma região de
@@ -29,22 +29,22 @@ export interface Atalho {
   emCampo?: true;
   /** Segurar a tecla repete a ação. */
   repete?: true;
-  /** Atalho de um bot: o rótulo usa o nome em vigor, que o usuário pode trocar. */
-  bot?: { id: BotId; rotulo: (nome: string) => string };
+  /** Atalho de um bot fixo: o rótulo usa o nome em vigor, que o usuário pode trocar. Os bots criados não têm atalho. */
+  bot?: { id: BotFixo; rotulo: (nome: string) => string };
 }
 
 /** A letra de cada bot nos prefixos O (abrir a página) e N (conversa nova). */
-const LETRA: Record<BotId, string> = { chefe: "c", post: "p", legenda: "l", agenda: "a", fotos: "f", reels: "r" };
+const LETRA: Record<BotFixo, string> = { chefe: "c", post: "p", legenda: "l", agenda: "a", fotos: "f", reels: "r" };
 
-const doBot = (prefixo: "o" | "n", id: BotId, rotulo: (nome: string) => string): Atalho => ({
+const doBot = (prefixo: "o" | "n", id: BotFixo, rotulo: (nome: string) => string): Atalho => ({
   teclas: [`${prefixo} ${LETRA[id]}`],
   rotulo: rotulo(BOTS[id].nome),
   grupo: prefixo === "o" ? "Bots" : "Conversas",
   escopo: "global",
   bot: { id, rotulo },
 });
-const abrirBot = (id: BotId) => doBot("o", id, (nome) => `Abrir ${nome}`);
-const conversarCom = (id: BotId) => doBot("n", id, (nome) => `Nova conversa com ${nome}`);
+const abrirBot = (id: BotFixo) => doBot("o", id, (nome) => `Abrir ${nome}`);
+const conversarCom = (id: BotFixo) => doBot("n", id, (nome) => `Nova conversa com ${nome}`);
 
 export const ATALHOS = {
   paleta: { teclas: ["mod+k"], rotulo: "Abrir a paleta de comandos", grupo: "Geral", escopo: "global", emCampo: true },
@@ -113,14 +113,14 @@ export const IDS_DE_ATALHO = Object.keys(ATALHOS) as AtalhoId[];
 
 export const GRUPOS: readonly Grupo[] = ["Geral", "Navegação", "Conversas", "Bots", "Aprovação", "Calendário", "Editor de arte"];
 
-export const atalhoDoBot = (id: BotId) => `abrir-bot-${id}` as const satisfies AtalhoId;
+export const atalhoDoBot = (id: BotFixo) => `abrir-bot-${id}` as const satisfies AtalhoId;
 
-export const atalhoDeConversa = (id: BotId) => `conversar-${id}` as const satisfies AtalhoId;
+export const atalhoDeConversa = (id: BotFixo) => `conversar-${id}` as const satisfies AtalhoId;
 
 /** O rótulo com o nome do bot em vigor, para os atalhos de um bot. */
-export function rotuloDe(id: AtalhoId, nomes?: Partial<Record<BotId, { nome: string }>>): string {
+export function rotuloDe(id: AtalhoId, equipe?: Pick<Equipe, "de">): string {
   const a: Atalho = ATALHOS[id];
-  return a.bot ? a.bot.rotulo(nomes?.[a.bot.id]?.nome ?? BOTS[a.bot.id].nome) : a.rotulo;
+  return a.bot ? a.bot.rotulo(equipe?.de(a.bot.id).nome ?? BOTS[a.bot.id].nome) : a.rotulo;
 }
 
 /** O que importa de um KeyboardEvent; separado para os testes não dependerem do DOM. */

@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import type { NomesDosBots } from "../api";
 import { auth } from "../auth";
-import { BOT_IDS } from "../bots";
-import type { AgoraDaConversa, EstadosDaEquipe } from "../equipe";
+import { ehBotFixo, porSetor, type Equipe } from "../bots";
+import { estadoDe, type AgoraDaConversa, type EstadosDaEquipe } from "../equipe";
 import { aoClicarLink } from "../rota";
 import { ariaDe, atalhoDoBot, ehMac } from "../teclado/atalhos";
 import type { Conversa } from "../tipos";
@@ -141,7 +140,7 @@ export function Barra({
   emAtividade: number;
   telaAtual: string;
   email: string;
-  bots: NomesDosBots;
+  bots: Equipe;
   novoPedido: () => void;
   abrirPaleta: () => void;
   abrirAtalhos: () => void;
@@ -210,27 +209,45 @@ export function Barra({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-2.5">
-        <section aria-label="Equipe" className="flex flex-col gap-px">
-          <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-3">Equipe</h2>
-          <ul className="flex flex-col gap-px">
-            {BOT_IDS.map((id) => {
-              const caminho = `/bots/${id}`;
-              const atual = telaAtual === caminho || telaAtual.startsWith(`${caminho}/`);
-              return (
-                <li key={id}>
-                  <Dica rotulo={`Abrir ${bots[id].nome}`} atalho={atalhoDoBot(id)}>
-                    <a href={caminho} aria-current={atual ? "page" : undefined} onClick={(e) => (aoClicarLink(e), aoNavegar())} className={`${linkDe(atual)} py-1.5`}>
-                      <Avatar bot={id} tamanho={26} estado={estados[id].tipo} />
-                      <span className="flex min-w-0 flex-col">
-                        <span className="truncate leading-tight font-medium text-tinta">{bots[id].nome}</span>
-                        <span className="truncate text-xs text-tinta-3">{estados[id].texto}</span>
-                      </span>
-                    </a>
-                  </Dica>
-                </li>
-              );
-            })}
-          </ul>
+        <section aria-label="Equipe" className="flex flex-col gap-4">
+          {porSetor(bots.lista).map(([setor, doSetor]) => (
+            <div key={setor} className="flex flex-col gap-px">
+              <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-3">{setor}</h2>
+              <ul className="flex flex-col gap-px">
+                {doSetor.map(({ id, nome }) => {
+                  const caminho = `/bots/${id}`;
+                  const atual = telaAtual === caminho || telaAtual.startsWith(`${caminho}/`);
+                  const estado = estadoDe(estados, id);
+                  return (
+                    <li key={id}>
+                      <Dica rotulo={`Abrir ${nome}`} atalho={ehBotFixo(id) ? atalhoDoBot(id) : undefined}>
+                        <a href={caminho} aria-current={atual ? "page" : undefined} onClick={(e) => (aoClicarLink(e), aoNavegar())} className={`${linkDe(atual)} py-1.5`}>
+                          <Avatar bot={id} tamanho={26} estado={estado.tipo} />
+                          <span className="flex min-w-0 flex-col">
+                            <span className="truncate leading-tight font-medium text-tinta">{nome}</span>
+                            <span className="truncate text-xs text-tinta-3">{estado.texto}</span>
+                          </span>
+                        </a>
+                      </Dica>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
+          <a
+            href="/bots/novo"
+            aria-current={telaAtual === "/bots/novo" ? "page" : undefined}
+            onClick={(e) => (aoClicarLink(e), aoNavegar())}
+            className={`${linkDe(telaAtual === "/bots/novo")} -mt-3 text-tinta-3 hover:text-tinta`}
+          >
+            <span aria-hidden="true" className="grid size-[26px] flex-none place-items-center rounded-full border border-dashed border-linha-forte">
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                <path d="M6 2v8M2 6h8" />
+              </svg>
+            </span>
+            Novo bot
+          </a>
         </section>
 
         <div data-lista-conversas className="flex flex-col gap-5">
