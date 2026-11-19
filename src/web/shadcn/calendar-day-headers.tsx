@@ -27,14 +27,13 @@ export function CalendarDayHeaders({
       <div
         aria-hidden
         className={cn("grid", className)}
-        style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}
+        style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
       >
         {days.map((day) => (
           <div
             key={day.date.toISOString()}
             className={cn(
-              "flex items-center justify-center py-2 text-sm",
-              day.isToday ? "gap-0.5 " : "gap-0",
+              "flex min-w-0 flex-col items-center justify-center gap-0.5 py-2 text-sm sm:flex-row sm:gap-1",
               highlightedDate &&
                 isSameDay(day.date, highlightedDate) &&
                 "column-highlight",
@@ -47,7 +46,8 @@ export function CalendarDayHeaders({
                   : "text-muted-foreground font-normal",
               )}
             >
-              {day.dayName}
+              <span className="max-sm:hidden">{day.dayName}</span>
+              <span className="sm:hidden">{day.dayName.slice(0, 3)}</span>
             </span>
             <span
               className={cn(
@@ -78,14 +78,13 @@ export function CalendarDayHeaders({
       {/* Day columns */}
       <div
         className="grid"
-        style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}
+        style={{ gridTemplateColumns: `repeat(${days.length}, minmax(0, 1fr))` }}
       >
         {days.map((day) => (
           <div
             key={day.date.toISOString()}
             className={cn(
-              "flex items-center justify-center py-2 text-sm",
-              day.isToday ? "gap-0.5 " : "gap-0",
+              "flex min-w-0 flex-col items-center justify-center gap-0.5 py-2 text-sm sm:flex-row sm:gap-1",
               highlightedDate &&
                 isSameDay(day.date, highlightedDate) &&
                 "column-highlight",
@@ -98,7 +97,8 @@ export function CalendarDayHeaders({
                   : "text-muted-foreground font-normal",
               )}
             >
-              {day.dayName}
+              <span className="max-sm:hidden">{day.dayName}</span>
+              <span className="sm:hidden">{day.dayName.slice(0, 3)}</span>
             </span>
             <span
               className={cn(
