@@ -42,7 +42,8 @@ export async function executar(botId: BotId, conversaId: string, messages: Model
     instructions: `${instrucoes}\n\n--- ESTADO DO POST DESTA CONVERSA ---\n${resumoDoPost(await postDaConversa(conversaId))}`,
     messages,
     tools: await catalogo(conversaId, rodar, inspiracoes),
-    activeTools: [...BOTS[botId].tools],
+    // Numa tarefa delegada ninguém viu as artes: a escolha só acontece num turno com o usuário.
+    activeTools: BOTS[botId].tools.filter((t) => !(delegada && t === "escolher_arte")),
     toolApproval: APROVACAO,
     experimental_toolApprovalSecret: segredoAprovacao,
     // O post no formato ambos passa por 7 tools antes do resumo; 8 cortava o fluxo no fim.

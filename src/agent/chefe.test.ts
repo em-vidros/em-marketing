@@ -98,6 +98,20 @@ describe("delegação do Chefe", () => {
     expect(ordem).toEqual(["inicio 1", "fim 1", "inicio 2", "fim 2"]);
   });
 
+  test("o Post delegado não recebe escolher_arte: a variação só é escolhida num turno com o usuário", async () => {
+    const chefe = new MockLanguageModelV4({
+      doStream: [turno([{ type: "tool-call", toolCallId: "c1", toolName: "delegar_post", input: JSON.stringify({ pedido: "Gere as artes." }) }], "tool-calls"), texto("Pronto.")],
+    });
+    const post = new MockLanguageModelV4({ doStream: texto("Artes geradas, esperando a escolha.") });
+
+    await conversar(chefe, post);
+    const ferramentas = (m: MockLanguageModelV4) => (m.doStreamCalls[0]?.tools ?? []).map((t) => t.name);
+
+    expect(ferramentas(post)).toContain("gerar_3_artes");
+    expect(ferramentas(post)).not.toContain("escolher_arte");
+    expect(ferramentas(chefe)).toEqual(expect.arrayContaining(["mostrar_artes", "escolher_arte"]));
+  });
+
   test("a tarefa fica gravada no banco enquanto o especialista ainda trabalha", async () => {
     const chefe = chefeQueDelega();
     let gravadaNoMeio: unknown;

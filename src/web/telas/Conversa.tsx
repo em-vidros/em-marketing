@@ -10,6 +10,7 @@ import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprov
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
 import { Pensando } from "../componentes/ia/Pensando";
+import { EscolhaDeArtes, ehMostrarArtes } from "../componentes/EscolhaDeArtes";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
 import { apiMensagens, criarApagarMensagem, type Historico, textoDaMensagem, tirarTurno } from "../componentes/mensagem/apagar";
@@ -499,6 +500,7 @@ function Chat({
                           key={t.chave}
                           parte={t.parte}
                           noAr={respondendo && m === ultima}
+                          escolher={!respondendo && m === ultima ? (n) => enviar(`Quero a variação ${n}.`) : null}
                           painel={painel}
                           abrir={abrir}
                           responder={responder}
@@ -557,8 +559,11 @@ function ParteDoChefe({
   abrir,
   responder,
   respondidas,
+  escolher,
 }: {
   parte: Parte;
+  /** Manda a variação escolhida; null quando a conversa já passou das artes desta parte. */
+  escolher: ((variante: number) => void) | null;
   /** A mensagem desta parte ainda está chegando. */
   noAr: boolean;
   painel: string | null;
@@ -571,6 +576,7 @@ function ParteDoChefe({
     const digitando = noAr && parte.state === "streaming";
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
+  if (ehMostrarArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
   if (ehDelegacao(parte)) return <CartaoTarefa parte={parte as ParteDelegacao} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
   if (ehAprovacao(parte))
     return <CartaoAprovacao parte={parte} respondida={parte.state === "approval-requested" && respondidas.has(parte.approval.id)} responder={responder} />;
@@ -578,7 +584,7 @@ function ParteDoChefe({
 }
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
-const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p);
+const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p);
 
 /** Para onde o foco volta quando a edição fecha: a mensagem, ou o composer quando o ↑ abriu a edição de lá. */
 type Volta = string | "composer";
