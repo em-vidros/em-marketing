@@ -1,6 +1,7 @@
-import { Box, Canvas, Image, Rect, Text, type IFontWeight, type IGroup, type ITextAlign, type IUI, type IUIInputData } from "leafer-ui";
+import { Box, Canvas, Image, Rect, Text, type IGroup, type ITextAlign, type IUI, type IUIInputData } from "leafer-ui";
 import { FORMATOS, PROPORCAO_DO_LOGO, recorteDaCena, transformacaoDa, type Ajustes, type Camada, type Formato } from "../../../v2/camadas";
 import type { Guia } from "./reguas";
+import { deslocamentoDaFonte } from "./recursos";
 
 /**
  * A arte montada no Leafer: um quadro que corta o que sai da arte, a cena tratada no fundo e um nó por camada, em px da arte.
@@ -15,8 +16,6 @@ export interface Montagem {
 }
 
 const ALINHAMENTO: Record<Extract<Camada, { tipo: "texto" }>["alinhamento"], ITextAlign> = { esquerda: "left", centro: "center", direita: "right" };
-
-const PESOS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const satisfies IFontWeight[];
 
 const LOGO = { cor: "/logo/emvidros-oficial.svg", branca: "/logo/emvidros-branca.svg" } as const;
 
@@ -113,13 +112,14 @@ function atributosDoTipo(camada: Camada): IUIInputData {
       return {
         text: camada.texto,
         fontFamily: camada.fonte,
-        fontWeight: PESOS.find((p) => p === camada.peso) ?? "normal",
+        fontWeight: camada.peso,
         fontSize: camada.tamanho,
         lineHeight: { type: "percent", value: camada.entrelinha },
         fill: camada.cor,
         textAlign: ALINHAMENTO[camada.alinhamento],
         width: camada.largura,
         height: undefined,
+        padding: paddingDoTexto(camada),
       };
     case "logo":
       return { url: LOGO[camada.variante], width: camada.largura, height: camada.largura * PROPORCAO_DO_LOGO };
@@ -145,6 +145,13 @@ function enquadrar(imagem: HTMLImageElement, ajustes: Ajustes, largura: number, 
   contexto.drawImage(imagem, left, top, width, height, margem, margem, largura - 2 * margem, altura - 2 * margem);
 
   return tela;
+}
+
+/** Desce só as letras: o topo menos o mesmo embaixo deixa a caixa onde o render põe a dele. */
+function paddingDoTexto(camada: Extract<Camada, { tipo: "texto" }>): [number, number, number, number] {
+  const deslocamento = deslocamentoDaFonte(camada.fonte, camada.peso) * camada.tamanho;
+
+  return [deslocamento, 0, -deslocamento, 0];
 }
 
 const LIMITES_DA_LARGURA = { texto: [20, 4000], logo: [40, 1080], imagem: [20, 4000], forma: [1, 4000] } as const;

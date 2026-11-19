@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -153,12 +153,34 @@ describe("artes", () => {
     expect((await pedir(`/api/artes/${arte.id}/imagens`, { method: "POST", body: form })).status).toBe(400);
   });
 
-  test("recusa camada com peso que a fonte não tem", async () => {
+  test("a fonte do texto pode ser qualquer família do catálogo, no peso que ela tem; a da marca grava sem rede", async () => {
+    const catalogo = [
+      { family: "Montserrat", weights: [400, 800], styles: ["normal", "italic"], subsets: ["latin", "latin-ext"], category: "sans-serif", type: "google" },
+      { family: "Noto Sans JP", weights: [400], styles: ["normal"], subsets: ["japanese"], category: "sans-serif", type: "google" },
+    ];
+    const pedidos: string[] = [];
+    const rede = spyOn(globalThis, "fetch").mockImplementation((async (url: string) => (pedidos.push(String(url)), Response.json(catalogo))) as typeof fetch);
+
     const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
-    const camadas = arte.camadas.map((c: { id: string }) => (c.id === "titulo" ? { ...c, fonte: "Playfair Display", peso: 900 } : c));
-    const r = await pedir(`/api/artes/${arte.id}`, { method: "PUT", ...json({ camadas, ajustes: AJUSTES_NEUTROS }) });
-    expect(r.status).toBe(400);
-    expect(await r.json()).toEqual({ erro: "Essa fonte não tem esse peso." });
+    const comTitulo = (titulo: object) => arte.camadas.map((c: { id: string }) => (c.id === "titulo" ? { ...c, ...titulo } : c));
+    const gravar = (titulo: object) => pedir(`/api/artes/${arte.id}`, { method: "PUT", ...json({ camadas: comTitulo(titulo), ajustes: AJUSTES_NEUTROS }) });
+
+    try {
+      expect((await gravar({})).status).toBe(200);
+      expect(pedidos).toEqual([]);
+
+      const semPeso = await gravar({ fonte: "Montserrat", peso: 300 });
+      expect(await semPeso.json()).toEqual({ erro: "A fonte Montserrat não tem o peso 300." });
+
+      const semLatin = await gravar({ fonte: "Noto Sans JP", peso: 400 });
+      expect(await semLatin.json()).toEqual({ erro: "A fonte Noto Sans JP não está no catálogo." });
+
+      const gravada = await gravar({ fonte: "Montserrat", peso: 800 });
+      expect(gravada.status).toBe(200);
+      expect((await gravada.json()).camadas[0]).toMatchObject({ fonte: "Montserrat", peso: 800 });
+    } finally {
+      rede.mockRestore();
+    }
   });
 });
 

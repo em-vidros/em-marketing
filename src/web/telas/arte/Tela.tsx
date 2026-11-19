@@ -170,7 +170,7 @@ function usePalco(caixa: RefObject<HTMLDivElement | null>, formato: Formato, atu
 
     const desligar = [ligarEditor(app, montagem, atuais), desligarImaComTecla(snap)];
     let viva = true;
-    void carregarFontes().then(() => viva && setPalco({ app, montagem, snap, view }));
+    void carregarFontes(atuais.current.camadas).then(() => viva && setPalco({ app, montagem, snap, view }));
 
     return () => {
       viva = false;

@@ -14,18 +14,20 @@ import {
 } from "@hugeicons/core-free-icons";
 import { Popover } from "@base-ui/react/popover";
 import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
-import type { ReactNode } from "react";
-import { FONTES, transformacaoDa, type Camada, type Fonte } from "../../../v2/camadas";
+import { useState, type ReactNode } from "react";
+import { transformacaoDa, type Camada } from "../../../v2/camadas";
+import { NOME_DO_PESO, pesoMaisPerto, PESOS, type Peso } from "../../../v2/fontes";
+import { mostrarAviso } from "../../componentes/menu/Avisos";
 import { Segmentado } from "../../componentes/Segmentado";
 import { Dica } from "../../componentes/menu/Teclas";
 import type { AtalhoId } from "../../teclado/atalhos";
 import { Cor, Deslizante, Numero } from "./Campos";
+import { carregarFonte } from "./recursos";
+import { SeletorDeFonte, useCatalogoDeFontes } from "./SeletorDeFonte";
 import { TIPO } from "./textos";
 import type { AcoesDoEditor } from "./useEditor";
 
 type Texto = Extract<Camada, { tipo: "texto" }>;
-
-const NOME_DO_PESO: Record<number, string> = { 400: "Regular", 500: "Médio", 600: "Seminegrito" };
 
 const PROXIMO_ALINHAMENTO = { esquerda: "centro", centro: "direita", direita: "esquerda" } as const;
 
@@ -93,36 +95,40 @@ function ControlesDoTipo({ camada: c, acoes }: { camada: Camada; acoes: AcoesDoE
 }
 
 function ControlesDeTexto({ camada: c, acoes }: { camada: Texto; acoes: AcoesDoEditor }) {
-  const pesos = Object.keys(FONTES[c.fonte]).map(Number);
+  const catalogo = useCatalogoDeFontes();
+  const [carregando, setCarregando] = useState(false);
+  const pesos = catalogo.find((f) => f.familia === c.fonte)?.pesos ?? [c.peso];
   const tamanho = (novo: number) => acoes.mudar({ ...c, tamanho: Math.min(400, Math.max(12, novo)) }, "tamanho");
   const proximo = PROXIMO_ALINHAMENTO[c.alinhamento];
 
+  async function trocarFonte(fonte: string, peso: Peso) {
+    setCarregando(true);
+    try {
+      await carregarFonte(fonte, peso);
+      acoes.mudar({ ...c, fonte, peso });
+    } catch {
+      mostrarAviso({ tipo: "erro", texto: `Não deu para baixar a fonte ${fonte}. Confira a conexão e tente de novo.` });
+    } finally {
+      setCarregando(false);
+    }
+  }
+
   return (
     <div className="flex flex-none items-center gap-1">
-      <select
-        aria-label="Fonte"
-        value={c.fonte}
-        onChange={(e) => {
-          const fonte = e.target.value as Fonte;
-          acoes.mudar({ ...c, fonte, peso: Number(Object.keys(FONTES[fonte])[0]) });
-        }}
-        className="h-9 w-40 cursor-pointer rounded-lg border border-linha-forte bg-transparent px-2.5 text-sm hover:bg-hover"
-        style={{ fontFamily: c.fonte }}
-      >
-        {Object.keys(FONTES).map((f) => (
-          <option key={f}>{f}</option>
-        ))}
-      </select>
+      <SeletorDeFonte familia={c.fonte} catalogo={catalogo} carregando={carregando} aoEscolher={(f) => trocarFonte(f.familia, pesoMaisPerto(f.pesos, c.peso))} />
       <select
         aria-label="Peso"
         value={c.peso}
-        disabled={pesos.length < 2}
-        onChange={(e) => acoes.mudar({ ...c, peso: Number(e.target.value) })}
+        disabled={pesos.length < 2 || carregando}
+        onChange={(e) => {
+          const peso = PESOS.find((p) => p === Number(e.target.value));
+          if (peso) void trocarFonte(c.fonte, peso);
+        }}
         className="h-9 cursor-pointer rounded-lg border border-linha-forte bg-transparent px-2 text-sm hover:bg-hover disabled:cursor-default disabled:opacity-60"
       >
         {pesos.map((p) => (
           <option key={p} value={p}>
-            {NOME_DO_PESO[p] ?? p}
+            {NOME_DO_PESO[p]}
           </option>
         ))}
       </select>

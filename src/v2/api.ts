@@ -7,6 +7,7 @@ import type { Usuario } from "../server/auth";
 import { criarArte, gravarEdicao, listarArtes, novaCena, pegarArte, type Estudio } from "./artes";
 import { EXTENSOES, ehChave, TIPO_DA_EXTENSAO, type Extensao } from "./arquivos";
 import { Ajustes, Camadas, FORMATOS, type Formato } from "./camadas";
+import { catalogoDeFontes, fonteRecusada } from "./fontsource";
 import { criarReferencia, editarLeitura, listarReferencias, removerReferencia, restaurarReferencia } from "./referencias";
 import { renderizar } from "./render";
 
@@ -107,6 +108,12 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     return new Response(bytes, { headers: { "content-type": tipo, "cache-control": "private, max-age=31536000, immutable" } });
   });
 
+  api.get("/fontes", async (c) => {
+    const catalogo = await catalogoDeFontes();
+    if (!catalogo) return c.json(erro("O catálogo de fontes não respondeu. As fontes da marca continuam valendo."), 503);
+    return c.json([...catalogo.values()], 200, { "cache-control": "private, max-age=86400" });
+  });
+
   api.get("/artes", async (c) => c.json(await listarArtes(banco)));
 
   api.post("/artes", async (c) => {
@@ -124,6 +131,10 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
   api.put("/artes/:id", async (c) => {
     const r = await corpo(c.req.raw, Edicao);
     if (!r.ok) return c.json(erro(r.problema), 400);
+
+    const recusa = await fonteRecusada(r.dados.camadas);
+    if (recusa) return c.json(erro(recusa), 400);
+
     const arte = await gravarEdicao(banco, c.req.param("id"), r.dados);
     return arte ? c.json(arte) : c.json(erro("Não encontrado."), 404);
   });

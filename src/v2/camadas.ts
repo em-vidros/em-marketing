@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { NOME_DE_FAMILIA, PESOS } from "./fontes";
 
 /** Tamanho final de publicação e a área segura de cada formato (tokens.json, `formats`). */
 export const FORMATOS = {
@@ -12,17 +13,6 @@ const MARGEM = 80;
 
 /** Altura sobre largura do logo oficial (viewBox 2272×1888). */
 export const PROPORCAO_DO_LOGO = 1888 / 2272;
-
-/**
- * As fontes que o render sabe desenhar, com o arquivo de cada peso.
- * Uma camada só aceita família e peso que estão aqui, para o PNG nunca cair numa fonte de reserva.
- */
-export const FONTES = {
-  Poppins: { 400: "Poppins-Regular.ttf", 500: "Poppins-Medium.ttf", 600: "Poppins-SemiBold.ttf" },
-  "Playfair Display": { 500: "PlayfairDisplay-Variable.ttf" },
-} as const satisfies Record<string, Partial<Record<number, string>>>;
-
-export type Fonte = keyof typeof FONTES;
 
 const cor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "A cor precisa ser um hex como #2F646A.");
 const px = z.number().int().min(-2000).max(4000);
@@ -42,20 +32,19 @@ const comum = {
   bloqueada: z.boolean().optional(),
 };
 
-const Texto = z
-  .object({
-    ...comum,
-    tipo: z.literal("texto"),
-    texto: z.string().min(1, "O texto não pode ficar vazio.").max(400),
-    fonte: z.enum(Object.keys(FONTES) as [Fonte, ...Fonte[]]),
-    peso: z.number().int(),
-    tamanho: z.number().int().min(12).max(400),
-    entrelinha: z.number().min(0.8).max(2.5),
-    cor,
-    alinhamento: z.enum(["esquerda", "centro", "direita"]),
-    largura: z.number().int().min(20).max(4000),
-  })
-  .refine((t) => t.peso in FONTES[t.fonte], { message: "Essa fonte não tem esse peso.", path: ["peso"] });
+/** `fonte` é uma família do Google Fonts; a API confere no catálogo se ela existe e tem o peso, porque o catálogo muda. */
+const Texto = z.object({
+  ...comum,
+  tipo: z.literal("texto"),
+  texto: z.string().min(1, "O texto não pode ficar vazio.").max(400),
+  fonte: z.string().max(60).regex(NOME_DE_FAMILIA, "Nome de fonte inválido."),
+  peso: z.literal(PESOS, "O peso vai de 100 a 900, de 100 em 100."),
+  tamanho: z.number().int().min(12).max(400),
+  entrelinha: z.number().min(0.8).max(2.5),
+  cor,
+  alinhamento: z.enum(["esquerda", "centro", "direita"]),
+  largura: z.number().int().min(20).max(4000),
+});
 
 const Logo = z.object({ ...comum, tipo: z.literal("logo"), variante: z.enum(["cor", "branca"]), largura: z.number().int().min(40).max(1080) });
 
@@ -120,11 +109,16 @@ export const Plano = z.object({
 export type Plano = z.infer<typeof Plano>;
 
 /** Largura média de um caractere, em fração do tamanho da fonte. Só serve para estimar a quebra de linha. */
-const LARGURA_MEDIA: Record<Fonte, number> = { Poppins: 0.56, "Playfair Display": 0.5 };
+const LARGURA_MEDIA = new Map([
+  ["Poppins", 0.56],
+  ["Playfair Display", 0.5],
+]);
+
+const LARGURA_MEDIA_GENERICA = 0.55;
 
 /** Quantas linhas o texto ocupa, quebrando por palavra como o render faz. É estimativa: o render mede a fonte de verdade. */
-export function linhasEstimadas(texto: string, fonte: Fonte, tamanho: number, largura: number): number {
-  const porLinha = Math.max(1, Math.floor(largura / (tamanho * LARGURA_MEDIA[fonte])));
+export function linhasEstimadas(texto: string, fonte: string, tamanho: number, largura: number): number {
+  const porLinha = Math.max(1, Math.floor(largura / (tamanho * (LARGURA_MEDIA.get(fonte) ?? LARGURA_MEDIA_GENERICA))));
   let linhas = 1;
   let ocupado = 0;
   for (const palavra of texto.split(/\s+/)) {

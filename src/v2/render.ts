@@ -1,22 +1,18 @@
 import { Resvg } from "@resvg/resvg-js";
 import satori from "satori";
 import sharp from "sharp";
-import { AJUSTES_NEUTROS, FONTES, FORMATOS, PROPORCAO_DO_LOGO, recorteDaCena, transformacaoDa, type Ajustes, type Camada } from "./camadas";
+import { AJUSTES_NEUTROS, FORMATOS, PROPORCAO_DO_LOGO, recorteDaCena, transformacaoDa, type Ajustes, type Camada } from "./camadas";
+import { arquivoDaMarca, chaveDaFonte, FACES_DA_MARCA, type Peso } from "./fontes";
+import { bytesDaFonte } from "./fontsource";
 import type { Arte } from "./schema";
 
 type No = { type: string; props: Record<string, unknown> };
+type FonteDoSatori = { name: string; weight: Peso; style: "normal"; data: ArrayBuffer };
 
 const pastaDaMarca = `${process.cwd()}/brand/assets/`;
 
-const fontes = await Promise.all(
-  Object.entries(FONTES).flatMap(([familia, pesos]) =>
-    Object.entries(pesos).map(async ([peso, arquivo]) => ({
-      name: familia,
-      weight: Number(peso) as 400 | 500 | 600,
-      style: "normal" as const,
-      data: await Bun.file(`${pastaDaMarca}fonts/${arquivo}`).arrayBuffer(),
-    })),
-  ),
+const fontesDaMarca: FonteDoSatori[] = await Promise.all(
+  FACES_DA_MARCA.map(async ({ familia, peso, arquivo }) => ({ name: familia, weight: peso, style: "normal", data: await Bun.file(`${pastaDaMarca}fonts/${arquivo}`).arrayBuffer() })),
 );
 
 const dataUri = (tipo: string, bytes: Uint8Array) => `data:${tipo};base64,${Buffer.from(bytes).toString("base64")}`;
@@ -78,9 +74,9 @@ function noDaCamada(camada: Camada, imagens: Map<string, string>): No {
 }
 
 /** A arte pronta para baixar: a cena tratada no fundo e as camadas por cima, na ordem do array. */
-export async function renderizar({ formato, camadas, ajustes }: Desenho, cena: Uint8Array, ler?: LerArquivo): Promise<Uint8Array<ArrayBuffer>> {
+export async function renderizar({ formato, camadas: pedidas, ajustes }: Desenho, cena: Uint8Array, ler?: LerArquivo): Promise<Uint8Array<ArrayBuffer>> {
   const { largura, altura } = FORMATOS[formato];
-  const fundo = await tratarCena(cena, ajustes, largura, altura);
+  const [fundo, { fontes, camadas }] = await Promise.all([tratarCena(cena, ajustes, largura, altura), fontesDoCatalogo(pedidas)]);
 
   const imagens = new Map<string, string>();
   for (const c of camadas)
@@ -98,8 +94,27 @@ export async function renderizar({ formato, camadas, ajustes }: Desenho, cena: U
       ],
     },
   };
-  const svg = await satori(raiz as Parameters<typeof satori>[0], { width: largura, height: altura, fonts: fontes });
+  const svg = await satori(raiz as Parameters<typeof satori>[0], { width: largura, height: altura, fonts: [...fontesDaMarca, ...fontes] });
   return new Uint8Array(new Resvg(svg, { fitTo: { mode: "original" }, font: { loadSystemFonts: false } }).render().asPng());
+}
+
+/**
+ * Baixa as fontes do catálogo que as camadas usam. Uma fonte que não baixa não derruba o PNG: o texto dela sai em
+ * Poppins, no peso mais perto que a marca tem.
+ */
+async function fontesDoCatalogo(camadas: Camada[]): Promise<{ fontes: FonteDoSatori[]; camadas: Camada[] }> {
+  const doCatalogo = new Map(
+    camadas.flatMap((c) => (c.tipo === "texto" && !arquivoDaMarca(c.fonte, c.peso) ? [[chaveDaFonte(c.fonte, c.peso), { familia: c.fonte, peso: c.peso }] as const] : [])),
+  );
+  const baixadas = await Promise.allSettled([...doCatalogo.values()].map(async ({ familia, peso }) => ({ name: familia, weight: peso, style: "normal" as const, data: await bytesDaFonte(familia, peso) })));
+  const fontes = baixadas.flatMap((b) => (b.status === "fulfilled" ? [b.value] : []));
+  const faltam = new Set([...doCatalogo.keys()].filter((_, i) => baixadas[i]?.status === "rejected"));
+  if (faltam.size === 0) return { fontes, camadas };
+
+  console.error("render: fontes do catálogo que não baixaram, o texto sai em Poppins", [...faltam], baixadas.flatMap((b) => (b.status === "rejected" ? [b.reason] : [])));
+  const trocadas = camadas.map((c) => (c.tipo === "texto" && faltam.has(chaveDaFonte(c.fonte, c.peso)) ? { ...c, fonte: "Poppins" } : c));
+
+  return { fontes, camadas: trocadas };
 }
 
 /**
