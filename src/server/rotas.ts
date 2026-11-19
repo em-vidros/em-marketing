@@ -401,7 +401,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
       }),
     },
     "/api/posts/:id/variacoes/:variante/editar": {
-      // A variação do post abre no editor de camadas, com a imagem de fundo. Abrir de novo devolve a mesma arte.
+      // A variação do post abre no editor de camadas, com a imagem de fundo. A mesma imagem reabre a mesma arte; gerar de novo cria outra.
       POST: comSessao<"/api/posts/:id/variacoes/:variante/editar">(async (req, u) => {
         const id = idDa(req.params.id);
         const variante = idDa(req.params.variante);
@@ -411,7 +411,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         if (!arte) return naoEncontrado();
         const { tema, angulo } = post.brief;
         const aberta = await arteDaImagem(estudio, {
-          pedido: `Post ${post.postId}, variação ${variante}`,
+          pedido: `Post ${post.postId}, variação ${variante}: ${arte.path}`,
           promptDaCena: [tema, angulo].filter(Boolean).join(". "),
           formato: post.formato === "stories" ? "story" : "feed",
           criadaPor: u.id,
