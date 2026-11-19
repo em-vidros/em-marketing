@@ -10,6 +10,19 @@ import { enviar } from "../componentes/bot/enviar";
 import { LIMITE, type DetalheBot } from "../componentes/bot/formulario";
 import { navegar } from "../rota";
 
+const NOME_DA_COR: Record<(typeof CORES)[number], string> = {
+  "#0a0a0a": "Preto",
+  "#1AAE9F": "Verde-água",
+  "#9558FF": "Roxo",
+  "#1689FF": "Azul",
+  "#FF9500": "Laranja",
+  "#FF2D95": "Rosa",
+  "#E5484D": "Vermelho",
+  "#30A46C": "Verde",
+  "#F5B400": "Amarelo",
+  "#6E56CF": "Violeta",
+};
+
 type Campo = "nome" | "descricao" | "setor" | "prompt";
 
 const conta = (n: number) => n.toLocaleString("pt-BR");
@@ -140,7 +153,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
               {(Object.keys(FORMAS) as Forma[]).map((forma) => (
                 <label
                   key={forma}
-                  className={`flex cursor-pointer flex-col items-center gap-1 rounded-[12px] border px-3 py-2 text-xs has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-tinta ${
+                  className={`flex min-w-20 cursor-pointer flex-col items-center gap-1 rounded-[12px] border px-3 py-2 text-xs has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-tinta ${
                     pedido.forma === forma ? "border-tinta bg-fundo" : "border-linha-forte hover:bg-fundo"
                   }`}
                 >
@@ -156,7 +169,7 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
                   key={cor}
                   className="grid size-9 cursor-pointer place-items-center rounded-full has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-tinta"
                 >
-                  <input type="radio" name={`${ids}-cor`} checked={pedido.cor === cor} onChange={() => mudar("cor", cor)} aria-label={cor} className="sr-only" />
+                  <input type="radio" name={`${ids}-cor`} checked={pedido.cor === cor} onChange={() => mudar("cor", cor)} aria-label={NOME_DA_COR[cor]} className="sr-only" />
                   <span
                     aria-hidden="true"
                     className="size-7 rounded-full"
