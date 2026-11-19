@@ -45,7 +45,7 @@ import {
   type Historico,
 } from "../db";
 import { PILARES } from "../domain/art/pipeline";
-import { gravarSaldo, saldo } from "../domain/saldo";
+import { inicioDoDia as meiaNoiteDe, lancar, removerLancamento, saldo } from "../domain/saldo";
 import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
 import { listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
@@ -341,11 +341,28 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     "/api/saldo": {
       GET: comSessao(async () => Response.json(await saldo())),
       PUT: comSessao(async (req, u) => {
-        const corpo = await lerCorpo(req, z.object({ carregado: z.number({ error: "Mande o saldo em dólar." }).nonnegative().max(1_000_000) }));
+        const corpo = await lerCorpo(
+          req,
+          z.object({
+            tipo: z.enum(["deposito", "saldo"], { error: "tipo é deposito ou saldo." }),
+            valor: z.number({ error: "Mande o valor em dólar." }).positive("O valor precisa ser maior que zero.").max(1_000_000),
+            dia: z.iso.date({ error: "dia é AAAA-MM-DD." }).optional(),
+          }),
+        );
         if ("resposta" in corpo) return corpo.resposta;
-        await gravarSaldo(corpo.dados.carregado, u.email);
+        const { tipo, valor, dia } = corpo.dados;
+        // Depósito de hoje, ou saldo, conta a partir de agora; depósito de outro dia, da meia-noite dele.
+        const hoje = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(Date.now());
+        const em = tipo === "deposito" && dia && dia !== hoje ? meiaNoiteDe(dia) : Date.now();
+        if (em > Date.now()) return invalido("A data do depósito não pode ser no futuro.");
+        await lancar({ tipo, valor, em, por: u.email });
         return Response.json(await saldo());
       }),
+    },
+    "/api/saldo/:em": {
+      DELETE: comSessao<"/api/saldo/:em">(async (req) =>
+        (await removerLancamento(Number(req.params.em))) ? Response.json(await saldo()) : naoEncontrado(),
+      ),
     },
     "/api/atividade/agora": {
       GET: comSessao(async (_, u) => {
