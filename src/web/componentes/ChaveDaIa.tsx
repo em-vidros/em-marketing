@@ -39,11 +39,6 @@ function useChaves() {
   return { chaves, erro, conectar, desconectar };
 }
 
-function descricao(c: EstadoDaChave): string {
-  if (c.origem === "equipe") return `Chave da equipe, termina em ${c.final}. Conectada por ${primeiroNome(c.por.nome)} em ${quando(c.em)}.`;
-  if (c.origem === "ambiente") return `Chave do servidor, termina em ${c.final}. Só quem tem acesso à Vercel troca.`;
-  return "Nenhuma chave conectada. As chamadas de IA vão falhar.";
-}
 
 /** Três passos para quem nunca abriu o painel da OpenAI. Depois de conectar, vira um recibo. */
 export function ChaveDaIa() {
@@ -63,7 +58,7 @@ export function ChaveDaIa() {
       <section className="flex flex-col gap-4 rounded-cartao bg-painel p-4 sm:p-5">
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-semibold">O app usa a chave do servidor</h2>
-          <p className="text-sm text-tinta-2">{descricao(openai)} Se ela acabar, só o Henrique resolve.</p>
+          <p className="text-sm text-tinta-2">Termina em {openai.final}. Só quem tem acesso à Vercel troca essa chave.</p>
         </div>
         <button type="button" onClick={() => setGuiando(true)} className="pressiona h-10 self-start rounded-item bg-tinta px-4 text-sm font-medium text-sobre-tinta">
           Conectar a chave da equipe
@@ -121,7 +116,7 @@ function Passos({ conectar, podeCancelar, cancelar }: { conectar: (c: string) =>
     <section className="flex flex-col gap-5 rounded-cartao bg-painel p-4 sm:p-6">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold">Conecte uma chave da OpenAI</h2>
-        <p className="text-sm text-tinta-2">Leva dois minutos. Depois disso o app roda na conta de quem conectou, sem depender de ninguém.</p>
+        <p className="text-sm text-tinta-2">O uso passa a ser cobrado na conta dona da chave.</p>
       </div>
 
       <ol className="flex flex-col gap-5">
@@ -154,8 +149,8 @@ function Passos({ conectar, podeCancelar, cancelar }: { conectar: (c: string) =>
               aria-describedby="chave-guiada-status"
               className="h-11 w-full rounded-item border border-borda-campo bg-superficie px-3 font-mono text-[13px] outline-none focus:border-tinta aria-invalid:border-erro"
             />
-            <p id="chave-guiada-status" role={recusa ? "alert" : undefined} className={`min-h-4 text-xs ${recusa ? "text-erro" : ok ? "text-trabalhando-texto" : "text-tinta-3"}`}>
-              {recusa ?? (ok ? "Formato certo. Falta testar na OpenAI." : valor ? "Ainda não parece uma chave. Ela começa com sk-." : "A chave fica cifrada no banco e ninguém consegue ler ela de volta.")}
+            <p id="chave-guiada-status" role={recusa ? "alert" : undefined} className={`min-h-4 text-xs ${recusa ? "text-erro" : "text-tinta-3"}`}>
+              {recusa ?? (valor && !ok ? "A chave começa com sk-." : null)}
             </p>
             <div className="flex gap-2">
               <button type="submit" disabled={!ok || enviando} className="pressiona h-10 rounded-item bg-tinta px-4 text-sm font-medium text-sobre-tinta disabled:opacity-40">
@@ -188,7 +183,7 @@ function Recibo({ chave, recemConectada, trocar, desconectar }: { chave: Extract
           <h2 className="text-base font-semibold">{recemConectada ? "Pronto, a chave está conectada" : "O app roda na chave da equipe"}</h2>
           <p className="text-sm text-tinta-2">
             Artes, legendas e os bots usam a chave que termina em <span className="font-mono text-tinta">{chave.final}</span>, conectada por {primeiroNome(chave.por.nome)} em{" "}
-            {quando(chave.em)}. O gasto aparece na conta dela na OpenAI.
+            {quando(chave.em)}. O gasto sai da conta dona da chave na OpenAI.
           </p>
         </div>
       </div>
