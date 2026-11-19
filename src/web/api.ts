@@ -52,6 +52,9 @@ const comCorpo = async <T>(caminho: string, method: string, corpo?: unknown): Pr
   (await pedir(caminho, { method, body: corpo === undefined ? undefined : JSON.stringify(corpo) })).json() as Promise<T>;
 const semCorpo = async (caminho: string, method: string) => void (await pedir(caminho, { method }));
 
+/** Para o turno do bot no servidor; o useChat só corta o que chega na tela. */
+export const pararResposta = (conversaId: string) => semCorpo(`/api/conversas/${encodeURIComponent(conversaId)}/parar`, "POST");
+
 /** As rotas do calendário (.specs/project/CALENDARIO.md, "API"). Horários em epoch ms. */
 export const apiCalendario = {
   itens: (de: Dia, ate: Dia, sinal?: AbortSignal) => pegar<ItemCalendario[]>(`/api/calendario?de=${de}&ate=${ate}`, sinal),

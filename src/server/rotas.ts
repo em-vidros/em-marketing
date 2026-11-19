@@ -24,6 +24,7 @@ import {
   conversasDoUsuario,
   mensagensDaConversa,
   mudarConversa,
+  pararTurno,
   restaurarConversa,
   restaurarMensagens,
   type Recusa,
@@ -362,6 +363,11 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         const excluida = await apagarConversa(u.id, req.params.id);
         return excluida ? Response.json(excluida) : naoEncontrado();
       }),
+    },
+    "/api/conversas/:id/parar": {
+      POST: comSessao<"/api/conversas/:id/parar">(async (req, u) =>
+        (await pararTurno(u.id, req.params.id)) ? new Response(null, { status: 204 }) : naoEncontrado(),
+      ),
     },
     "/api/conversas/:id/restaurar": {
       POST: comSessao<"/api/conversas/:id/restaurar">(async (req, u) => {

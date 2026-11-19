@@ -1,4 +1,5 @@
 import {
+  consumeStream,
   convertToModelMessages,
   createUIMessageStreamResponse,
   getToolName,
@@ -17,11 +18,11 @@ import { configDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
 import {
   AINDA_RESPONDENDO,
+  PARADO_PELO_USUARIO,
   abrirConversaDoUsuario,
   comecarTurno,
   gravarMensagens,
   mensagensDaConversa,
-  terminarTurno,
 } from "../agent/conversas";
 import type { Usuario } from "./auth";
 
@@ -97,6 +98,21 @@ function fecharAprovacoesNoErro(ultima: UIMessage) {
   });
 }
 
+/**
+ * Um turno parado no meio pode deixar uma tool sem resultado, e o modelo recusa um histórico com chamada sem resposta.
+ * A chamada que nem terminou de chegar sai. A que já rodava, ou já tinha sido aprovada, vira erro, porque pode ter feito parte do trabalho.
+ */
+function fecharToolsParadas(m: UIMessage): UIMessage {
+  const parts = m.parts.flatMap((p): UIMessage["parts"] => {
+    if (!isToolUIPart(p)) return [p];
+    if (p.state === "input-streaming") return [];
+    if (p.state === "input-available" || (p.state === "approval-responded" && p.approval.approved))
+      return [{ ...p, state: "output-error", errorText: PARADO_PELO_USUARIO, approval: p.approval && { ...p.approval, approved: true } }];
+    return [p];
+  });
+  return { ...m, parts };
+}
+
 export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: OpcoesChat) {
   return async (req: Request, usuario: Usuario): Promise<Response> => {
     const corpo = Corpo.safeParse(await req.json().catch(() => null));
@@ -111,37 +127,43 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: Op
     if (!conversa) return erro(404, "Conversa não encontrada.");
     if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${(await configDoBot(conversa.botId)).nome}.`);
 
-    if (!comecarTurno(conversa.id)) return erro(409, AINDA_RESPONDENDO);
+    const turno = await comecarTurno(conversa.id);
+    if (!turno) return erro(409, AINDA_RESPONDENDO);
     try {
       const juntada = juntar(await mensagensDaConversa(conversa.id), ultima);
       if (!juntada.ok) {
-        terminarTurno(conversa.id);
+        await turno.terminar();
         return erro(juntada.status, juntada.erro);
       }
       const { historico } = juntada;
-      const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico), { resolverModelo, segredoAprovacao, inspiracoes });
-      // Sem backpressure do cliente: o turno termina e é salvo mesmo se a aba fechar no meio.
-      result.consumeStream();
-
-      return createUIMessageStreamResponse({
-        stream: toUIMessageStream({
-          stream: result.stream.pipeThrough(fecharAprovacoesNoErro(historico.at(-1)!)),
-          originalMessages: historico,
-          generateMessageId: () => crypto.randomUUID(),
-          onError: explicarErro,
-          // Um turno que falhou antes da primeira parte deixa uma mensagem do assistente vazia; ela não entra no histórico.
-          // Roda também quando a aba fecha no meio (cancel do stream), então solta a conversa nos dois casos.
-          onEnd: async ({ messages }) => {
-            try {
-              await gravarMensagens(conversa.id, messages.filter((m) => m.parts.length > 0));
-            } finally {
-              terminarTurno(conversa.id);
-            }
-          },
-        }),
+      const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico), {
+        resolverModelo,
+        segredoAprovacao,
+        inspiracoes,
+        abortSignal: turno.sinal,
       });
+      const mensagemId = crypto.randomUUID();
+      const [paraOCliente, paraGravar] = toUIMessageStream({
+        stream: result.stream.pipeThrough(fecharAprovacoesNoErro(historico.at(-1)!)),
+        originalMessages: historico,
+        generateMessageId: () => mensagemId,
+        onError: explicarErro,
+        // Um turno que falhou antes da primeira parte deixa uma mensagem do assistente vazia; ela não entra no histórico.
+        onEnd: async ({ messages, isAborted }) => {
+          try {
+            const salvas = messages.filter((m) => m.parts.length > 0);
+            await gravarMensagens(conversa.id, isAborted ? salvas.map(fecharToolsParadas) : salvas);
+          } finally {
+            await turno.terminar();
+          }
+        },
+      }).tee();
+      // O cliente pode parar de ler (aba fechada, Parar); o turno segue até o fim ou até o sinal de parar, e só então
+      // grava e solta a conversa.
+      void consumeStream({ stream: paraGravar });
+      return createUIMessageStreamResponse({ stream: paraOCliente });
     } catch (e) {
-      terminarTurno(conversa.id);
+      await turno.terminar();
       throw e;
     }
   };

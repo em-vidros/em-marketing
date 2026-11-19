@@ -55,7 +55,7 @@ describe("servidor", () => {
     expect(res.status).toBe(401);
   });
 
-  test("um usuário não lê nem continua a conversa de outro", async () => {
+  test("um usuário não lê, não continua e não para a conversa de outro", async () => {
     const ana = await sessao("ana@emvidros.com.br");
     const { cookie: deBia } = await sessao("bia@emvidros.com.br");
     await abrirConversaDoUsuario(ana.id, "conversa-da-ana", "chefe", "Post do Dia do Vidraceiro");
@@ -66,10 +66,11 @@ describe("servidor", () => {
       headers: { "content-type": "application/json", cookie: deBia },
       body: pedidoDeChat("conversa-da-ana"),
     });
+    const parar = await fetch(url("/api/conversas/conversa-da-ana/parar"), { method: "POST", headers: { cookie: deBia } });
 
-    expect([leitura.status, chat.status]).toEqual([404, 404]);
-    const dono = await q`SELECT user_id, mensagens FROM conversas WHERE id = ${"conversa-da-ana"}`;
-    expect(dono).toEqual([{ user_id: ana.id, mensagens: "[]" }]);
+    expect([leitura.status, chat.status, parar.status]).toEqual([404, 404, 404]);
+    const dono = await q`SELECT user_id, mensagens, parar_em FROM conversas WHERE id = ${"conversa-da-ana"}`;
+    expect(dono).toEqual([{ user_id: ana.id, mensagens: "[]", parar_em: null }]);
   });
 });
 

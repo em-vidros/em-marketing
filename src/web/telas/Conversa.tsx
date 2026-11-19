@@ -3,7 +3,7 @@ import { Menu } from "@base-ui/react/menu";
 import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { useApi, useNomesDosBots } from "../api";
+import { pararResposta, useApi, useNomesDosBots } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
@@ -546,7 +546,10 @@ function Chat({
           respondendo={respondendo}
           aoSubirVazio={() => executar("mensagem-editar-ultima")}
           enviar={enviar}
-          parar={() => chat.stop()}
+          parar={() => {
+            pararResposta(id).catch(() => mostrarAviso({ tipo: "erro", texto: "Não deu para parar o bot no servidor. Ele vai terminar a resposta sozinho." }));
+            chat.stop();
+          }}
         />
       </main>
       <p role="status" className="sr-only">
