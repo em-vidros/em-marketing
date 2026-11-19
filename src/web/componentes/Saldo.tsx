@@ -4,6 +4,7 @@ import { ErroDeApi, useApi } from "../api";
 
 export const dolar = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "USD" });
 const data = new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Sao_Paulo" });
+const nomeDoMes = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" });
 
 export const useSaldo = () => useApi<Saldo>("/api/saldo", 5 * 60_000);
 
@@ -92,6 +93,11 @@ export function SaldoDetalhado() {
         )}
       </div>
       {s?.estado === "ok" ? <Barra restante={restanteDe(s)} alta /> : <Barra restante={0} alta />}
+      {s?.estado === "ok" && (
+        <p className="tabular text-sm text-tinta-2">
+          Gasto em {nomeDoMes.format(s.inicioDoMes)}, recargas incluídas: <span className="font-medium text-tinta">{dolar.format(s.gastoDoMes)}</span>
+        </p>
+      )}
       {s && aviso(s) && (
         <p className="text-sm text-tinta-2">
           {aviso(s)}.{" "}
@@ -126,6 +132,20 @@ export function SaldoDetalhado() {
         )}
       </form>
       <p className="text-xs text-tinta-3">Ao recarregar crédito na OpenAI, grave o saldo novo aqui. O gasto passa a contar a partir desse momento.</p>
+      {s && s.estado !== "sem-saldo" && s.historico.length > 0 && (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-tinta-2 hover:text-tinta">Saldos gravados ({s.historico.length})</summary>
+          <ul className="tabular mt-2 flex flex-col">
+            {s.historico.map((h) => (
+              <li key={h.desde} className="flex justify-between gap-4 border-b border-linha py-1.5 last:border-0">
+                <span>{data.format(h.desde)}</span>
+                <span className="min-w-0 flex-1 truncate text-tinta-3">{h.por}</span>
+                <span>{dolar.format(h.carregado)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
     </section>
   );
 }
