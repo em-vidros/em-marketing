@@ -10,7 +10,6 @@ import {
   isSameMonth,
   isSameYear,
   startOfDay,
-  startOfMonth,
 } from "date-fns";
 import { enUS } from "date-fns/locale";
 
@@ -1044,10 +1043,8 @@ function CalendarStateProvider({
           ? isSameMonth(start, displayMonth ?? currentDate)
           : visibleDays.some((day) => isSameDay(day, start));
       if (isOnScreen) return;
-      // Month view starts on the week of the 1st, so the month is the one shown
-      const periodDate = view === "month" ? startOfMonth(start) : start;
       setCurrentDate(
-        getPeriodStart(periodDate, view, weekStartsOn, numberOfDays),
+        getPeriodStart(start, view, weekStartsOn, numberOfDays),
       );
     },
     [
