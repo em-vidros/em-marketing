@@ -109,6 +109,10 @@ const padraoDoFixo = (id: BotFixo): Editavel => {
   return { nome, descricao, setor: SETOR_PADRAO, modelo, prompt: papel, regras, marca: true, tools };
 };
 
+/**
+ * As consultas de versoes_bot listam as colunas em vez de SELECT *: uma instância que preparou o
+ * SELECT * antes de um ALTER TABLE de outra instância passa a falhar com "cached plan must not change result type".
+ */
 interface LinhaVersao {
   id: number;
   bot_id: BotId;
@@ -164,10 +168,10 @@ async function baseDo(botId: BotId): Promise<Base | null> {
     const { contexto, sugestoes } = BOTS[botId];
     return { id: botId, criado: null, apagadoEm: null, padrao: padraoDoFixo(botId), contexto, sugestoes };
   }
-  const bot = await primeira(q<LinhaBot>`SELECT * FROM bots WHERE id = ${botId}`);
+  const bot = await primeira(q<LinhaBot>`SELECT id, forma, cor, criado_por, criado_em, apagado_em FROM bots WHERE id = ${botId}`);
   if (!bot) return null;
   // criarBot grava o bot e a primeira versão, com todos os campos, na mesma transação.
-  const primeiraVersao = (await primeira(q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id LIMIT 1`))!;
+  const primeiraVersao = (await primeira(q<LinhaVersao>`SELECT id, bot_id, nome, descricao, modelo, prompt, setor, regras, tools, marca, criada_em, autor FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id LIMIT 1`))!;
   return {
     id: botId,
     criado: { forma: bot.forma, cor: bot.cor, por: bot.criado_por, em: bot.criado_em },
@@ -181,7 +185,7 @@ async function baseDo(botId: BotId): Promise<Base | null> {
 async function lerBot(botId: BotId): Promise<{ base: Base; config: ConfigBot }> {
   const base = await baseDo(botId);
   if (!base) throw new Error(`Bot desconhecido: ${botId}.`);
-  const r = await primeira(q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC LIMIT 1`);
+  const r = await primeira(q<LinhaVersao>`SELECT id, bot_id, nome, descricao, modelo, prompt, setor, regras, tools, marca, criada_em, autor FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC LIMIT 1`);
   const versao = r && daLinha(r, base.padrao);
   const atual: Editavel = versao ?? base.padrao;
   const editavel = Object.fromEntries(CAMPOS.map((c) => [c, atual[c]])) as unknown as Editavel;
@@ -212,7 +216,7 @@ export async function situacaoDoBot(botId: BotId): Promise<"ativo" | "apagado" |
 export const configDoBot = async (botId: BotId): Promise<ConfigBot> => (await lerBot(botId)).config;
 
 export async function memoriaDo(botId: BotId): Promise<Memoria> {
-  const r = await primeira(q<{ texto: string; atualizada_em: number; autor: string | null }>`SELECT * FROM memorias_bot WHERE bot_id = ${botId}`);
+  const r = await primeira(q<{ texto: string; atualizada_em: number; autor: string | null }>`SELECT texto, atualizada_em, autor FROM memorias_bot WHERE bot_id = ${botId}`);
   return r ? { texto: r.texto, atualizadaEm: r.atualizada_em, autor: r.autor } : { texto: "", atualizadaEm: null, autor: null };
 }
 
@@ -251,12 +255,12 @@ export function instrucoesDe(bot: DetalheBot, turno: { delegada: boolean; estado
 
 export async function versoesDoBot(botId: BotId): Promise<VersaoBot[]> {
   const { base } = await lerBot(botId);
-  return (await q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC`).map((r) => daLinha(r, base.padrao));
+  return (await q<LinhaVersao>`SELECT id, bot_id, nome, descricao, modelo, prompt, setor, regras, tools, marca, criada_em, autor FROM versoes_bot WHERE bot_id = ${botId} ORDER BY id DESC`).map((r) => daLinha(r, base.padrao));
 }
 
 export async function versaoDoBot(botId: BotId, versaoId: number): Promise<VersaoBot | null> {
   const { base } = await lerBot(botId);
-  const r = await primeira(q<LinhaVersao>`SELECT * FROM versoes_bot WHERE bot_id = ${botId} AND id = ${versaoId}`);
+  const r = await primeira(q<LinhaVersao>`SELECT id, bot_id, nome, descricao, modelo, prompt, setor, regras, tools, marca, criada_em, autor FROM versoes_bot WHERE bot_id = ${botId} AND id = ${versaoId}`);
   return r && daLinha(r, base.padrao);
 }
 
