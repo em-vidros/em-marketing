@@ -1,17 +1,30 @@
 import { expect, test } from "bun:test";
-import { contaDe, type Lancamento } from "./saldo";
+import { lerResposta } from "./saldo";
 
-const l = (tipo: Lancamento["tipo"], valor: number, em: number): Lancamento => ({ tipo, valor, em, por: "bi@emvidros.com.br" });
-
-test.each([
-  { caso: "só depósitos: soma todos e conta do primeiro", lista: [l("deposito", 20, 300), l("deposito", 50, 100)], creditado: 70, desde: 100 },
-  { caso: "saldo e depois depósito: parte do saldo e soma o depósito", lista: [l("deposito", 25, 300), l("saldo", 10, 200)], creditado: 35, desde: 200 },
-  { caso: "depósito antes do último saldo já está dentro dele", lista: [l("saldo", 40, 200), l("deposito", 50, 100)], creditado: 40, desde: 200 },
-])("$caso", ({ lista, creditado, desde }) => {
-  const conta = contaDe(lista)!;
-  expect({ creditado: conta.creditado, desde: conta.desde, ultimo: conta.ultimoDeposito?.valor }).toEqual({
-    creditado,
-    desde,
-    ultimo: lista.find((x) => x.tipo === "deposito")?.valor,
+test("o saldo traz o disponível e os depósitos do mais novo para o mais velho, em ms", () => {
+  const s = lerResposta(
+    {
+      total_granted: 15,
+      total_used: 11.56,
+      total_available: 3.44,
+      grants: {
+        data: [
+          { grant_amount: 5, used_amount: 5, effective_at: 1_700_000_000, expires_at: null },
+          { grant_amount: 10, used_amount: 6.56, effective_at: 1_760_000_000, expires_at: 1_790_000_000 },
+        ],
+      },
+    },
+    42,
+  );
+  expect(s).toEqual({
+    estado: "ok",
+    disponivel: 3.44,
+    depositado: 15,
+    usado: 11.56,
+    lidoEm: 42,
+    depositos: [
+      { valor: 10, usado: 6.56, em: 1_760_000_000_000, expiraEm: 1_790_000_000_000 },
+      { valor: 5, usado: 5, em: 1_700_000_000_000, expiraEm: null },
+    ],
   });
 });

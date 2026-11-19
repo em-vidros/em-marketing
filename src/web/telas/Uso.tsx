@@ -13,9 +13,9 @@ const diaCurto = (dia: string) => `${dia.slice(8, 10)}/${dia.slice(5, 7)}`;
 
 function Numero({ rotulo, valor }: { rotulo: string; valor: number }) {
   return (
-    <div className="flex flex-col gap-1 rounded-cartao bg-painel px-4 py-3">
+    <div className="flex min-w-0 flex-col gap-1 rounded-cartao bg-painel px-3 py-3 sm:px-4">
       <span className="text-xs text-tinta-3">{rotulo}</span>
-      <span className="tabular text-2xl/tight font-semibold tracking-[-0.02em]" title={numero.format(valor)}>
+      <span className="tabular text-xl/tight font-semibold tracking-[-0.02em] sm:text-2xl/tight" title={numero.format(valor)}>
         {compacto.format(valor)}
       </span>
     </div>
@@ -93,41 +93,36 @@ export function Uso({ abrirMenu }: { abrirMenu: () => void }) {
 
   return (
     <main id="conteudo" className="min-w-0 flex-1 overflow-y-auto">
-      <div className="mx-auto flex max-w-[880px] flex-col gap-8 px-4 pt-3 pb-10 sm:px-6 md:pt-10">
-        <header className="flex flex-col gap-1">
-          <div className="flex items-center gap-2.5">
-            <BotaoMenu abrir={abrirMenu} />
-            <h1 className="text-2xl/tight font-semibold tracking-[-0.02em]">Uso da API</h1>
-          </div>
-          <p className="text-sm text-tinta-3">
-            Tokens e imagens que os bots e o estúdio gastaram, da equipe toda. O valor em dinheiro fica no{" "}
-            <a href="https://platform.openai.com/usage" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-tinta">
-              painel da OpenAI
-            </a>
-            .
-          </p>
+      <div className="mx-auto flex max-w-[880px] flex-col gap-6 px-4 pt-3 pb-10 sm:px-6 md:pt-10">
+        <header className="flex items-center gap-2.5">
+          <BotaoMenu abrir={abrirMenu} />
+          <h1 className="text-2xl/tight font-semibold tracking-[-0.02em]">Uso da API</h1>
         </header>
 
         <SaldoDetalhado />
 
         {carga.estado === "carregando" ? (
-          <p className="text-tinta-3">Carregando…</p>
+          <p className="text-sm text-tinta-3">Carregando o uso…</p>
         ) : carga.estado === "erro" ? (
           <Falha texto="Não deu para carregar o uso." erro={carga.erro} tentar={tentar} />
         ) : (
           <>
             <section className="flex flex-col gap-3">
               <h2 className="text-sm font-medium first-letter:uppercase">{nomeDoMes(carga.dados.mes)}</h2>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-3">
                 <Numero rotulo="Chamadas" valor={carga.dados.totalDoMes.chamadas} />
-                <Numero rotulo="Tokens de entrada" valor={carga.dados.totalDoMes.entrada} />
-                <Numero rotulo="Tokens de saída" valor={carga.dados.totalDoMes.saida} />
-                <Numero rotulo="Imagens geradas" valor={carga.dados.totalDoMes.imagens} />
+                <Numero rotulo="Tokens" valor={carga.dados.totalDoMes.entrada + carga.dados.totalDoMes.saida} />
+                <Numero rotulo="Imagens" valor={carga.dados.totalDoMes.imagens} />
               </div>
             </section>
             <PorDia dias={carga.dados.porDia} />
-            <Tabela titulo="Por modelo" coluna="Modelo" linhas={carga.dados.porModelo.map(({ modelo, ...t }) => ({ nome: modelo, ...t }))} />
-            <Tabela titulo="Por origem" coluna="Origem" linhas={carga.dados.porOrigem.map(({ origem, ...t }) => ({ nome: origem, ...t }))} />
+            <details>
+              <summary className="cursor-pointer text-sm text-tinta-2 hover:text-tinta">Detalhes por modelo e por origem</summary>
+              <div className="mt-4 flex flex-col gap-8">
+                <Tabela titulo="Por modelo" coluna="Modelo" linhas={carga.dados.porModelo.map(({ modelo, ...t }) => ({ nome: modelo, ...t }))} />
+                <Tabela titulo="Por origem" coluna="Origem" linhas={carga.dados.porOrigem.map(({ origem, ...t }) => ({ nome: origem, ...t }))} />
+              </div>
+            </details>
           </>
         )}
       </div>
