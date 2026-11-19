@@ -26,12 +26,28 @@ describe("ler_pagina", () => {
       { "https://gov.br/clt": html(`<html><head><title>CLT &amp; férias</title><script>roubar()</script></head><body><h1>Art. 130</h1><p>30 dias&nbsp;corridos</p><p>${longa}</p></body></html>`) },
     );
 
-    const leitura = await lerPagina("https://gov.br/clt", undefined, r);
+    const leitura = await lerPagina("https://gov.br/clt", {}, r);
 
     expect(leitura).toMatchObject({ ok: true, titulo: "CLT & férias", cortado: true });
     expect(leitura.ok && leitura.texto).toStartWith("Art. 130\n30 dias corridos\naaa");
     expect(leitura.ok && leitura.texto.length).toBe(LIMITE_DO_TEXTO);
     expect(leitura.ok && leitura.texto).not.toContain("roubar");
+    expect(await lerPagina("https://gov.br/clt", { procurar: "30 DIAS" }, r)).toMatchObject({ ok: true, achou: true, texto: expect.stringMatching(/^Art\. 130\n30 dias corridos/) });
+  });
+
+  test("lê em windows-1252 a página que não declara charset e não é UTF-8, como a CLT no Planalto, e em UTF-8 a que é", async () => {
+    const latin1 = new Uint8Array([...new TextEncoder().encode("<html><body><p>F"), 0xe9, 0x72, 0x69, 0x61, 0x73, ...new TextEncoder().encode("</p></body></html>")]);
+    const utf8 = new TextEncoder().encode("<html><body><p>Férias</p></body></html>");
+    const { r } = rede(
+      { "planalto.gov.br": ["170.246.252.10"] },
+      {
+        "https://planalto.gov.br/clt": () => new Response(latin1, { headers: { "content-type": "text/html" } }),
+        "https://planalto.gov.br/utf8": () => new Response(utf8, { headers: { "content-type": "text/html" } }),
+      },
+    );
+
+    expect(await lerPagina("https://planalto.gov.br/clt", {}, r)).toMatchObject({ ok: true, texto: "Férias" });
+    expect(await lerPagina("https://planalto.gov.br/utf8", {}, r)).toMatchObject({ ok: true, texto: "Férias" });
   });
 
   test.each([
@@ -44,7 +60,7 @@ describe("ler_pagina", () => {
   ])("recusa %s sem fazer o pedido", async (_, url, dns) => {
     const { r, buscadas } = rede(dns, {});
 
-    const leitura = await lerPagina(url, undefined, r);
+    const leitura = await lerPagina(url, {}, r);
 
     expect(leitura).toEqual({ ok: false, motivo: "Esse endereço é da rede interna; só leio páginas públicas da internet." });
     expect(buscadas).toEqual([]);
@@ -53,7 +69,7 @@ describe("ler_pagina", () => {
   test("recusa esquema que não é http", async () => {
     const { r, buscadas } = rede({}, {});
 
-    expect(await lerPagina("file:///etc/passwd", undefined, r)).toEqual({ ok: false, motivo: "Só leio endereços http ou https." });
+    expect(await lerPagina("file:///etc/passwd", {}, r)).toEqual({ ok: false, motivo: "Só leio endereços http ou https." });
     expect(buscadas).toEqual([]);
   });
 
@@ -63,7 +79,7 @@ describe("ler_pagina", () => {
       { "https://publico.example/": redireciona("http://interno.example/admin") },
     );
 
-    const leitura = await lerPagina("https://publico.example/", undefined, r);
+    const leitura = await lerPagina("https://publico.example/", {}, r);
 
     expect(leitura).toEqual({ ok: false, motivo: "Esse endereço é da rede interna; só leio páginas públicas da internet." });
     expect(buscadas).toEqual(["https://publico.example/"]);

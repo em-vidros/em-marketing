@@ -56,7 +56,16 @@ export interface Rede {
 
 const REDE: Rede = { resolver: resolverDns, buscar: (url, init) => fetch(url, init) };
 
-export type Leitura = { ok: true; url: string; titulo: string | null; texto: string; cortado: boolean } | { ok: false; motivo: string };
+export type Leitura =
+  | { ok: true; url: string; titulo: string | null; texto: string; cortado: boolean; achou?: boolean }
+  | { ok: false; motivo: string };
+
+/** O pedaço que volta ao modelo: do começo, ou de um pouco antes do trecho procurado, que numa lei longa fica longe do topo. */
+function janela(texto: string, procurar: string | undefined) {
+  const achado = procurar ? texto.toLocaleLowerCase("pt-BR").indexOf(procurar.trim().toLocaleLowerCase("pt-BR")) : -1;
+  const inicio = Math.max(0, achado - 200);
+  return { texto: texto.slice(inicio, inicio + LIMITE_DO_TEXTO), cortado: texto.length - inicio > LIMITE_DO_TEXTO, ...(procurar ? { achou: achado >= 0 } : {}) };
+}
 
 class Recusada extends Error {}
 
@@ -109,6 +118,23 @@ export function textoDoHtml(html: string): { titulo: string | null; texto: strin
   return { titulo: titulo ? decodificar(titulo).replace(/\s+/g, " ").trim() || null : null, texto: linhas.join("\n") };
 }
 
+/**
+ * Sites do governo ainda servem windows-1252, às vezes sem declarar (a CLT no Planalto), e ler como UTF-8
+ * troca todo acento por �. Sem declaração, vale o que o navegador faz: UTF-8 se os bytes forem UTF-8 válido.
+ * `stream` evita o falso erro no último caractere, que o corte em LIMITE_DE_BYTES pode partir no meio.
+ */
+function decodificarBytes(bytes: Uint8Array, tipo: string): string {
+  const declarado =
+    /charset=["']?([\w-]+)/i.exec(tipo)?.[1] ?? /<meta[^>]+charset=["']?([\w-]+)/i.exec(new TextDecoder("latin1").decode(bytes.subarray(0, 4096)))?.[1];
+  for (const [rotulo, fatal] of [[declarado, false], ["utf-8", true]] as const) {
+    if (!rotulo) continue;
+    try {
+      return new TextDecoder(rotulo, { fatal }).decode(bytes, { stream: true });
+    } catch {}
+  }
+  return new TextDecoder("windows-1252").decode(bytes);
+}
+
 const ehTexto = (tipo: string) => /^(text\/|application\/(json|xml|xhtml\+xml|ld\+json))/i.test(tipo);
 
 /**
@@ -117,7 +143,7 @@ const ehTexto = (tipo: string) => /^(text\/|application\/(json|xml|xhtml\+xml|ld
  * Resta a janela entre conferir o DNS e o fetch resolver de novo; ler_pagina não manda cookie nem
  * credencial, e só devolve texto.
  */
-export async function lerPagina(endereco: string, sinal?: AbortSignal, rede: Rede = REDE): Promise<Leitura> {
+export async function lerPagina(endereco: string, { procurar, sinal }: { procurar?: string; sinal?: AbortSignal } = {}, rede: Rede = REDE): Promise<Leitura> {
   let url: URL;
   try {
     url = new URL(endereco);
@@ -146,9 +172,9 @@ export async function lerPagina(endereco: string, sinal?: AbortSignal, rede: Red
         await res.body?.cancel();
         return { ok: false, motivo: `Isso não é uma página de texto (${tipo.split(";")[0]}).` };
       }
-      const bruto = new TextDecoder().decode(await lerAte(res.body, LIMITE_DE_BYTES));
+      const bruto = decodificarBytes(await lerAte(res.body, LIMITE_DE_BYTES), tipo);
       const { titulo, texto } = /html|xml/i.test(tipo) ? textoDoHtml(bruto) : { titulo: null, texto: bruto.trim() };
-      return { ok: true, url: url.href, titulo, texto: texto.slice(0, LIMITE_DO_TEXTO), cortado: texto.length > LIMITE_DO_TEXTO };
+      return { ok: true, url: url.href, titulo, ...janela(texto, procurar) };
     }
   } catch (e) {
     if (e instanceof Recusada) return { ok: false, motivo: e.message };
@@ -162,8 +188,11 @@ export const toolsDeWeb = {
   pesquisar_web: buscaNaWeb(),
   ler_pagina: tool({
     description:
-      "Abre uma página pública da internet e devolve o texto dela, até 20 mil caracteres. Use para ler uma lei, uma norma, um artigo ou um site que o usuário mandou ou que pesquisar_web achou.",
-    inputSchema: z.object({ url: z.string().describe("O endereço completo, com https://.") }),
-    execute: ({ url }, { abortSignal }) => lerPagina(url, abortSignal),
+      "Abre uma página pública da internet e devolve até 20 mil caracteres do texto dela. Use para ler uma lei, uma norma, um artigo ou um site que o usuário mandou ou que pesquisar_web achou.",
+    inputSchema: z.object({
+      url: z.string().describe("O endereço completo, com https://."),
+      procurar: z.string().optional().describe("Numa página longa, o trecho que interessa, como \"Art. 143\". O texto volta a partir dele."),
+    }),
+    execute: ({ url, procurar }, { abortSignal }) => lerPagina(url, { procurar, sinal: abortSignal }),
   }),
 };
