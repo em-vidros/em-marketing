@@ -31,16 +31,19 @@ import {
 import { agendar, cancelar, prontos, reagendar, restaurar, type EstudioDaFila, type RecusaDaFila } from "../agent/fila";
 import { ehModelId, modelos, problemaDoModelo, type ModelId } from "../agent/models";
 import { pegarTarefa, tarefasAtivas, tarefasDaConversa, trabalhoDoBot } from "../agent/tarefas";
-import { ehUrl } from "../armazem";
+import { ehUrl, lerArquivo } from "../armazem";
 import {
   agendamentos,
   aprovacoesPendentes,
+  idDaImagem,
+  imagemGerada,
   inicioDoDia,
   primeira,
   pecasDoUsuario,
   publicacoesRecentes,
   tarefasEmCurso,
   tarefasFeitas,
+  urlDaMidia,
   type Agora,
   type Historico,
 } from "../db";
@@ -48,7 +51,8 @@ import { PILARES } from "../domain/art/pipeline";
 import { saldo } from "../domain/saldo";
 import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
-import { arteDaImagem, listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
+import { arteDaImagem, listarArtes, pedidoDaImagem, resumoDaArte, resumosDasArtes } from "../v2/artes";
+import { imagensDaBiblioteca } from "../domain/biblioteca";
 import { postPorId } from "../agent/post";
 import { q } from "../v2/banco";
 import { auth, usuarioDa, type Usuario } from "./auth";
@@ -252,6 +256,22 @@ export interface OpcoesDasRotas extends OpcoesChat {
 
 export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
   const lerArtes = (ids: readonly string[]) => resumosDasArtes(estudio.banco, ids);
+
+  async function abrirImagemNoEditor(imagemId: number, criadaPor: string) {
+    const imagem = await imagemGerada(imagemId);
+    if (!imagem) return null;
+    return arteDaImagem(estudio, {
+      pedido: pedidoDaImagem(imagem),
+      promptDaCena: [imagem.tema, imagem.angulo].filter(Boolean).join(". "),
+      formato: imagem.formato === "stories" ? "story" : "feed",
+      criadaPor,
+      bytes: async () => {
+        const bytes = await lerArquivo(imagem.path);
+        if (!bytes) throw new Error(`A imagem ${imagem.path} sumiu do armazenamento.`);
+        return bytes;
+      },
+    });
+  }
   return {
     ...marca,
     "/health": () => Response.json({ ok: true, ts: new Date().toISOString() }),
@@ -403,24 +423,36 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         return conversa ? Response.json(conversa) : naoEncontrado();
       }),
     },
+    "/api/biblioteca": { GET: comSessao(async (_, u) => Response.json(await imagensDaBiblioteca(estudio.banco, u.id))) },
+    "/api/imagens/:id/editar": {
+      // A imagem abre no editor de camadas como fundo. A mesma imagem reabre a mesma arte, com as edições.
+      POST: comSessao<"/api/imagens/:id/editar">(async (req, u) => {
+        const id = idDa(req.params.id);
+        const aberta = id === null ? null : await abrirImagemNoEditor(id, u.id);
+        return aberta ? Response.json({ id: aberta.id }) : naoEncontrado();
+      }),
+    },
     "/api/posts/:id/variacoes/:variante/editar": {
-      // A variação do post abre no editor de camadas, com a imagem de fundo. A mesma imagem reabre a mesma arte; gerar de novo cria outra.
+      // As escolhas de arte antigas da conversa não trazem o id da imagem, só a variante do post.
       POST: comSessao<"/api/posts/:id/variacoes/:variante/editar">(async (req, u) => {
         const id = idDa(req.params.id);
         const variante = idDa(req.params.variante);
         const post = id === null ? null : await postPorId(id);
         if (!post || variante === null || post.etapa === "brief" || post.etapa === "formato" || post.etapa === "headline") return naoEncontrado();
         const arte = (post.etapa === "artes" ? post.artes : post.opcoes).find((a) => a.variant === variante);
-        if (!arte) return naoEncontrado();
-        const { tema, angulo } = post.brief;
-        const aberta = await arteDaImagem(estudio, {
-          pedido: `Post ${post.postId}, variação ${variante}: ${arte.path}`,
-          promptDaCena: [tema, angulo].filter(Boolean).join(". "),
-          formato: post.formato === "stories" ? "story" : "feed",
-          criadaPor: u.id,
-          bytes: async () => (ehUrl(arte.path) ? new Uint8Array(await (await fetch(arte.path)).arrayBuffer()) : Bun.file(arte.path).bytes()),
-        });
-        return Response.json({ id: aberta.id });
+        const imagemId = arte ? await idDaImagem(arte.path) : null;
+        const aberta = imagemId === null ? null : await abrirImagemNoEditor(imagemId, u.id);
+        return aberta ? Response.json({ id: aberta.id }) : naoEncontrado();
+      }),
+    },
+    "/api/posts/:id/escolhida": {
+      // A escolha de arte que a conversa desenhou é uma foto de antes da escolha; a tela pergunta aqui qual ficou.
+      GET: comSessao<"/api/posts/:id/escolhida">(async (req) => {
+        const id = idDa(req.params.id);
+        const post = id === null ? null : await postPorId(id);
+        if (!post) return naoEncontrado();
+        const path = "peca" in post ? post.peca.arte.path : null;
+        return Response.json({ imagemId: path && (await idDaImagem(path)), url: path && (await urlDaMidia(path)) });
       }),
     },
     "/api/prontos": { GET: comSessao(async () => Response.json(await prontos((await listarArtes(estudio.banco)).map(resumoDaArte)))) },

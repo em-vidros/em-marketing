@@ -662,8 +662,9 @@ div:has(> div > .cal-ideia):not([aria-pressed="true"]) > div:nth-child(3):not(:l
 }
 
 /*
- * A arte escolhida no chat: ao passar o mouse, a imagem esmaece de leve e o botão de editar aparece.
- * Só opacidade, então vale também com movimento reduzido. Sem mouse (toque), o botão fica sempre visível.
+ * Imagem que abre no editor (variações no chat, Biblioteca): ao passar o mouse ou focar pelo teclado, a imagem
+ * esmaece de leve e as ações aparecem. Só opacidade, então vale também com movimento reduzido. Sem mouse (toque),
+ * as ações ficam sempre visíveis.
  */
 .editavel img {
   transition: opacity 150ms ease;

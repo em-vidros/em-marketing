@@ -22,7 +22,6 @@ import { atalhoDeConversa, atalhoDoBot } from "./teclado/atalhos";
 import { useAtalho, useTeclado } from "./teclado/motor";
 import { Atividade } from "./telas/Atividade";
 import { Arte } from "./telas/Arte";
-import { Artes } from "./telas/Artes";
 import { Biblioteca } from "./telas/Biblioteca";
 import { Calendario } from "./telas/Calendario";
 import Bot from "./telas/Bot";
@@ -55,7 +54,6 @@ const NOME_DA_TELA: Record<Exclude<Rota["tela"], "entrar">, string> = {
   conversa: "esta conversa",
   atividade: "a atividade",
   biblioteca: "a biblioteca",
-  artes: "as artes",
   arte: "o editor da arte",
   calendario: "o calendário",
   uso: "o uso da API",
@@ -296,8 +294,6 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
             <Atividade abrirMenu={abrirMenu} />
           ) : rota.tela === "biblioteca" ? (
             <Biblioteca abrirMenu={abrirMenu} />
-          ) : rota.tela === "artes" ? (
-            <Artes abrirMenu={abrirMenu} />
           ) : rota.tela === "arte" ? (
             <Arte key={rota.id} id={rota.id} abrirMenu={abrirMenu} />
           ) : rota.tela === "calendario" ? (

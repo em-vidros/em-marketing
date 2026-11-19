@@ -121,8 +121,8 @@ function Escolha({ prontos, veioDe, escolher, fechar }: PropsDaEscolha) {
         />
       </ul>
       {prontos?.length === 0 && (
-        <button type="button" onClick={() => (fechar(), navegar("/artes"))} className={`${botaoSecundario} self-end`}>
-          Abrir Artes
+        <button type="button" onClick={() => (fechar(), navegar("/biblioteca"))} className={`${botaoSecundario} self-end`}>
+          Abrir a Biblioteca
         </button>
       )}
     </>

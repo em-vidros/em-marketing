@@ -5,8 +5,15 @@ import type { UIMessage } from "ai";
 import { abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa, type Conversa } from "../agent/conversas";
 import type { Modelo } from "../agent/models";
 import { tarefasDaConversa, type TrabalhoDoBot } from "../agent/tarefas";
-import { emOrdem, newMediaId, primeira, type Agendamento, type Agora, type Historico, type Peca } from "../db";
-import { q } from "../v2/banco";
+import { emOrdem, idDaImagem, newMediaId, primeira, type Agendamento, type Agora, type Historico, type Peca } from "../db";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { criarPost, gravarPost } from "../agent/post";
+import type { Brief } from "../domain/art/pipeline";
+import type { ImagemDaBiblioteca } from "../domain/biblioteca";
+import { pegarArte } from "../v2/artes";
+import { banco, q } from "../v2/banco";
 import { estudioDeTeste } from "../../test/estudio";
 import { rotas } from "./rotas";
 
@@ -184,6 +191,38 @@ describe("leituras de Atividade e Biblioteca", () => {
     expect(await caminhos(daAna!.artes)).toEqual(["/tmp/arte-v2.jpg", "/tmp/arte-v1.jpg"]);
     expect(daBia?.artes).toEqual(daAna!.artes);
     expect(daBia?.conversaId).toBeNull();
+  });
+});
+
+describe("Biblioteca de imagens", () => {
+  test("gerar de novo mantém as variações anteriores na Biblioteca, e uma variação antiga abre no editor", async () => {
+    const { cookie } = await sessao("ana@emvidros.com.br");
+    const dir = mkdtempSync(join(tmpdir(), "em-marketing-imagens-"));
+    const brief: Brief = { pilar: "PROVA", tema: "espelho bisotado", precisaFotoReal: false };
+    const post = await criarPost("sem-conversa", brief, "feed");
+    const geracao = async (n: number) =>
+      emOrdem([1, 2, 3], async (variant) => {
+        const path = join(dir, `g${n}-v${variant}.jpg`);
+        await Bun.write(path, `jpeg ${n}.${variant}`);
+        return { variant, style: "tecnico-poppins", path, problemas: [] };
+      });
+    const headline = { headline: "Bisotê feito aqui.", apoio: "" };
+    const antes = await geracao(1);
+    await gravarPost({ etapa: "artes", postId: post.postId, brief, formato: "feed", headline, artes: antes });
+    await gravarPost({ etapa: "artes", postId: post.postId, brief, formato: "feed", headline, artes: await geracao(2) });
+
+    const doPost = (await comCookie<ImagemDaBiblioteca[]>("/api/biblioteca", cookie)).filter((i) => i.origem === "post" && i.postId === post.postId);
+    const antiga = await idDaImagem(antes[1]!.path);
+    const abrir = () => enviar(`/api/imagens/${antiga}/editar`, cookie, "POST");
+    const aberta = (await (await abrir()).json()) as { id: string };
+    const deNovo = (await (await abrir()).json()) as { id: string };
+
+    expect(await semSessao("/api/biblioteca")).toBe(401);
+    expect(doPost).toHaveLength(6);
+    expect(doPost.map((i) => i.id)).toContain(antiga!);
+    expect(doPost.map((i) => i.titulo)).toEqual(Array(6).fill("Bisotê feito aqui."));
+    expect((await pegarArte(banco(), aberta.id))?.pedido).toBe(`Post ${post.postId}, variação 2: ${antes[1]!.path}`);
+    expect(deNovo.id).toBe(aberta.id);
   });
 });
 

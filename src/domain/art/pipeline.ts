@@ -141,6 +141,7 @@ export async function generate3Arts(opts: {
   const styles = (opts.styles ?? stylesFor(opts.brief.pilar)).filter((s) => !STYLES_SEM_GERACAO.has(s));
   if (styles.length < 3) throw new Error(`Só ${styles.length} estilos geráveis para o pilar ${opts.brief.pilar}.`);
   // A semente muda a cada geração do mesmo post, então "gerar de novo" mostra outras referências ao modelo.
+  // Ela também entra no nome do arquivo: gerar de novo não sobrescreve as variações anteriores, que ficam na Biblioteca.
   const semente = Math.floor(Date.now() / 1000);
   const doUsuario = opts.referenciasDoUsuario ?? [];
 
@@ -154,7 +155,7 @@ export async function generate3Arts(opts: {
       });
       const jpeg = await aplicarLogo(gerada, opts.formato, cantoDa(styleId));
       const estilo = opts.direcao ? `${styleId}+pedido` : styleId;
-      const path = await gravarArquivo("arts", `post${opts.postId}-${opts.formato}-v${i + 1}-${styleId}.jpg`, jpeg, "image/jpeg");
+      const path = await gravarArquivo("arts", `post${opts.postId}-${opts.formato}-v${i + 1}-${styleId}-${semente}.jpg`, jpeg, "image/jpeg");
       const problemas = await validarArte(jpeg, opts.formato, { paleta: !STYLES_COM_CENA.has(styleId) && !opts.direcao });
       return { variant: i + 1, style: estilo, path, problemas };
     }),
@@ -178,6 +179,6 @@ export async function deriveStory(opts: {
     base: opts.chosen.path,
   });
   const jpeg = await aplicarLogo(gerada, "stories", cantoDa(estiloBase(opts.chosen.style)));
-  const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived.jpg`, jpeg, "image/jpeg");
+  const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived-${Math.floor(Date.now() / 1000)}.jpg`, jpeg, "image/jpeg");
   return { path, problemas: await validarArte(jpeg, "stories", { paleta: !STYLES_COM_CENA.has(estiloBase(opts.chosen.style)) }) };
 }

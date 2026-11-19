@@ -4,6 +4,7 @@ import { useApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
+import { ImagensGeradas } from "../componentes/ImagensGeradas";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { Check } from "../componentes/Passos";
 import { Referencias } from "../componentes/Referencias";
@@ -90,7 +91,8 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   const origem = useRef<HTMLElement | null>(null);
 
   const pecas = carga.estado === "pronto" ? carga.dados : [];
-  const visiveis = filtrar(pecas, useDeferredValue(busca), pilar, status);
+  const buscaAdiada = useDeferredValue(busca);
+  const visiveis = filtrar(pecas, buscaAdiada, pilar, status);
   const selecionada = pecas.find((p) => p.id === aberta) ?? null;
   const statusPresentes = (Object.keys(STATUS_POST) as StatusPost[]).filter((s) => pecas.some((p) => p.status === s));
   const filtrando = !!busca.trim() || !!pilar || !!status;
@@ -132,6 +134,8 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
           </header>
 
           <Referencias />
+
+          <ImagensGeradas busca={buscaAdiada} />
 
           <h2 className="-mb-2 border-t border-linha pt-6 text-[15px] font-semibold">Peças</h2>
 

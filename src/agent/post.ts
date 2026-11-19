@@ -1,4 +1,4 @@
-import { primeira, utcDe } from "../db";
+import { guardarImagens, primeira, utcDe, type ImagemNova } from "../db";
 import { q } from "../v2/banco";
 import type { ArtVariant, Brief } from "../domain/art/pipeline";
 
@@ -329,4 +329,13 @@ export async function gravarPost(post: EtapaPost): Promise<void> {
   await q`UPDATE posts SET formato = ${formato}, headline = ${headline && JSON.stringify(headline)}, arts = ${artes && JSON.stringify(artes)},
     chosen = ${chosen}, story_path = ${storyPath}, legenda = ${legenda}, status = ${STATUS[post.etapa]}
     WHERE id = ${post.postId}`;
+  const daArte = (a: Arte): ImagemNova => ({
+    path: a.path,
+    tipo: a.style === "foto-real" ? "foto" : "variacao",
+    variante: a.variant,
+    estilo: a.style,
+    formato: formato === "stories" ? "stories" : "feed",
+  });
+  const story: ImagemNova[] = storyPath ? [{ path: storyPath, tipo: "story", variante: null, estilo: null, formato: "stories" }] : [];
+  await guardarImagens(post.postId, [...(artes ?? []).map(daArte), ...story]);
 }
