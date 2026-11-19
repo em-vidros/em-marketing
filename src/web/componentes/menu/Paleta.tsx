@@ -75,7 +75,7 @@ export function Paleta({
               <Teclas tecla="escape" />
             </div>
             <Command.List className="max-h-[min(440px,60dvh)] scroll-py-2 overflow-y-auto overscroll-contain p-2">
-              <Command.Empty className="px-3 py-8 text-center text-tinta-3">Nada encontrado para “{busca}”.</Command.Empty>
+              <Command.Empty className="px-3 py-8 text-center text-tinta-3">Nada encontrado para "{busca}".</Command.Empty>
 
               {!so && aberta && (
                 <Grupo titulo="Esta conversa">

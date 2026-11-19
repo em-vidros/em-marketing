@@ -75,7 +75,7 @@ export function FolhaAtalhos({ aberta, fechar, bots }: { aberta: boolean; fechar
                 </section>
               );
             })}
-            {visiveis.length === 0 && <p className="px-1 py-8 text-center text-tinta-3">Nenhum atalho para “{busca}”.</p>}
+            {visiveis.length === 0 && <p className="px-1 py-8 text-center text-tinta-3">Nenhum atalho para "{busca}".</p>}
             <p className="px-1 pt-4 text-xs text-pretty text-tinta-3">
               Teclas de uma letra não valem enquanto você digita. Esc sai do campo de texto.
             </p>
