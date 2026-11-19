@@ -1,12 +1,13 @@
 import { afterAll, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
-import type { ConversaDaPauta, ItemAgendado, ItemCalendario, ItemPauta } from "../agent/calendario";
+import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta } from "../agent/calendario";
 import { conversaDoUsuario } from "../agent/conversas";
 import sharp from "sharp";
 import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
 import { abrirConversa, criarPost, gravarPost, transicionar, type EtapaPost, type Evento } from "../agent/post";
 import { toolsDePost } from "../agent/tools/post";
 import { primeira } from "../db";
+import { proximasDatas, type DataDaEquipe } from "../domain/scheduler/calendar";
 import { q } from "../v2/banco";
 import { camadasIniciais, FORMATOS, type Formato } from "../v2/camadas";
 import { artes } from "../v2/schema";
@@ -101,8 +102,8 @@ describe("GET /api/calendario", () => {
 
     const doPost = { fonte: { tipo: "post" as const, postId }, titulo: "Box entregue no Calhau.", pilar: "PROVA" as const, capa: expect.stringMatching(/^\/media\/[0-9a-f]{32}$/) };
     expect(itens).toEqual([
-      { tipo: "data", dia: "2031-05-01", nome: "Início do Mês do Vidraceiro" },
-      { tipo: "data", dia: "2031-05-18", nome: "Dia do Vidraceiro" },
+      { tipo: "data", dia: "2031-05-01", id: null, mmdd: "05-01", ano: null, nome: "Início do Mês do Vidraceiro", teste: "setor", porque: "campanha do setor dirigida ao público primário" },
+      { tipo: "data", dia: "2031-05-18", id: null, mmdd: "05-18", ano: null, nome: "Dia do Vidraceiro", teste: "setor", porque: "público primário nº 1; data nomeada no §12.4" },
       { tipo: "pauta", id: pauta.id, dia: "2031-05-31", hora: "23:30", titulo: "Bastidor da fábrica", pilar: null, nota: "", conversaId: null },
       { tipo: "agendado", filaId: primeiroMinuto, publicaEm: Date.parse("2031-05-01T00:00:00-03:00"), midia: "IMAGE", status: "pending", erro: null, ...doPost },
       { tipo: "agendado", filaId: ultimoDia, publicaEm: Date.parse("2031-05-31T23:30:00-03:00"), midia: "IMAGE", status: "failed", erro: null, ...doPost },
@@ -156,6 +157,35 @@ describe("pautas", () => {
     expect(await conversaDoUsuario(ana.id, primeira.conversaId)).toMatchObject({ botId: "chefe", titulo: "Obra entregue em Teresina" });
     expect(await pautaPara(ana.cookie)).toMatchObject({ conversaId: primeira.conversaId });
     expect(await pautaPara(bia.cookie)).toMatchObject({ conversaId: null });
+  });
+});
+
+describe("datas comemorativas", () => {
+  // Pega a data da equipe sumindo do calendário ou dos bots, e o apagar que não esconde nos dois.
+  test("a data cadastrada aparece no calendário e no proximas_datas dos bots; apagar tira dos dois e restaurar devolve", async () => {
+    const ana = await sessao("ana@emvidros.com.br");
+    const dia = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo" }).format(Date.now() + 10 * 86_400_000) as Dia;
+    const doDia = async () => (await calendario(ana.cookie, dia, dia)).filter((i) => i.tipo === "data" && i.id !== null);
+    const dosBots = async () => (await proximasDatas(45)).filter((d) => d.ocasiao === "Aniversário de Raposa");
+
+    const criada = await pedir("/api/datas", ana.cookie, "POST", { mmdd: dia.slice(5), nome: "Aniversário de Raposa", teste: "regiao", porque: "Matriz em Raposa-MA" });
+    const { id } = (await criada.json()) as DataDaEquipe;
+    const mudada = await json<DataDaEquipe>(pedir(`/api/datas/${id}`, ana.cookie, "PATCH", { porque: "Matriz da EM Vidros" }));
+    const vistaNaTela = await doDia();
+    const vistaPelosBots = await dosBots();
+    const apagar = await pedir(`/api/datas/${id}`, ana.cookie, "DELETE");
+    const depoisDeApagar = [await doDia(), await dosBots()];
+    const restaurada = await json<DataDaEquipe>(pedir(`/api/datas/${id}/restaurar`, ana.cookie, "POST"));
+    await pedir(`/api/datas/${id}`, ana.cookie, "DELETE");
+
+    expect(criada.status).toBe(201);
+    expect(mudada).toEqual({ id, mmdd: dia.slice(5), ano: null, nome: "Aniversário de Raposa", teste: "regiao", porque: "Matriz da EM Vidros" });
+    expect(vistaNaTela).toEqual([{ ...mudada, tipo: "data", dia }]);
+    expect(vistaPelosBots).toEqual([{ emDias: 10, ocasiao: "Aniversário de Raposa", porque: "Matriz da EM Vidros" }]);
+    expect(apagar.status).toBe(204);
+    expect(depoisDeApagar).toEqual([[], []]);
+    expect(restaurada).toEqual(mudada);
+    expect(await json<{ erro: string }>(pedir("/api/datas", ana.cookie, "POST", { mmdd: "02-29", ano: 2027, nome: "Não existe" }))).toEqual({ erro: "Esse dia não existe no calendário." });
   });
 });
 
@@ -291,6 +321,10 @@ test("as rotas novas pedem sessão", async () => {
     ["DELETE", "/api/pautas/1"],
     ["POST", "/api/pautas/1/restaurar"],
     ["POST", "/api/pautas/1/conversa"],
+    ["POST", "/api/datas"],
+    ["PATCH", "/api/datas/1"],
+    ["DELETE", "/api/datas/1"],
+    ["POST", "/api/datas/1/restaurar"],
     ["GET", "/api/prontos"],
     ["POST", "/api/fila"],
     ["PATCH", "/api/fila/1"],

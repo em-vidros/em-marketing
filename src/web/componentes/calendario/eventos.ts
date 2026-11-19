@@ -2,7 +2,7 @@ import type { StatusAgendado } from "../../../agent/calendario";
 import type { Pilar } from "../../../db";
 import type { CalendarEvent, EventColor } from "../../shadcn/calendar-types";
 import type { Dia } from "./datas";
-import { chaveDe, DURACAO, instanteDe, lugarDe, mesmoLugar, tituloDe, type ItemAgendado, type ItemCalendario, type ItemPauta, type Lugar, type Movel } from "./itens";
+import { chaveDe, DURACAO, ehDaEquipe, instanteDe, lugarDe, mesmoLugar, tituloDe, type ItemAgendado, type ItemCalendario, type ItemDataDaEquipe, type ItemPauta, type Lugar, type Movel } from "./itens";
 
 /** Por onde o detalhe do rascunho começa: a escolha entre ideia e agendamento, ou direto na ideia. */
 export type AberturaDoRascunho = "escolha" | "ideia";
@@ -22,7 +22,8 @@ export type EventoDoCalendario = CalendarEvent & { item: ItemNaTela };
 export type Remocao =
   | { acao: "apagar-pauta"; pauta: ItemPauta }
   | { acao: "cancelar"; agendado: ItemAgendado }
-  | { acao: "dispensar"; agendado: ItemAgendado };
+  | { acao: "dispensar"; agendado: ItemAgendado }
+  | { acao: "apagar-data"; data: ItemDataDaEquipe };
 
 /** O que um arrasto ou um ⌥ com seta vira na agenda. */
 export type Mudanca = { tipo: "nada" } | { tipo: "recusar"; motivo: string } | { tipo: "mover"; item: Movel; lugar: Lugar };
@@ -35,6 +36,7 @@ export const ROTULO_DA_REMOCAO: Record<Remocao["acao"], string> = {
   "apagar-pauta": "Apagar pauta",
   cancelar: "Cancelar agendamento",
   dispensar: "Dispensar falha",
+  "apagar-data": "Apagar data",
 };
 
 interface Regra<I extends ItemNaTela> {
@@ -70,7 +72,7 @@ const REGRAS: { [T in ItemNaTela["tipo"]]: Regra<Extract<ItemNaTela, { tipo: T }
     ideia: false,
   },
   publicado: { movel: () => false, remocao: () => null, cor: (p) => corDoPilar(p.pilar), ideia: false },
-  data: { movel: () => false, remocao: () => null, cor: () => "yellow", ideia: false },
+  data: { movel: () => false, remocao: (data) => (ehDaEquipe(data) ? { acao: "apagar-data", data } : null), cor: () => "yellow", ideia: false },
   rascunho: { movel: () => false, remocao: () => null, cor: () => "gray", ideia: false },
 };
 

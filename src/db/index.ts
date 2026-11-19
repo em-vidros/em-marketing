@@ -149,6 +149,21 @@ export async function criarTabelas(): Promise<void> {
     )`;
     await q`CREATE INDEX IF NOT EXISTS pautas_dia ON pautas(dia)`;
 
+    // Feriados e datas que a equipe cadastra no calendário, somados às fixas de
+    // domain/scheduler/calendar.ts. Os bots leem as duas pelo proximas_datas.
+    await q`CREATE TABLE IF NOT EXISTS datas_comemorativas (
+      id serial PRIMARY KEY,
+      mmdd text NOT NULL,             -- MM-DD
+      ano integer,                    -- NULL = repete todo ano
+      nome text NOT NULL,
+      teste text NOT NULL DEFAULT 'empresa' CHECK (teste IN ('setor','regiao','empresa')),
+      porque text NOT NULL DEFAULT '',
+      criada_por text NOT NULL,       -- id do usuário (better-auth)
+      criada_em double precision NOT NULL,     -- epoch ms
+      atualizada_em double precision NOT NULL,
+      apagada_em double precision     -- epoch ms; NULL = viva
+    )`;
+
     // Uma linha por chamada às APIs de IA (domain/uso.ts). em é epoch ms.
     await q`CREATE TABLE IF NOT EXISTS uso_api (
       id serial PRIMARY KEY,

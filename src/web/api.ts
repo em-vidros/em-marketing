@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import type { ConversaExcluida } from "../agent/conversas";
 import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
 import type { ConfigBot } from "../agent/config";
+import type { DataDaEquipe, NovaData } from "../domain/scheduler/calendar";
 import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
 import type { Edicao } from "../v2/artes";
 import type { Arte, Referencia } from "../v2/schema";
@@ -56,6 +57,10 @@ export const apiCalendario = {
   apagarPauta: (id: number) => semCorpo(`/api/pautas/${id}`, "DELETE"),
   restaurarPauta: (id: number) => comCorpo<ItemPauta>(`/api/pautas/${id}/restaurar`, "POST"),
   conversaDaPauta: (id: number) => comCorpo<ConversaDaPauta>(`/api/pautas/${id}/conversa`, "POST"),
+  criarData: (d: Pick<NovaData, "mmdd" | "ano" | "nome"> & Partial<NovaData>) => comCorpo<DataDaEquipe>("/api/datas", "POST", d),
+  mudarData: (id: number, mudanca: Partial<Omit<NovaData, "mmdd">>) => comCorpo<DataDaEquipe>(`/api/datas/${id}`, "PATCH", mudanca),
+  apagarData: (id: number) => semCorpo(`/api/datas/${id}`, "DELETE"),
+  restaurarData: (id: number) => comCorpo<DataDaEquipe>(`/api/datas/${id}/restaurar`, "POST"),
   prontos: () => pegar<Pronto[]>("/api/prontos"),
   agendar: (pedido: PedidoDeAgendamento) => comCorpo<ItemAgendado>("/api/fila", "POST", pedido),
   reagendar: (filaId: number, publicaEm: number) => comCorpo<Reagendado>(`/api/fila/${filaId}`, "PATCH", { publicaEm }),

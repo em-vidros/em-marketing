@@ -1,13 +1,13 @@
 import { capaDo, emOrdem, fonteDa, headlineDo, isoDoUtc, primeira, utcDe, urlDaMidia, type ColunasDaFonte, type ColunasDoPost, type Fonte, type Pilar, type TipoMidia } from "../db";
 import type { ResumoDaArte } from "../v2/artes";
 import { q, transacao } from "../v2/banco";
-import { datasEntre } from "../domain/scheduler/calendar";
+import { datasEntre, type DataComemorativa, type DataDaEquipe } from "../domain/scheduler/calendar";
 import { abrirConversaDoUsuario, mensagensDaConversa } from "./conversas";
 
 /**
  * O que a tela de calendário mostra (.specs/project/CALENDARIO.md). Cada tipo vem de uma fonte
  * e tem as próprias regras de edição: pauta é desta tabela, agendado é a fila, publicado é
- * publicacoes, data é o calendário editorial (só leitura).
+ * publicacoes, data é o calendário editorial (as fixas do código são só leitura; as da equipe se editam).
  */
 
 /** AAAA-MM-DD em America/Sao_Paulo. */
@@ -57,11 +57,10 @@ export interface ItemPublicado {
   link: string | null;
 }
 
-export interface ItemData {
-  tipo: "data";
-  dia: Dia;
-  nome: string;
-}
+/** Uma data do calendário editorial no dia em que cai. Uma que repete todo ano aparece uma vez por ano. */
+export type ItemData = DataComemorativa & { tipo: "data"; dia: Dia };
+
+export type ItemDataDaEquipe = ItemData & DataDaEquipe;
 
 export type ItemCalendario = ItemPauta | ItemAgendado | ItemPublicado | ItemData;
 
@@ -273,7 +272,7 @@ export async function itensDoCalendario(userId: string, de: Dia, ate: Dia, lerAr
         (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId}) AS conversa_id
       FROM pautas WHERE dia BETWEEN ${de} AND ${ate} AND apagada_em IS NULL ORDER BY dia, hora NULLS FIRST`
   ).map(daPauta);
-  const datas = datasEntre(de, ate).map((d): ItemData => ({ tipo: "data", dia: d.dia as Dia, nome: d.ocasiao }));
+  const datas = (await datasEntre(de, ate)).map(({ dia, data }): ItemData => ({ ...data, tipo: "data", dia: dia as Dia }));
 
   const agendados = await q<LinhaAgendado>`SELECT q.id, q.post_id, q.arte_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, p.pilar, p.arts, p.chosen
     FROM queue q LEFT JOIN posts p ON p.id = q.post_id

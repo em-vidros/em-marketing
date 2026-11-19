@@ -45,6 +45,7 @@ import {
   type Historico,
 } from "../db";
 import { PILARES } from "../domain/art/pipeline";
+import { apagarData, criarData, dataPorId, diaExiste, mudarData, restaurarData, TESTES } from "../domain/scheduler/calendar";
 import { saldo } from "../domain/saldo";
 import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
@@ -212,6 +213,37 @@ const EdicaoPauta = z
       pilar: CamposPauta.pilar.optional(),
       nota: CamposPauta.nota.optional(),
     },
+    { error: "Mande um objeto JSON." },
+  )
+  .refine(algumCampo, "Mande ao menos um campo para mudar.");
+
+const CamposData = {
+  nome: texto("O nome", 120),
+  teste: z.enum(TESTES, { error: "teste inválido. Use setor, regiao ou empresa." }),
+  porque: z.string({ error: "O porquê precisa ser texto." }).trim().max(500, "O porquê passa de 500 caracteres."),
+  ano: z.number({ error: "ano precisa ser um número ou null." }).int("ano precisa ser inteiro.").min(2000, "ano fora do intervalo.").max(2200, "ano fora do intervalo.").nullable(),
+};
+
+const DIA_INEXISTENTE = "Esse dia não existe no calendário.";
+
+/** POST /api/datas. Sem ano, a data repete todo ano. */
+const NovaData = z
+  .object(
+    {
+      mmdd: z.string({ error: "mmdd precisa ser texto MM-DD." }).regex(/^\d{2}-\d{2}$/, "mmdd precisa ser MM-DD."),
+      ...CamposData,
+      ano: CamposData.ano.default(null),
+      teste: CamposData.teste.default("empresa"),
+      porque: CamposData.porque.default(""),
+    },
+    { error: "Mande um objeto JSON." },
+  )
+  .refine((d) => diaExiste(d.mmdd, d.ano), DIA_INEXISTENTE);
+
+/** PATCH /api/datas/:id. Só os campos mandados mudam; o dia não muda. */
+const EdicaoData = z
+  .object(
+    { nome: CamposData.nome.optional(), teste: CamposData.teste.optional(), porque: CamposData.porque.optional(), ano: CamposData.ano.optional() },
     { error: "Mande um objeto JSON." },
   )
   .refine(algumCampo, "Mande ao menos um campo para mudar.");
@@ -401,6 +433,36 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         const id = idDa(req.params.id);
         const conversa = id === null ? null : await conversaDaPauta(u.id, id);
         return conversa ? Response.json(conversa) : naoEncontrado();
+      }),
+    },
+    "/api/datas": {
+      POST: comSessao(async (req, u) => {
+        const corpo = await lerCorpo(req, NovaData);
+        return "resposta" in corpo ? corpo.resposta : Response.json(await criarData(u.id, corpo.dados), { status: 201 });
+      }),
+    },
+    "/api/datas/:id": {
+      PATCH: comSessao<"/api/datas/:id">(async (req) => {
+        const id = idDa(req.params.id);
+        if (id === null) return naoEncontrado();
+        const atual = await dataPorId(id);
+        if (!atual) return naoEncontrado();
+        const corpo = await lerCorpo(req, EdicaoData);
+        if ("resposta" in corpo) return corpo.resposta;
+        if (!diaExiste(atual.mmdd, corpo.dados.ano === undefined ? atual.ano : corpo.dados.ano)) return invalido(DIA_INEXISTENTE);
+        const data = await mudarData(id, corpo.dados);
+        return data ? Response.json(data) : naoEncontrado();
+      }),
+      DELETE: comSessao<"/api/datas/:id">(async (req) => {
+        const id = idDa(req.params.id);
+        return id !== null && (await apagarData(id)) ? new Response(null, { status: 204 }) : naoEncontrado();
+      }),
+    },
+    "/api/datas/:id/restaurar": {
+      POST: comSessao<"/api/datas/:id/restaurar">(async (req) => {
+        const id = idDa(req.params.id);
+        const data = id === null ? null : await restaurarData(id);
+        return data ? Response.json(data) : naoEncontrado();
       }),
     },
     "/api/posts/:id/variacoes/:variante/editar": {
