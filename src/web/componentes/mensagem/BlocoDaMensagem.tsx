@@ -150,7 +150,7 @@ export function BlocoDaMensagem(p: PropsDoBloco) {
                   aria-disabled={motivo ? true : undefined}
                   aria-keyshortcuts={a.atalho ? ariaDe(a.atalho, ehMac) : undefined}
                   onClick={() => !motivo && a.fazer()}
-                  className="pressiona grid size-7 cursor-pointer place-items-center rounded-[9px] text-tinta-3 hover:bg-hover hover:text-tinta aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-tinta-3"
+                  className="pressiona grid size-8 cursor-pointer place-items-center rounded-[9px] text-tinta-3 hover:bg-hover hover:text-tinta aria-disabled:cursor-default aria-disabled:opacity-50 aria-disabled:hover:bg-transparent aria-disabled:hover:text-tinta-3"
                 >
                   {a.icone}
                 </button>
