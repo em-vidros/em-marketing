@@ -1,12 +1,11 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { Livre } from "../../agent/bots";
 import type { NovoBot as Pedido } from "../../agent/config";
 import type { Modelo } from "../../agent/models";
 import { useApi } from "../api";
 import { CORES, FORMAS, recarregarBots, useEquipe, visualCriado, type Forma } from "../bots";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
-import { Cartao, Descricao, estiloCampo, Ferramentas, Linha, Problema, SeletorDeModelo, Setor, TextoLongo } from "../componentes/bot/campos";
+import { Cartao, Descricao, estiloCampo, Linha, Problema, SeletorDeModelo, Setor, TextoLongo } from "../componentes/bot/campos";
 import { enviar } from "../componentes/bot/enviar";
 import { LIMITE, type DetalheBot } from "../componentes/bot/formulario";
 import { navegar } from "../rota";
@@ -44,7 +43,6 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
     cor: CORES[1],
     prompt: "",
     modelo: "openai:gpt-6-luna",
-    tools: [],
   });
   const [problemas, setProblemas] = useState<Partial<Record<Campo, string>>>({});
   const [envio, setEnvio] = useState<{ fase: "parado" | "enviando" } | { fase: "erro"; erro: string }>({ fase: "parado" });
@@ -195,12 +193,9 @@ export default function NovoBot({ abrirMenu }: { abrirMenu: () => void }) {
               placeholder="Você ajuda o comercial da EM Vidros a montar orçamentos. Pergunte medida, espessura e tipo de vidro antes de dar preço."
             />
           </Linha>
-          <Linha rotulo="Ferramentas" ajuda="O que o bot pode fazer além de conversar. Dá para mudar depois.">
-            <Ferramentas marcadas={pedido.tools} aoMudar={(tools: Livre[]) => mudar("tools", tools)} />
-          </Linha>
         </Cartao>
         <p className="-mt-4 px-1 text-[13px] text-pretty text-tinta-3">
-          O brandbook da EM Vidros entra no prompt por padrão. Regras, memória e brandbook ficam na aba Configuração, depois de criar.
+          Não precisa escolher ferramentas: o bot decide o que usar pela descrição e pelo setor. O brandbook da EM Vidros entra no prompt por padrão. Regras, memória e brandbook ficam na aba Configuração, depois de criar.
         </p>
 
         <div className="flex flex-wrap items-center justify-end gap-3">

@@ -1,8 +1,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, type ReactNode } from "react";
-import type { Livre } from "../../../agent/bots";
-import type { Ferramenta } from "../../../agent/config";
+import { Combobox, ComboboxContent, ComboboxEmpty, ComboboxInput, ComboboxItem, ComboboxList, ComboboxTrigger } from "@ui-sdk/react/combobox";
 import type { Modelo } from "../../../agent/models";
-import { useApi, type Carga } from "../../api";
+import type { Carga } from "../../api";
 import { Falha } from "../Falha";
 
 /** Os campos da config de um bot, usados na aba Configuração e na tela de criar bot. */
@@ -238,7 +237,10 @@ export function Confirmar({
   );
 }
 
-/** Texto livre, com os setores que já existem como sugestão: digitar "Comercial" de novo junta no mesmo grupo. */
+/**
+ * O setor num dropdown com os que já existem (Combobox do UI SDK da Vercel). Digitar um nome que não está
+ * na lista cria um setor novo: o valor é o texto, confirmado com Enter ou ao sair do campo.
+ */
 export function Setor({
   id,
   valor,
@@ -257,49 +259,43 @@ export function Setor({
   descrito: string | undefined;
 }) {
   return (
-    <>
-      <input
-        id={id}
-        ref={campoRef}
-        value={valor}
-        onChange={(e) => aoMudar(e.target.value)}
-        list={`${id}-setores`}
-        autoComplete="off"
-        maxLength={60}
-        placeholder="Marketing"
-        aria-invalid={invalido || undefined}
-        aria-describedby={descrito}
-        className={estiloCampo}
-      />
-      <datalist id={`${id}-setores`}>
-        {setores.map((s) => (
-          <option key={s} value={s} />
-        ))}
-      </datalist>
-    </>
-  );
-}
-
-/** As tools que um bot criado pode usar, de GET /api/ferramentas. A lista sai sempre na ordem do catálogo. */
-export function Ferramentas({ marcadas, aoMudar }: { marcadas: readonly string[]; aoMudar: (tools: Livre[]) => void }) {
-  const [carga, tentar] = useApi<Ferramenta[]>("/api/ferramentas");
-  if (carga.estado === "carregando") return <p className="text-tinta-3">Carregando as ferramentas…</p>;
-  if (carga.estado === "erro") return <Falha texto="Não deu para listar as ferramentas." erro={carga.erro} tentar={tentar} />;
-  const catalogo = carga.dados;
-  const alternar = (nome: Livre) => aoMudar(catalogo.map((t) => t.nome).filter((t) => (t === nome ? !marcadas.includes(t) : marcadas.includes(t))));
-  return (
-    <ul className="flex flex-col overflow-hidden rounded-[12px] border border-linha-forte">
-      {catalogo.map((t) => (
-        <li key={t.nome} className="border-t border-linha first:border-t-0">
-          <label className="flex min-h-11 cursor-pointer items-start gap-3 px-3.5 py-2.5 transition-colors duration-150 hover:bg-fundo">
-            <input type="checkbox" checked={marcadas.includes(t.nome)} onChange={() => alternar(t.nome)} className="mt-0.5 size-4 flex-none accent-tinta" />
-            <span className="flex min-w-0 flex-col">
-              <span className="text-[13px] text-pretty">{t.descricao}</span>
-              <span className="font-mono text-xs text-tinta-3">{t.nome}</span>
-            </span>
-          </label>
-        </li>
-      ))}
-    </ul>
+    <Combobox<string> value={valor || null} onValueChange={(v) => aoMudar(v ?? "")} allowCustomValue autoHighlight>
+      <div className="relative">
+        <ComboboxInput
+          id={id}
+          ref={campoRef}
+          maxLength={40}
+          placeholder="Escolha um setor ou digite um novo"
+          aria-invalid={invalido || undefined}
+          aria-describedby={descrito}
+          className={`${estiloCampo} pr-10`}
+        />
+        <ComboboxTrigger
+          aria-label="Ver os setores"
+          className="absolute top-1/2 right-1.5 grid size-8 -translate-y-1/2 cursor-pointer place-items-center rounded-full text-tinta-2 hover:bg-hover hover:text-tinta"
+        >
+          <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M3 4.5 6 7.5l3-3" />
+          </svg>
+        </ComboboxTrigger>
+      </div>
+      <ComboboxContent
+        sideOffset={6}
+        className="setor-popup z-50 max-h-[min(280px,var(--available-height))] w-(--anchor-width) overflow-y-auto overscroll-contain rounded-[12px] border border-linha-forte bg-superficie p-1 shadow-[0_8px_24px_rgb(15_13_10/0.10)]"
+      >
+        <ComboboxList className="flex flex-col">
+          {setores.map((s) => (
+            <ComboboxItem
+              key={s}
+              value={s}
+              className="flex min-h-9 cursor-pointer outline-none items-center rounded-[8px] px-2.5 text-sm text-tinta-2 data-highlighted:bg-hover data-highlighted:text-tinta data-selected:font-medium data-selected:text-tinta"
+            >
+              {s}
+            </ComboboxItem>
+          ))}
+        </ComboboxList>
+        <ComboboxEmpty className="px-2.5 py-2 text-[13px] empty:hidden text-tinta-3">Setor novo. Enter para usar este nome.</ComboboxEmpty>
+      </ComboboxContent>
+    </Combobox>
   );
 }

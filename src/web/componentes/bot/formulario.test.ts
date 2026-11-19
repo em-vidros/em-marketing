@@ -15,7 +15,7 @@ const detalhe: DetalheBot = {
   apagadoEm: null,
   sugestoes: [],
   versaoId: null,
-  padrao: { nome: true, descricao: true, setor: true, modelo: true, prompt: true, regras: true, marca: true, tools: true },
+  padrao: { nome: true, descricao: true, setor: true, modelo: true, prompt: true, regras: true, marca: true },
   contexto: "Regras da marca",
   regrasPadrao: "Chame montar_brief primeiro.",
   memoria: { texto: "", atualizadaEm: null, autor: null },

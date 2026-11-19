@@ -2,7 +2,7 @@ import { readdirSync } from "node:fs";
 import { safeValidateUIMessages } from "ai";
 import type { BunRequest } from "bun";
 import { z } from "zod";
-import { ehBotFixo, FORMAS, LIVRES, type BotId, type Livre } from "../agent/bots";
+import { ehBotFixo, FORMAS, type BotId } from "../agent/bots";
 import {
   apagarPauta,
   agendadoPorId,
@@ -20,7 +20,6 @@ import {
   apagarBot,
   criarBot,
   detalheDoBot,
-  ferramentasLivres,
   gravarMemoria,
   gravarVersao,
   instrucoesDe,
@@ -144,11 +143,6 @@ const Modelo = z.string({ error: "O modelo precisa ser texto." }).transform(asyn
   return z.NEVER;
 });
 
-/** Na ordem do catálogo e sem repetição, para a mesma escolha não virar uma versão nova. */
-const Ferramentas = z
-  .array(z.enum(LIVRES as [Livre, ...Livre[]], { error: (i) => `Ferramenta desconhecida: ${String(i.input)}.` }), { error: "tools precisa ser uma lista." })
-  .transform((ts) => LIVRES.filter((t) => ts.includes(t)));
-
 const CamposBot = {
   nome: texto("O nome", 40),
   descricao: texto("A descrição", 300),
@@ -157,7 +151,6 @@ const CamposBot = {
   prompt: texto("O prompt", 20_000),
   regras: z.string({ error: "As regras precisam ser texto." }).trim().max(20_000, "As regras passam de 20.000 caracteres."),
   marca: z.boolean({ error: "marca precisa ser true ou false." }),
-  tools: Ferramentas,
 };
 
 /** PUT /api/bots/:id/config. Só os campos mandados mudam. */
@@ -171,7 +164,6 @@ const EdicaoBot = z
       prompt: CamposBot.prompt.optional(),
       regras: CamposBot.regras.optional(),
       marca: CamposBot.marca.optional(),
-      tools: CamposBot.tools.optional(),
     },
     { error: "Mande um objeto JSON." },
   )
@@ -187,7 +179,6 @@ const NovoBot = z.object(
     cor: z.string({ error: "A cor precisa ser texto." }).regex(/^#[0-9a-fA-F]{6}$/, "A cor precisa ser hexadecimal, como #1AAE9F."),
     prompt: CamposBot.prompt,
     modelo: CamposBot.modelo,
-    tools: CamposBot.tools.default([]),
   },
   { error: "Mande um objeto JSON." },
 );
@@ -397,7 +388,6 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     "/api/auth/*": (req: Request) => auth.handler(req),
 
     "/api/modelos": { GET: comSessao(async () => Response.json(await modelos())) },
-    "/api/ferramentas": { GET: comSessao(() => Response.json(ferramentasLivres())) },
     "/api/bots": {
       GET: comSessao(async () => Response.json(await listarBots())),
       POST: comSessao(async (req, u) => {
@@ -422,7 +412,6 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
       PUT: doBot<"/api/bots/:id/config">(async (req, u, botId) => {
         const corpo = await lerCorpo(req, EdicaoBot);
         if ("resposta" in corpo) return corpo.resposta;
-        if (corpo.dados.tools && ehBotFixo(botId)) return invalido("As ferramentas dos bots que vêm com o sistema são definidas no código.");
         return Response.json(await gravarVersao(botId, corpo.dados, u.email));
       }),
     },

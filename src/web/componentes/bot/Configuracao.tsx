@@ -11,7 +11,7 @@ import { Falha } from "../Falha";
 import { fecharAviso, mostrarAviso } from "../menu/Avisos";
 import { pilhaDeDesfazer } from "../menu/desfazer";
 import { dataCurta } from "../peca";
-import { Cartao, Confirmar, Descricao, estiloCampo, Ferramentas, Linha, Problema, SeletorDeModelo, Setor, TextoLongo } from "./campos";
+import { Cartao, Confirmar, Descricao, estiloCampo, Linha, Problema, SeletorDeModelo, Setor, TextoLongo } from "./campos";
 import { enviar } from "./enviar";
 import {
   CAMPOS,
@@ -534,13 +534,8 @@ export function Configuracao({
             </details>
           </Linha>
         )}
-        <Linha
-          rotulo="Ferramentas"
-          ajuda={criado ? "O que o bot pode fazer além de conversar. Lembrar, que grava na memória, todo bot tem." : "As ferramentas dos bots que vêm com o sistema são definidas no código."}
-        >
-          {criado ? (
-            <Ferramentas marcadas={r.tools} aoMudar={(tools) => editar({ tipo: "editar", campo: "tools", valor: tools })} />
-          ) : (
+        {!criado && (
+          <Linha rotulo="Ferramentas" ajuda="As ferramentas dos bots que vêm com o sistema são definidas no código.">
             <ul className="flex flex-wrap gap-1.5">
               {[...f.salvo.tools, "lembrar"].map((t) => (
                 <li key={t} className="rounded-[6px] bg-ativo px-1.5 py-0.5 font-mono text-xs text-tinta-2">
@@ -548,8 +543,8 @@ export function Configuracao({
                 </li>
               ))}
             </ul>
-          )}
-        </Linha>
+          </Linha>
+        )}
       </Cartao>
       <p className="-mt-5 px-1 text-[13px] text-pretty text-tinta-3">
         As mudanças valem a partir da próxima mensagem, inclusive nas conversas que já existem. Não precisa reiniciar nada.

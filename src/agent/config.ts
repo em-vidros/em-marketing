@@ -1,6 +1,6 @@
 import { primeira } from "../db";
 import { q, transacao } from "../v2/banco";
-import { BOTS, ehBotFixo, FERRAMENTAS, LIVRES, MARCA, SETOR_PADRAO, type BotFixo, type BotId, type Forma, type Livre } from "./bots";
+import { BOTS, ehBotFixo, LIVRES, MARCA, SETOR_PADRAO, type BotFixo, type BotId, type Forma } from "./bots";
 import { contextoDeData, diaDe } from "./hoje";
 import { ehModelId, type ModelId } from "./models";
 import type { ToolName } from "./tools";
@@ -24,8 +24,6 @@ export interface Editavel {
   regras: string;
   /** Liga o contexto de marca (brandbook e tokens) depois das regras. */
   marca: boolean;
-  /** Só um bot criado escolhe as dele; os fixos usam as do código. */
-  tools: readonly ToolName[];
 }
 
 export type CampoEditavel = keyof Editavel;
@@ -48,6 +46,8 @@ export interface Criado {
 /** GET /api/bots. A config que vale agora. `padrao[campo]` é true quando o campo está igual ao padrão. */
 export interface ConfigBot extends Editavel {
   id: BotId;
+  /** Não se edita. O fixo usa as do código; o criado tem todas as livres e escolhe pelo papel e pelo setor. */
+  tools: readonly ToolName[];
   criado: Criado | null;
   apagadoEm: number | null;
   sugestoes: readonly string[];
@@ -72,14 +72,6 @@ export interface DetalheBot extends ConfigBot {
   memoria: Memoria;
 }
 
-/** GET /api/ferramentas: as tools que um bot criado pode escolher, com a descrição para a tela. */
-export interface Ferramenta {
-  nome: Livre;
-  descricao: string;
-}
-
-export const ferramentasLivres = (): Ferramenta[] => LIVRES.map((nome) => ({ nome, descricao: FERRAMENTAS[nome] }));
-
 /** POST /api/bots */
 export interface NovoBot {
   nome: string;
@@ -89,24 +81,23 @@ export interface NovoBot {
   cor: string;
   prompt: string;
   modelo: ModelId;
-  tools: readonly Livre[];
 }
 
 export const LIMITE_DA_MEMORIA = 20_000;
 
-const CAMPOS = ["nome", "descricao", "setor", "modelo", "prompt", "regras", "marca", "tools"] as const satisfies readonly CampoEditavel[];
+const CAMPOS = ["nome", "descricao", "setor", "modelo", "prompt", "regras", "marca"] as const satisfies readonly CampoEditavel[];
 
 /** Os campos que NULL no banco quer dizer "igual ao padrão". */
-const OPCIONAIS = ["setor", "regras", "marca", "tools"] as const satisfies readonly CampoEditavel[];
+const OPCIONAIS = ["setor", "regras", "marca"] as const satisfies readonly CampoEditavel[];
 
 const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** O fundo da primeira versão de um bot criado. Ela grava todos os campos; daqui só sai o modelo, quando o gravado saiu de MODELOS. */
-const FUNDO_DO_CRIADO: Editavel = { nome: "", descricao: "", setor: SETOR_PADRAO, modelo: "openai:gpt-6-luna", prompt: "", regras: "", marca: true, tools: [] };
+const FUNDO_DO_CRIADO: Editavel = { nome: "", descricao: "", setor: SETOR_PADRAO, modelo: "openai:gpt-6-luna", prompt: "", regras: "", marca: true };
 
 const padraoDoFixo = (id: BotFixo): Editavel => {
-  const { nome, descricao, modelo, papel, regras, tools } = BOTS[id];
-  return { nome, descricao, setor: SETOR_PADRAO, modelo, prompt: papel, regras, marca: true, tools };
+  const { nome, descricao, modelo, papel, regras } = BOTS[id];
+  return { nome, descricao, setor: SETOR_PADRAO, modelo, prompt: papel, regras, marca: true };
 };
 
 /**
@@ -148,7 +139,6 @@ const daLinha = (r: LinhaVersao, padrao: Editavel): VersaoBot => ({
   prompt: r.prompt,
   regras: r.regras ?? padrao.regras,
   marca: r.marca ?? padrao.marca,
-  tools: r.tools === null ? padrao.tools : (JSON.parse(r.tools) as ToolName[]),
   criadaEm: r.criada_em,
   autor: r.autor,
 });
@@ -189,13 +179,12 @@ async function lerBot(botId: BotId): Promise<{ base: Base; config: ConfigBot }> 
   const versao = r && daLinha(r, base.padrao);
   const atual: Editavel = versao ?? base.padrao;
   const editavel = Object.fromEntries(CAMPOS.map((c) => [c, atual[c]])) as unknown as Editavel;
-  // Os fixos não escolhem tools: valem sempre as do código, mesmo que uma versão antiga diga outra coisa.
-  if (!base.criado) editavel.tools = base.padrao.tools;
   return {
     base,
     config: {
       id: botId,
       ...editavel,
+      tools: ehBotFixo(botId) ? BOTS[botId].tools : LIVRES,
       criado: base.criado,
       apagadoEm: base.apagadoEm,
       sugestoes: base.sugestoes,
@@ -238,10 +227,15 @@ const DELEGADA =
  * O system prompt inteiro de um turno, na ordem em que o modelo lê: prompt, regras, marca,
  * data, aviso de tarefa delegada, memória e estado do post. GET /api/bots/:id/prompt mostra o mesmo texto.
  */
+/** O bot criado tem todas as ferramentas livres; esta linha é o que o faz usar só as do papel dele. */
+const papelDoCriado = (bot: DetalheBot) =>
+  `Você é ${bot.nome}, do setor ${bot.setor} da EM Vidros. ${bot.descricao} Você tem várias ferramentas: use só as que servem a esse papel e a esse setor, e ignore as outras. Se o pedido for de outra área, diga qual bot da equipe cuida disso.`;
+
 export function instrucoesDe(bot: DetalheBot, turno: { delegada: boolean; estadoDoPost: string; agora?: number }): string {
   const memoria = bot.memoria.texto.trim();
   return [
     bot.prompt,
+    bot.criado ? papelDoCriado(bot) : "",
     bot.regras.trim(),
     bot.marca ? bot.contexto : "",
     contextoDeData(turno.agora),
@@ -271,12 +265,11 @@ export async function versaoDoBot(botId: BotId, versaoId: number): Promise<Versa
 export async function gravarVersao(botId: BotId, mudanca: Partial<Editavel>, autor: string): Promise<DetalheBot> {
   const { base, config: atual } = await lerBot(botId);
   const nova: Editavel = { ...atual, ...mudanca };
-  if (!base.criado) nova.tools = base.padrao.tools;
   if (CAMPOS.every((c) => igual(nova[c], atual[c]))) return detalheDoBot(botId);
-  const [setor, regras, marca, tools] = OPCIONAIS.map((c) => (igual(nova[c], base.padrao[c]) ? null : nova[c]));
+  const [setor, regras, marca] = OPCIONAIS.map((c) => (igual(nova[c], base.padrao[c]) ? null : nova[c]));
   await q`INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, setor, regras, marca, tools, criada_em, autor)
     VALUES (${botId}, ${nova.nome}, ${nova.descricao}, ${nova.modelo}, ${nova.prompt}, ${setor}, ${regras}, ${marca},
-      ${tools === null ? null : JSON.stringify(tools)}, ${Date.now()}, ${autor})`;
+      ${null}, ${Date.now()}, ${autor})`;
   return detalheDoBot(botId);
 }
 
@@ -293,7 +286,7 @@ export async function criarBot(novo: NovoBot, autor: string): Promise<DetalheBot
     await q`INSERT INTO bots (id, forma, cor, criado_por, criado_em) VALUES (${id}, ${novo.forma}, ${novo.cor}, ${autor}, ${agora})`;
     await q`INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, setor, regras, marca, tools, criada_em, autor)
       VALUES (${id}, ${novo.nome}, ${novo.descricao}, ${novo.modelo}, ${novo.prompt}, ${novo.setor}, ${""}, ${true},
-        ${JSON.stringify(novo.tools)}, ${agora}, ${autor})`;
+        ${null}, ${agora}, ${autor})`;
   });
   return detalheDoBot(id);
 }

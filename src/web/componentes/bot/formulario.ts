@@ -2,7 +2,7 @@ import type { CampoEditavel, DetalheBot, Editavel, Memoria, VersaoBot } from "..
 
 export type { CampoEditavel, DetalheBot, Editavel, Memoria, VersaoBot };
 
-export const CAMPOS = ["nome", "descricao", "setor", "modelo", "prompt", "regras", "marca", "tools"] as const satisfies readonly CampoEditavel[];
+export const CAMPOS = ["nome", "descricao", "setor", "modelo", "prompt", "regras", "marca"] as const satisfies readonly CampoEditavel[];
 
 /** Os limites das rotas de /api/bots, repetidos aqui para avisar antes de mandar. */
 export const LIMITE = { nome: 40, descricao: 300, setor: 40, prompt: 20_000, regras: 20_000, memoria: 20_000 } as const;
@@ -38,7 +38,6 @@ export type Acao =
 
 const editavel = (e: Editavel): Editavel => Object.fromEntries(CAMPOS.map((c) => [c, e[c]])) as unknown as Editavel;
 
-/** As tools são uma lista; comparar pelo JSON vale para todos os campos. */
 const igual = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
 /** Os campos que mudaram, para o PUT mandar só eles. Vazio quando nada mudou. */
@@ -95,7 +94,6 @@ const NOMES: Record<CampoEditavel, string> = {
   prompt: "o prompt",
   regras: "as regras",
   marca: "o brandbook",
-  tools: "as ferramentas",
 };
 
 /** O que mudou de uma versão para a anterior, em português: "Mudou o prompt e o modelo". */

@@ -25,6 +25,8 @@
     "@leafer-in/text-editor": "2.3.4",
     "@leafer-in/viewport": "2.3.4",
     "@resvg/resvg-js": "2.6.2",
+    "@ui-sdk/core": "0.1.0-beta.13",
+    "@ui-sdk/react": "0.1.0-beta.13",
     "@vercel/blob": "2",
     "ai": "7.0.138",
     "better-auth": "1.7.7",
