@@ -254,22 +254,24 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
             {gravacao.tipo === "salvo" ? "Salvo" : "Salvando…"}
           </span>
         </div>
-        <button
-          type="button"
-          onClick={gerarNovaCena}
-          disabled={cena.tipo === "gerando"}
-          className="pressiona cursor-pointer rounded-full bg-linha px-4 py-2 text-sm font-medium hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
-        >
-          {cena.tipo === "gerando" ? "Gerando cena…" : "Nova cena"}
-        </button>
-        <a
-          href={apiArtes.png(arte)}
-          download={`arte-${arte.id.slice(0, 8)}.png`}
-          onClick={baixar}
-          className="pressiona rounded-full bg-tinta px-4 py-2 text-sm font-medium text-sobre-tinta"
-        >
-          Baixar PNG
-        </a>
+        <div className="flex flex-none items-center gap-2.5">
+          <button
+            type="button"
+            onClick={gerarNovaCena}
+            disabled={cena.tipo === "gerando"}
+            className="pressiona cursor-pointer rounded-full bg-linha px-4 py-2 text-sm font-medium hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
+          >
+            {cena.tipo === "gerando" ? "Gerando cena…" : "Nova cena"}
+          </button>
+          <a
+            href={apiArtes.png(arte)}
+            download={`arte-${arte.id.slice(0, 8)}.png`}
+            onClick={baixar}
+            className="pressiona rounded-full bg-tinta px-4 py-2 text-sm font-medium text-sobre-tinta"
+          >
+            Baixar PNG
+          </a>
+        </div>
       </header>
       <div role="alert" className="empty:hidden flex flex-col gap-2 px-4 pt-3 sm:px-6">
         {gravacao.tipo === "erro" && <Falha texto="A última edição não foi salva." erro={gravacao.mensagem} tentar={() => void gravarAgora()} />}
