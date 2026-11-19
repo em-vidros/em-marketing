@@ -21,6 +21,13 @@ test("a logo oficial entra no canto pedido e não suja o resto da arte", async (
   expect(await agitacao(arte, 64, 1350 - 64 - 158)).toBeLessThan(2);
 });
 
+test("fundo teal médio recebe o selo teal escuro com a logo toda branca", async () => {
+  const arte = await aplicarLogo(await fundo("#3FA9A0"), "feed");
+  const px = await luz(arte, 1080 - 64 - 190, 1350 - 64 - 158, 190, 158);
+  expect(px.filter((v) => v > 230).length).toBeGreaterThan(1500);
+  expect(Math.min(...px)).toBeLessThan(90);
+});
+
 test("fundo escuro recebe a versão branca: o texto VIDROS fica claro", async () => {
   const arte = await aplicarLogo(await fundo("#1F4A4F"), "feed");
   expect(Math.max(...(await luz(arte, 1080 - 64 - 190, 1350 - 64 - 158, 190, 158)))).toBeGreaterThan(220);
