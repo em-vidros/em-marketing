@@ -35,7 +35,6 @@ export type Saldo =
 const CHAVE = "saldo_openai";
 const LIMITE = 50;
 const CACHE_MS = 10 * 60_000;
-const cache = new Map<number, { em: number; gasto: number }>();
 
 /** Da gravação mais nova para a mais velha. Lê também os formatos antigos (um saldo só, ou saldos sem tipo). */
 async function lancamentos(): Promise<Lancamento[]> {
@@ -92,33 +91,65 @@ export function contaDe(lista: readonly Lancamento[]): Comum | null {
 }
 
 interface PaginaDeCustos {
-  data?: { results?: { amount?: { value?: number | string } }[] }[];
+  data?: { start_time?: number; results?: { amount?: { value?: number | string } }[] }[];
   has_more?: boolean;
   next_page?: string | null;
   error?: { message?: string };
 }
 
-/** Soma em dólar os custos da organização desde `desde`, página por página. */
-async function gastoDesde(desde: number, chave: string): Promise<number> {
-  const guardado = cache.get(desde);
-  if (guardado && Date.now() - guardado.em < CACHE_MS) return guardado.gasto;
-  let gasto = 0;
+/** O custo de cada dia, em dólar, desde `inicio`. Guardado no banco para todas as funções da Vercel lerem o mesmo. */
+interface Custos {
+  inicio: number;
+  em: number;
+  dias: { t: number; v: number }[];
+}
+
+const CHAVE_DOS_CUSTOS = "custos_openai";
+
+async function custosGuardados(): Promise<Custos | null> {
+  const linha = await primeira(q<{ valor: string }>`SELECT valor FROM configuracoes WHERE chave = ${CHAVE_DOS_CUSTOS}`);
+  return linha ? (JSON.parse(linha.valor) as Custos) : null;
+}
+
+async function buscarCustos(inicio: number, chave: string): Promise<Custos> {
+  const dias: Custos["dias"] = [];
   let pagina: string | null | undefined;
   do {
     const url = new URL("https://api.openai.com/v1/organization/costs");
-    url.searchParams.set("start_time", String(Math.floor(desde / 1000)));
+    url.searchParams.set("start_time", String(Math.floor(inicio / 1000)));
     url.searchParams.set("bucket_width", "1d");
     url.searchParams.set("limit", "180");
     if (pagina) url.searchParams.set("page", pagina);
     const res = await fetch(url, { headers: { authorization: `Bearer ${chave}` }, signal: AbortSignal.timeout(8000) });
     const corpo = (await res.json().catch(() => ({}))) as PaginaDeCustos;
     if (!res.ok) throw new Error(corpo.error?.message ?? `A Costs API respondeu ${res.status}.`);
-    for (const balde of corpo.data ?? []) for (const r of balde.results ?? []) gasto += Number(r.amount?.value ?? 0);
+    for (const balde of corpo.data ?? [])
+      dias.push({ t: (balde.start_time ?? 0) * 1000, v: (balde.results ?? []).reduce((soma, r) => soma + Number(r.amount?.value ?? 0), 0) });
     pagina = corpo.has_more ? corpo.next_page : null;
   } while (pagina);
-  cache.set(desde, { em: Date.now(), gasto });
-  return gasto;
+  const custos = { inicio, em: Date.now(), dias };
+  await q`INSERT INTO configuracoes (chave, valor) VALUES (${CHAVE_DOS_CUSTOS}, ${JSON.stringify(custos)}) ON CONFLICT (chave) DO UPDATE SET valor = excluded.valor`;
+  return custos;
 }
+
+/**
+ * Os custos diários desde `inicio`: do banco se têm menos de 10 minutos e cobrem o período, senão uma
+ * chamada só à Costs API, que limita a 30 pedidos por minuto. Se ela recusar, vale o último guardado.
+ */
+async function custosDesde(inicio: number, chave: string): Promise<Custos> {
+  const guardados = await custosGuardados();
+  const cobre = guardados && guardados.inicio <= inicio;
+  if (cobre && Date.now() - guardados.em < CACHE_MS) return guardados;
+  try {
+    return await buscarCustos(cobre ? guardados.inicio : inicio, chave);
+  } catch (e) {
+    if (cobre) return guardados;
+    throw e;
+  }
+}
+
+/** A soma dos dias que começam a partir de `desde`. Um saldo corrigido no meio do dia conta aquele dia inteiro. */
+const somaDesde = (c: Custos, desde: number) => c.dias.filter((d) => d.t + 86_400_000 > desde).reduce((s, d) => s + d.v, 0);
 
 export async function saldo(chave = process.env.OPENAI_ADMIN_KEY): Promise<Saldo> {
   const conta = contaDe(await lancamentos());
@@ -126,8 +157,9 @@ export async function saldo(chave = process.env.OPENAI_ADMIN_KEY): Promise<Saldo
   if (!chave) return { estado: "sem-chave", ...conta };
   try {
     const comeco = inicioDoMes();
-    const [gasto, gastoDoMes] = await Promise.all([gastoDesde(conta.desde, chave), gastoDesde(comeco, chave)]);
-    return { estado: "ok", ...conta, gasto, disponivel: Math.max(0, conta.creditado - gasto), gastoDoMes, inicioDoMes: comeco };
+    const custos = await custosDesde(Math.min(conta.desde, comeco), chave);
+    const gasto = somaDesde(custos, conta.desde);
+    return { estado: "ok", ...conta, gasto, disponivel: Math.max(0, conta.creditado - gasto), gastoDoMes: somaDesde(custos, comeco), inicioDoMes: comeco };
   } catch (e) {
     return { estado: "erro", ...conta, erro: e instanceof Error ? e.message : String(e) };
   }
