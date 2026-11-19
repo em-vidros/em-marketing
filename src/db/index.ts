@@ -43,6 +43,9 @@ export async function criarTabelas(): Promise<void> {
       apagada_em double precision     -- epoch ms; NULL = viva. O boot remove de vez depois de 30 dias.
     )`;
     await q`CREATE INDEX IF NOT EXISTS conversas_usuario ON conversas(user_id, updated_at)`;
+    // A pauta de onde a conversa nasceu (agent/calendario.ts). A pauta é da equipe; cada pessoa tem a sua conversa para ela.
+    await q`ALTER TABLE conversas ADD COLUMN IF NOT EXISTS pauta_id integer`;
+    await q`CREATE INDEX IF NOT EXISTS conversas_pauta ON conversas(pauta_id, user_id)`;
 
     // Uma delegação do Chefe a um especialista (agent/tarefas.ts). conversa_id é a
     // conversa do Chefe; mensagens é o UIMessage[] do especialista em JSON.

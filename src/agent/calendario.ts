@@ -111,11 +111,17 @@ export interface NovaPauta {
   nota: string;
 }
 
-/** Só a pauta viva. A apagada some de todas as rotas até ser restaurada. conversa_id só sai para o dono da conversa, e só se ela não foi apagada. */
+/**
+ * Só a pauta viva. A apagada some de todas as rotas até ser restaurada. conversa_id é a conversa desta
+ * pessoa para a pauta (conversas.pauta_id); pautas.conversa_id fica só para as ligações de antes dessa coluna.
+ */
 export async function pautaPorId(userId: string, id: number): Promise<ItemPauta | null> {
   const r = await primeira(
     q<LinhaPauta>`SELECT id, dia, hora, titulo, pilar, nota,
-        (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId}) AS conversa_id
+        COALESCE(
+          (SELECT c.id FROM conversas c WHERE c.pauta_id = pautas.id AND c.user_id = ${userId} ORDER BY c.updated_at DESC LIMIT 1),
+          (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId})
+        ) AS conversa_id
       FROM pautas WHERE id = ${id} AND apagada_em IS NULL`,
   );
   return r ? daPauta(r) : null;
@@ -176,8 +182,8 @@ export interface ConversaDaPauta {
 
 /**
  * A conversa do usuário com o Chefe para esta pauta. Repetir devolve a mesma enquanto ela estiver viva.
- * A pauta é da equipe e a conversa é de uma pessoa: se a ligada é de outro usuário ou foi apagada,
- * abre uma nova e a pauta passa a apontar para ela.
+ * A pauta é da equipe e a conversa é de uma pessoa: cada pessoa que abre ganha a sua, e abrir de novo
+ * volta para ela, mesmo depois de um colega abrir a dele.
  */
 export function conversaDaPauta(userId: string, id: number): Promise<ConversaDaPauta | null> {
   return transacao(async () => {
@@ -187,7 +193,7 @@ export function conversaDaPauta(userId: string, id: number): Promise<ConversaDaP
     if (!conversaId) {
       conversaId = crypto.randomUUID();
       await abrirConversaDoUsuario(userId, conversaId, "chefe", pauta.titulo.slice(0, 80));
-      await q`UPDATE pautas SET conversa_id = ${conversaId} WHERE id = ${id}`;
+      await q`UPDATE conversas SET pauta_id = ${id} WHERE id = ${conversaId}`;
     }
     return { conversaId, pedido: pedidoDaPauta(pauta), vazia: (await mensagensDaConversa(conversaId)).length === 0 };
   });
@@ -269,7 +275,10 @@ export async function itensDoCalendario(userId: string, de: Dia, ate: Dia, lerAr
   const fim = utcDe(inicioDoDiaSP(ate) + DIA_MS);
   const pautas = (
     await q<LinhaPauta>`SELECT id, dia, hora, titulo, pilar, nota,
-        (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId}) AS conversa_id
+        COALESCE(
+          (SELECT c.id FROM conversas c WHERE c.pauta_id = pautas.id AND c.user_id = ${userId} ORDER BY c.updated_at DESC LIMIT 1),
+          (SELECT c.id FROM conversas c WHERE c.id = pautas.conversa_id AND c.user_id = ${userId})
+        ) AS conversa_id
       FROM pautas WHERE dia BETWEEN ${de} AND ${ate} AND apagada_em IS NULL ORDER BY dia, hora NULLS FIRST`
   ).map(daPauta);
   const datas = (await datasEntre(de, ate)).map(({ dia, data }): ItemData => ({ ...data, tipo: "data", dia: dia as Dia }));

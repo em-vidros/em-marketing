@@ -136,7 +136,7 @@ describe("pautas", () => {
     expect(await naJanela()).toEqual([mudada]);
   });
 
-  test("Criar com o Chefe devolve a mesma conversa ao repetir, e só o dono a vê ligada", async () => {
+  test("Criar com o Chefe devolve a mesma conversa ao repetir, cada pessoa tem a sua e só o dono a vê ligada", async () => {
     const ana = await sessao("ana@emvidros.com.br");
     const bia = await sessao("bia@emvidros.com.br");
     const { id } = await json<ItemPauta>(
@@ -157,6 +157,12 @@ describe("pautas", () => {
     expect(await conversaDoUsuario(ana.id, primeira.conversaId)).toMatchObject({ botId: "chefe", titulo: "Obra entregue em Teresina" });
     expect(await pautaPara(ana.cookie)).toMatchObject({ conversaId: primeira.conversaId });
     expect(await pautaPara(bia.cookie)).toMatchObject({ conversaId: null });
+
+    // A Bia abre a mesma pauta: ganha a conversa dela, e a da Ana continua ligada para a Ana.
+    const daBia = await json<ConversaDaPauta>(pedir(`/api/pautas/${id}/conversa`, bia.cookie, "POST"));
+    expect(daBia.conversaId).not.toBe(primeira.conversaId);
+    expect(await json<ConversaDaPauta>(pedir(`/api/pautas/${id}/conversa`, ana.cookie, "POST"))).toEqual(primeira);
+    expect(await json<ConversaDaPauta>(pedir(`/api/pautas/${id}/conversa`, bia.cookie, "POST"))).toEqual(daBia);
   });
 });
 
