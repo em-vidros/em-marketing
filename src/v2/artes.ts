@@ -4,7 +4,7 @@ import type { Banco } from "./banco";
 import { camadasIniciais, type Ajustes, type Camada, type Formato } from "./camadas";
 import type { Ia } from "./ia";
 import { escolherReferencias, listarReferencias } from "./referencias";
-import { areasDosElementos, camadasDosElementos } from "./separar";
+import { areasDosElementos, camadasDosElementos, remendar } from "./separar";
 import { artes, type Arte } from "./schema";
 
 export interface Estudio {
@@ -144,7 +144,7 @@ export async function separarElementos({ banco, ia, arquivos }: Estudio, id: str
   if (!original) throw new Error("A imagem desta arte sumiu do armazenamento.");
   const elementos = await ia.lerElementos(original, atual.formato);
   const areas = areasDosElementos(elementos, atual.formato);
-  const cena = areas.length ? await arquivos.salvar(await ia.apagarAreas(original, atual.formato, areas), "jpg") : atual.cena;
+  const cena = areas.length ? await arquivos.salvar(await remendar(original, await ia.apagarAreas(original, atual.formato, areas), areas, atual.formato), "jpg") : atual.cena;
   const camadas = camadasDosElementos(elementos, atual.formato);
   const [arte] = await banco
     .update(artes)

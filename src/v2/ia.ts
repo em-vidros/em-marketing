@@ -14,7 +14,7 @@ export interface Ia {
   gerarCena(prompt: string, formato: Formato): Promise<Uint8Array>;
   /** Acha os textos e o logo de uma imagem pronta, já no tamanho final do formato. */
   lerElementos(imagem: Uint8Array, formato: Formato): Promise<Elementos>;
-  /** Apaga as áreas e completa com o fundo em volta. Devolve a imagem no tamanho final, em JPEG. */
+  /** Apaga as áreas e completa com o fundo em volta. Devolve a imagem inteira redesenhada, no tamanho do modelo. */
   apagarAreas(imagem: Uint8Array, formato: Formato, areas: Area[]): Promise<Uint8Array>;
 }
 
@@ -127,29 +127,32 @@ export function iaDaOpenAI(chave: () => Promise<string | undefined>): Ia {
     },
 
     async apagarAreas(imagem, formato, areas) {
-      const { largura, altura } = FORMATOS[formato];
       const [w, h] = TAMANHO_DA_GERACAO[formato].split("x").map(Number) as [number, number];
-      const escala = w / largura;
-      const png = await sharp(imagem).resize(w, h, { fit: "fill" }).png().toBuffer();
+      const { largura, altura } = FORMATOS[formato];
+      const [ex, ey] = [w / largura, h / altura];
       // Na máscara, o transparente é o que o modelo refaz; o resto fica opaco.
-      const buracos = areas
-        .map((a) => `<rect x="${Math.floor(a.x * escala)}" y="${Math.floor(a.y * (h / altura))}" width="${Math.ceil(a.largura * escala)}" height="${Math.ceil(a.altura * (h / altura))}" fill="black"/>`)
-        .join("");
-      const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}"><defs><mask id="m"><rect width="${w}" height="${h}" fill="white"/>${buracos}</mask></defs><rect width="${w}" height="${h}" fill="white" mask="url(#m)"/></svg>`;
-      const mascara = await sharp(Buffer.from(svg)).png().toBuffer();
+      const alfa = Buffer.alloc(w * h, 255);
+      for (const a of areas) {
+        const x0 = Math.floor(a.x * ex);
+        const x1 = Math.min(w, Math.ceil((a.x + a.largura) * ex));
+        for (let y = Math.floor(a.y * ey); y < Math.min(h, Math.ceil((a.y + a.altura) * ey)); y++) alfa.fill(0, y * w + x0, y * w + x1);
+      }
+      const mascara = await sharp({ create: { width: w, height: h, channels: 3, background: "#000" } })
+        .joinChannel(alfa, { raw: { width: w, height: h, channels: 1 } })
+        .png()
+        .toBuffer();
+      // Com qualidade alta e output_format png, o modelo devolveu as áreas transparentes em vez de preenchidas.
       const resposta = await (await cliente()).images.edit({
         model: MODELO_DE_IMAGEM,
-        image: await toFile(png, "arte.png", { type: "image/png" }),
+        image: await toFile(await sharp(imagem).resize(w, h, { fit: "fill" }).png().toBuffer(), "arte.png", { type: "image/png" }),
         mask: await toFile(mascara, "mascara.png", { type: "image/png" }),
         prompt: PROMPT_DE_APAGAR,
         size: TAMANHO_DA_GERACAO[formato],
-        quality: "high",
-        // Em JPEG, o modelo devolveu as áreas da máscara pretas em vez de preenchidas.
-        output_format: "png",
+        quality: "medium",
       });
       const base64 = resposta.data?.[0]?.b64_json;
       if (!base64) throw new Error("O modelo de imagem não devolveu a imagem sem os textos.");
-      return sharp(Buffer.from(base64, "base64")).resize(largura, altura, { fit: "cover" }).jpeg({ quality: 90 }).toBuffer();
+      return Buffer.from(base64, "base64");
     },
   };
 }

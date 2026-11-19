@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { z } from "zod";
 import { FORMATOS, LIMITES, type Camada, type Formato } from "./camadas";
 import type { Peso } from "./fontes";
@@ -137,4 +138,45 @@ export function camadasDosElementos({ textos, logo }: Elementos, formato: Format
       largura: prender(logo.largura, LIMITES.largura.logo[0], LIMITES.largura.logo[1]),
     });
   return camadas;
+}
+
+const cinza = (largura: number, altura: number) => ({ raw: { width: largura, height: altura, channels: 1 as const } });
+
+/** O remendo para 8 px antes da borda da máscara: o modelo desenha uma linha onde ela acaba. */
+const RECUO_DO_REMENDO = 8;
+
+/**
+ * Cola na original só as áreas que o modelo apagou, com a borda suavizada. O modelo redesenha a imagem inteira,
+ * e fora das áreas ele também muda coisas, como um número desenhado numa ilustração.
+ */
+export async function remendar(original: Uint8Array, apagada: Uint8Array, areas: Area[], formato: Formato): Promise<Uint8Array> {
+  const { largura: W, altura: H } = FORMATOS[formato];
+  const furo = Buffer.alloc(W * H);
+  for (const a of areas) {
+    const x0 = Math.min(W, a.x + RECUO_DO_REMENDO);
+    const x1 = Math.max(x0, a.x + a.largura - RECUO_DO_REMENDO);
+    for (let y = a.y + RECUO_DO_REMENDO; y < a.y + a.altura - RECUO_DO_REMENDO; y++) furo.fill(255, y * W + x0, y * W + x1);
+  }
+  const rgba = await sharp(apagada).resize(W, H, { fit: "fill" }).ensureAlpha().raw().toBuffer();
+  const antes = await sharp(original).resize(W, H, { fit: "fill" }).removeAlpha().raw().toBuffer();
+  const preto = (px: Buffer, i: number, canais: number) => px[i * canais]! + px[i * canais + 1]! + px[i * canais + 2]! < 40;
+  let dentro = 0;
+  let vazios = 0;
+  let pretosAgora = 0;
+  let pretosAntes = 0;
+  for (let i = 0; i < W * H; i++)
+    if (furo[i]) {
+      dentro++;
+      if (rgba[i * 4 + 3]! < 128) vazios++;
+      if (preto(rgba, i, 4)) pretosAgora++;
+      if (preto(antes, i, 3)) pretosAntes++;
+    }
+  // O modelo às vezes devolve a área transparente ou pintada de preto. Gravada, a cena fica com um buraco preto no lugar do texto.
+  if (dentro > 0 && (vazios / dentro > 0.01 || (pretosAgora - pretosAntes) / dentro > 0.3))
+    throw new Error("O modelo de imagem devolveu a área do texto vazia, sem o fundo. Tente de novo.");
+  const borda = await sharp(furo, cinza(W, H)).blur(3).toColourspace("b-w").raw().toBuffer();
+  // O alfa sai num passo só dele: no mesmo pipeline do joinChannel, o sharp perde o canal novo.
+  const rgb = await sharp(rgba, { raw: { width: W, height: H, channels: 4 } }).removeAlpha().raw().toBuffer();
+  const remendo = await sharp(rgb, { raw: { width: W, height: H, channels: 3 } }).joinChannel(borda, cinza(W, H)).png().toBuffer();
+  return sharp(original).resize(W, H, { fit: "fill" }).composite([{ input: remendo }]).jpeg({ quality: 90 }).toBuffer();
 }
