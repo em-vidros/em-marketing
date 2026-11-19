@@ -111,6 +111,19 @@ async function custosGuardados(): Promise<Custos | null> {
   return linha ? (JSON.parse(linha.valor) as Custos) : null;
 }
 
+/**
+ * Um pedido à Costs API, com até 4 tentativas no 429. Da Vercel o limite de 30 por minuto chega
+ * mesmo com poucas chamadas nossas: ele parece contar o IP de saída, que outras contas dividem.
+ */
+async function pedirCustos(url: URL, chave: string): Promise<{ res: Response; corpo: PaginaDeCustos }> {
+  for (let tentativa = 1; ; tentativa++) {
+    const res = await fetch(url, { headers: { authorization: `Bearer ${chave}` }, signal: AbortSignal.timeout(8000) });
+    const corpo = (await res.json().catch(() => ({}))) as PaginaDeCustos;
+    if (res.status !== 429 || tentativa >= 4) return { res, corpo };
+    await Bun.sleep(1500 * tentativa + Math.random() * 1000);
+  }
+}
+
 async function buscarCustos(inicio: number, chave: string): Promise<Custos> {
   const dias: Custos["dias"] = [];
   let pagina: string | null | undefined;
@@ -120,8 +133,7 @@ async function buscarCustos(inicio: number, chave: string): Promise<Custos> {
     url.searchParams.set("bucket_width", "1d");
     url.searchParams.set("limit", "180");
     if (pagina) url.searchParams.set("page", pagina);
-    const res = await fetch(url, { headers: { authorization: `Bearer ${chave}` }, signal: AbortSignal.timeout(8000) });
-    const corpo = (await res.json().catch(() => ({}))) as PaginaDeCustos;
+    const { res, corpo } = await pedirCustos(url, chave);
     if (!res.ok) throw new Error(corpo.error?.message ?? `A Costs API respondeu ${res.status}.`);
     for (const balde of corpo.data ?? [])
       dias.push({ t: (balde.start_time ?? 0) * 1000, v: (balde.results ?? []).reduce((soma, r) => soma + Number(r.amount?.value ?? 0), 0) });
