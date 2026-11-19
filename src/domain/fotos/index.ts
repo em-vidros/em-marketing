@@ -59,7 +59,7 @@ export async function catalogarFoto(id: number, legendaDoUsuario?: string): Prom
     "base64",
   );
 
-  const resposta = await openai().responses.create({
+  const resposta = await (await openai()).responses.create({
     model: MODELO_DE_TEXTO,
     input: [
       {

@@ -45,6 +45,7 @@ import {
   type Historico,
 } from "../db";
 import { PILARES } from "../domain/art/pipeline";
+import { conectarChave, desconectarChave, ehProvedor, estadosDasChaves } from "../domain/chaves";
 import { saldo } from "../domain/saldo";
 import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
@@ -86,7 +87,7 @@ function doBot<P extends `/api/bots/:id${string}`>(rota: (req: BunRequest<P>, us
 
 /** O corpo validado, ou a resposta 400 com a primeira mensagem do schema, já em português. */
 async function lerCorpo<S extends z.ZodType>(req: Request, schema: S): Promise<{ dados: z.output<S> } | { resposta: Response }> {
-  const r = schema.safeParse(await req.json().catch(() => null));
+  const r = await schema.safeParseAsync(await req.json().catch(() => null));
   return r.success ? { dados: r.data } : { resposta: invalido(r.error.issues[0]?.message ?? "Pedido inválido.") };
 }
 
@@ -105,8 +106,8 @@ const texto = (campo: string, max: number) =>
     .min(1, `${campo} não pode ficar vazio.`)
     .max(max, `${campo} passa de ${max.toLocaleString("pt-BR")} caracteres.`);
 
-const Modelo = z.string({ error: "O modelo precisa ser texto." }).transform((id, ctx): ModelId => {
-  const problema = problemaDoModelo(id);
+const Modelo = z.string({ error: "O modelo precisa ser texto." }).transform(async (id, ctx): Promise<ModelId> => {
+  const problema = await problemaDoModelo(id);
   if (problema === null && ehModelId(id)) return id;
   ctx.addIssue({ code: "custom", message: problema ?? `Modelo desconhecido: ${id}.` });
   return z.NEVER;
@@ -258,7 +259,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
 
     "/api/auth/*": (req: Request) => auth.handler(req),
 
-    "/api/modelos": { GET: comSessao(() => Response.json(modelos())) },
+    "/api/modelos": { GET: comSessao(async () => Response.json(await modelos())) },
     "/api/bots": { GET: comSessao(async () => Response.json(await Promise.all(BOT_IDS.map(configDoBot)))) },
     "/api/bots/:id/config": {
       GET: doBot<"/api/bots/:id/config">(async (_, __, botId) => Response.json(await detalheDoBot(botId))),
@@ -272,7 +273,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
       POST: doBot<"/api/bots/:id/versoes/:versao/restaurar">(async (req, u, botId) => {
         const versao = await versaoDoBot(botId, Number(req.params.versao));
         if (!versao) return naoEncontrado();
-        const problema = problemaDoModelo(versao.modelo);
+        const problema = await problemaDoModelo(versao.modelo);
         return problema ? invalido(problema) : Response.json(await restaurarVersao(versao, u.email));
       }),
     },
@@ -343,6 +344,21 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     "/api/atividade": { GET: comSessao(async (_, u) => Response.json(await tarefasAtivas(u.id))) },
     "/api/uso": { GET: comSessao(async () => Response.json(await resumoDoUso())) },
     "/api/saldo": { GET: comSessao(async () => Response.json(await saldo())) },
+    "/api/chaves": { GET: comSessao(async () => Response.json(await estadosDasChaves())) },
+    "/api/chaves/:provedor": {
+      PUT: comSessao<"/api/chaves/:provedor">(async (req, u) => {
+        const p = req.params.provedor;
+        if (!ehProvedor(p)) return naoEncontrado();
+        const corpo = await lerCorpo(req, z.object({ chave: texto("A chave", 400) }));
+        if ("resposta" in corpo) return corpo.resposta;
+        const r = await conectarChave(p, corpo.dados.chave, { nome: u.nome, email: u.email });
+        return "motivo" in r ? invalido(r.motivo) : Response.json(r);
+      }),
+      DELETE: comSessao<"/api/chaves/:provedor">(async (req) => {
+        const p = req.params.provedor;
+        return ehProvedor(p) ? Response.json(await desconectarChave(p)) : naoEncontrado();
+      }),
+    },
     "/api/atividade/agora": {
       GET: comSessao(async (_, u) => {
         const hoje = inicioDoDia();

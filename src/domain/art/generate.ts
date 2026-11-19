@@ -35,7 +35,7 @@ export async function generateArt(opts: {
   for (const [i, ref] of (opts.referencias ?? []).entries()) imagens.push(await toFile(ref, `referencia-${i + 1}.jpg`, { type: "image/jpeg" }));
 
   const pedido = { model: MODELO_DE_IMAGEM, prompt: opts.prompt, size: f.tamanho, quality: "high", output_format: "png" } as const;
-  const resposta = imagens.length ? await openai().images.edit({ ...pedido, image: imagens }) : await openai().images.generate(pedido);
+  const resposta = imagens.length ? await (await openai()).images.edit({ ...pedido, image: imagens }) : await (await openai()).images.generate(pedido);
   const base64 = resposta.data?.[0]?.b64_json;
   if (!base64) throw new Error("O modelo de imagem não devolveu a arte.");
 

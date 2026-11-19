@@ -3,6 +3,7 @@ import type { ConversaExcluida } from "../agent/conversas";
 import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
 import type { ConfigBot } from "../agent/config";
 import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
+import type { EstadoDaChave, Provedor } from "../domain/chaves";
 import type { Edicao } from "../v2/artes";
 import type { Arte, Referencia } from "../v2/schema";
 import { BOT_IDS, BOTS, type BotId } from "./bots";
@@ -64,6 +65,13 @@ export const apiCalendario = {
 };
 
 export type ApiCalendario = typeof apiCalendario;
+
+/** As chaves de IA que a equipe conecta (src/domain/chaves.ts). A resposta nunca traz a chave. */
+export const apiChaves = {
+  listar: () => pegar<EstadoDaChave[]>("/api/chaves"),
+  conectar: (p: Provedor, chave: string) => comCorpo<EstadoDaChave>(`/api/chaves/${p}`, "PUT", { chave }),
+  desconectar: (p: Provedor) => comCorpo<EstadoDaChave>(`/api/chaves/${p}`, "DELETE"),
+};
 
 /** Uma arte como chega pela API: as datas vêm em texto ISO. */
 export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: string; atualizadaEm: string };

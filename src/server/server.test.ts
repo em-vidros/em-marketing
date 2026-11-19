@@ -224,7 +224,7 @@ describe("config dos bots", () => {
     expect(voltaAoPadrao.versaoId).toBeGreaterThan(restaurada.versaoId!);
   });
 
-  test("modelo desconhecido ou sem chave no servidor é recusado em português e não grava versão", async () => {
+  test("modelo desconhecido ou sem chave é recusado em português e não grava versão", async () => {
     const { cookie } = await sessao("ana@emvidros.com.br");
     const chave = process.env.ANTHROPIC_API_KEY;
     delete process.env.ANTHROPIC_API_KEY;
@@ -234,7 +234,7 @@ describe("config dos bots", () => {
       const disponiveis = await comCookie<Modelo[]>("/api/modelos", cookie);
 
       expect([desconhecido.status, await desconhecido.json()]).toEqual([400, { erro: "Modelo desconhecido: openai:gpt-9." }]);
-      expect([semChave.status, await semChave.json()]).toEqual([400, { erro: "O Claude Opus 5.5 não está disponível: falta a chave ANTHROPIC_API_KEY no servidor." }]);
+      expect([semChave.status, await semChave.json()]).toEqual([400, { erro: "O Claude Opus 5.5 não está disponível: falta conectar uma chave da Anthropic em Uso da API." }]);
       expect(disponiveis.find((m) => m.id === "anthropic:claude-opus-5-5")?.disponivel).toBe(false);
       expect(await comCookie<VersaoBot[]>("/api/bots/fotos/versoes", cookie)).toEqual([]);
     } finally {

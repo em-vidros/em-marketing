@@ -22,7 +22,7 @@ async function gerarValidando(
   let problemas: Problema[] = [];
 
   for (let i = 0; i < tentativas; i++) {
-    const r = await openai().responses.create({
+    const r = await (await openai()).responses.create({
       model: MODELO_DE_TEXTO,
       instructions: system,
       input:

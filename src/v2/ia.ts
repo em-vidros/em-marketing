@@ -47,11 +47,12 @@ Regras do texto:
 As leituras abaixo descrevem artes que a equipe considera bem pensadas. Siga os princípios delas, nunca copie o visual nem o assunto.
 `.trim();
 
-export function iaDaOpenAI(chave: string): Ia {
-  const openai = new OpenAI({ apiKey: chave, fetch: fetchQueConta("Estúdio de artes", MODELO_DE_IMAGEM) });
+/** `chave` é lida a cada pedido: a equipe pode trocar a chave com o servidor no ar. */
+export function iaDaOpenAI(chave: () => Promise<string | undefined>): Ia {
+  const cliente = async () => new OpenAI({ apiKey: (await chave()) ?? "", fetch: fetchQueConta("Estúdio de artes", MODELO_DE_IMAGEM) });
   return {
     async lerReferencia(imagem, tipo) {
-      const resposta = await openai.responses.create({
+      const resposta = await (await cliente()).responses.create({
         model: MODELO_DE_TEXTO,
         reasoning: { effort: "medium" },
         instructions: INSTRUCOES_DA_LEITURA,
@@ -66,7 +67,7 @@ export function iaDaOpenAI(chave: string): Ia {
     },
 
     async planejarArte(pedido, formato, leituras) {
-      const resposta = await openai.responses.parse({
+      const resposta = await (await cliente()).responses.parse({
         model: MODELO_DE_TEXTO,
         reasoning: { effort: "medium" },
         instructions: `${INSTRUCOES_DO_PLANO}\n\n${leituras.map((l, i) => `Leitura ${i + 1}: ${l}`).join("\n\n") || "Nenhuma leitura ainda."}`,
@@ -78,7 +79,7 @@ export function iaDaOpenAI(chave: string): Ia {
     },
 
     async gerarCena(prompt, formato) {
-      const resposta = await openai.images.generate({
+      const resposta = await (await cliente()).images.generate({
         model: MODELO_DE_IMAGEM,
         prompt: comComposicao(prompt, formato),
         size: TAMANHO_DA_GERACAO[formato],

@@ -7,7 +7,7 @@ import { registrarUso } from "../domain/uso";
 import { abrirConversa, postDaConversa, resumoDoPost } from "./post";
 import { APROVACAO, catalogo, type Inspiracoes, type RodarEspecialista } from "./tools";
 
-export type ResolverModelo = (bot: ConfigBot) => LanguageModel;
+export type ResolverModelo = (bot: ConfigBot) => LanguageModel | Promise<LanguageModel>;
 
 export interface Opcoes {
   /** Os testes trocam o registry por modelos falsos. */
@@ -40,7 +40,7 @@ export async function executar(botId: BotId, conversaId: string, messages: Model
   const rodar: RodarEspecialista = (especialista, pedido, sinal) =>
     executar(especialista, conversaId, [{ role: "user", content: pedido }], { resolverModelo, abortSignal: sinal, delegada: true, inspiracoes });
   return streamText({
-    model: resolverModelo(bot),
+    model: await resolverModelo(bot),
     instructions: `${instrucoes}\n\n--- ESTADO DO POST DESTA CONVERSA ---\n${resumoDoPost(await postDaConversa(conversaId))}`,
     messages,
     tools: await catalogo(conversaId, rodar, inspiracoes),
