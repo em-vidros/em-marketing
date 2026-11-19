@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import type { ResumoDoUso } from "../../domain/uso";
 import { useApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
+import { ChaveDaIa } from "../componentes/ChaveDaIa";
 import { Falha } from "../componentes/Falha";
 import { SaldoDetalhado } from "../componentes/Saldo";
 
@@ -98,6 +99,8 @@ export function Uso({ abrirMenu }: { abrirMenu: () => void }) {
           <BotaoMenu abrir={abrirMenu} />
           <h1 className="text-2xl/tight font-semibold tracking-[-0.02em]">Uso da API</h1>
         </header>
+
+        <ChaveDaIa />
 
         <SaldoDetalhado />
 
