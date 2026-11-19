@@ -1,5 +1,5 @@
 import { Resvg } from "@resvg/resvg-js";
-import sharp from "sharp";
+import sharp, { type OverlayOptions } from "sharp";
 import { readFileSync } from "node:fs";
 
 /**
@@ -45,7 +45,7 @@ async function luminancia(img: Buffer, area: { left: number; top: number; width:
   return soma / px.length / 255;
 }
 
-const colar = (jpeg: Buffer, camadas: sharp.OverlayOptions[]) => sharp(jpeg).composite(camadas).jpeg({ quality: 90 }).toBuffer();
+const colar = (jpeg: Buffer, camadas: OverlayOptions[]) => sharp(jpeg).composite(camadas).jpeg({ quality: 90 }).toBuffer();
 
 /** Cola a logo oficial no canto pedido. A versão sai do fundo daquele canto. */
 export async function aplicarLogo(jpeg: Buffer, formato: "feed" | "stories", canto: Canto = "inferior-direito"): Promise<Buffer> {
