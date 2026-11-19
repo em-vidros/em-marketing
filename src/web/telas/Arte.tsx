@@ -234,24 +234,26 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
     <main id="conteudo" data-escopo="arte" className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
       <header className="flex flex-wrap items-center gap-2.5 border-b border-linha px-4 py-3 sm:px-6">
         <BotaoMenu abrir={abrirMenu} />
-        <nav aria-label="Caminho" className="flex items-center gap-1.5 text-sm">
-          <a href="/biblioteca" onClick={aoClicarLink} className="rounded-md px-1.5 py-1 text-tinta-3 hover:bg-hover hover:text-tinta">
-            Biblioteca
-          </a>
-          <span aria-hidden="true" className="text-tinta-4">
-            /
-          </span>
-        </nav>
-        <h1 title={titulo} className="min-w-0 max-w-[40ch] truncate text-sm font-medium">
-          {titulo}
-        </h1>
-        <div className="ml-2 flex items-center gap-0.5">
+        <div className="flex min-w-0 items-center gap-2.5 max-sm:flex-1 max-sm:basis-48">
+          <nav aria-label="Caminho" className="flex flex-none items-center gap-1.5 text-sm">
+            <a href="/biblioteca" onClick={aoClicarLink} className="rounded-md px-1.5 py-1 text-tinta-3 hover:bg-hover hover:text-tinta">
+              Biblioteca
+            </a>
+            <span aria-hidden="true" className="text-tinta-4">
+              /
+            </span>
+          </nav>
+          <h1 title={titulo} className="min-w-0 max-w-[40ch] truncate text-sm font-medium">
+            {titulo}
+          </h1>
+        </div>
+        <div className="mr-auto flex items-center gap-0.5 sm:ml-2">
           <BotaoDoHistorico rotulo="Desfazer" atalho="desfazer" icone={Undo02Icon} disabled={!editor.podeDesfazer} onClick={editor.desfazer} />
           <BotaoDoHistorico rotulo="Refazer" atalho="refazer" icone={Redo02Icon} disabled={!editor.podeRefazer} onClick={editor.refazer} />
+          <span aria-live="off" className={`ml-3.5 text-[13px] text-tinta-3 ${gravacao.tipo === "erro" || gravacao.tipo === "conflito" ? "invisible" : ""}`}>
+            {gravacao.tipo === "salvo" ? "Salvo" : "Salvando…"}
+          </span>
         </div>
-        <span aria-live="off" className={`mr-auto ml-1 text-[13px] text-tinta-3 ${gravacao.tipo === "erro" || gravacao.tipo === "conflito" ? "invisible" : ""}`}>
-          {gravacao.tipo === "salvo" ? "Salvo" : "Salvando…"}
-        </span>
         <button
           type="button"
           onClick={gerarNovaCena}
