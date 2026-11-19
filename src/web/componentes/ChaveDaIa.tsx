@@ -134,7 +134,7 @@ function Passos({ conectar, podeCancelar, cancelar }: { conectar: (c: string) =>
         <Passo n={2} titulo="Crie uma chave chamada EM Marketing" feito={abriu && valor.length > 0}>
           Clique em <span className="font-medium text-tinta">Create new secret key</span>, dê o nome EM Marketing e copie a chave. Ela só aparece uma vez.
         </Passo>
-        <Passo n={3} titulo="Cole a chave aqui" feito={ok}>
+        <Passo n={3} titulo="Cole a chave aqui" feito={ok && !recusa}>
           <form onSubmit={enviar} className="mt-1 flex flex-col gap-2">
             <label className="sr-only" htmlFor="chave-guiada">
               Chave da OpenAI
