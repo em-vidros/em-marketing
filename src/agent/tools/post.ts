@@ -116,7 +116,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         const artes = p.etapa === "artes" ? p.artes : p.opcoes;
         const formato = p.formato === "stories" ? "stories" : "feed";
         const escolhida = p.etapa === "artes" ? null : p.peca.arte.variant;
-        return { ok: true as const, formato, escolhida, artes: await emOrdem(artes, artePublica) };
+        return { ok: true as const, postId: p.postId, formato, escolhida, artes: await emOrdem(artes, artePublica) };
       },
     }),
 

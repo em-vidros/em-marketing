@@ -660,3 +660,27 @@ div:has(> div > .cal-ideia):not([aria-pressed="true"]) > div:nth-child(3):not(:l
     scale: none;
   }
 }
+
+/*
+ * A arte escolhida no chat: ao passar o mouse, a imagem esmaece de leve e o botão de editar aparece.
+ * Só opacidade, então vale também com movimento reduzido. Sem mouse (toque), o botão fica sempre visível.
+ */
+.editavel img {
+  transition: opacity 150ms ease;
+}
+.editavel .editar {
+  transition: opacity 150ms ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .editavel .editar {
+    opacity: 0;
+  }
+  .editavel:hover img,
+  .editavel:focus-within img {
+    opacity: 0.85;
+  }
+  .editavel:hover .editar,
+  .editavel:focus-within .editar {
+    opacity: 1;
+  }
+}

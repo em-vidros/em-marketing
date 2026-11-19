@@ -48,7 +48,8 @@ import { PILARES } from "../domain/art/pipeline";
 import { saldo } from "../domain/saldo";
 import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
-import { listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
+import { arteDaImagem, listarArtes, resumoDaArte, resumosDasArtes } from "../v2/artes";
+import { postPorId } from "../agent/post";
 import { q } from "../v2/banco";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
@@ -397,6 +398,26 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         const id = idDa(req.params.id);
         const conversa = id === null ? null : await conversaDaPauta(u.id, id);
         return conversa ? Response.json(conversa) : naoEncontrado();
+      }),
+    },
+    "/api/posts/:id/variacoes/:variante/editar": {
+      // A variação do post abre no editor de camadas, com a imagem de fundo. Abrir de novo devolve a mesma arte.
+      POST: comSessao<"/api/posts/:id/variacoes/:variante/editar">(async (req, u) => {
+        const id = idDa(req.params.id);
+        const variante = idDa(req.params.variante);
+        const post = id === null ? null : await postPorId(id);
+        if (!post || variante === null || post.etapa === "brief" || post.etapa === "formato" || post.etapa === "headline") return naoEncontrado();
+        const arte = (post.etapa === "artes" ? post.artes : post.opcoes).find((a) => a.variant === variante);
+        if (!arte) return naoEncontrado();
+        const { tema, angulo } = post.brief;
+        const aberta = await arteDaImagem(estudio, {
+          pedido: `Post ${post.postId}, variação ${variante}`,
+          promptDaCena: [tema, angulo].filter(Boolean).join(". "),
+          formato: post.formato === "stories" ? "story" : "feed",
+          criadaPor: u.id,
+          bytes: async () => (ehUrl(arte.path) ? new Uint8Array(await (await fetch(arte.path)).arrayBuffer()) : Bun.file(arte.path).bytes()),
+        });
+        return Response.json({ id: aberta.id });
       }),
     },
     "/api/prontos": { GET: comSessao(async () => Response.json(await prontos((await listarArtes(estudio.banco)).map(resumoDaArte)))) },

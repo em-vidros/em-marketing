@@ -71,6 +71,22 @@ export async function criarArte({ banco, ia, arquivos }: Estudio, pedido: { text
   return arte!;
 }
 
+/**
+ * Uma imagem pronta, como a arte de um post, vira arte do editor: a imagem é a cena e as camadas começam vazias.
+ * O pedido identifica a origem, então abrir a mesma imagem de novo devolve a arte que já existe, com as edições.
+ */
+export async function arteDaImagem(
+  { banco, arquivos }: Pick<Estudio, "banco" | "arquivos">,
+  origem: { pedido: string; promptDaCena: string; formato: Formato; criadaPor: string; bytes: () => Promise<Uint8Array> },
+): Promise<Arte> {
+  const [existente] = await banco.select().from(artes).where(eq(artes.pedido, origem.pedido)).limit(1);
+  if (existente) return existente;
+  const cena = await arquivos.salvar(await origem.bytes(), "jpg");
+  const { pedido, promptDaCena, formato, criadaPor } = origem;
+  const [arte] = await banco.insert(artes).values({ pedido, formato, cena, promptDaCena, referencias: [], camadas: [], criadaPor }).returning();
+  return arte!;
+}
+
 export async function trocarCamadas(banco: Banco, id: string, camadas: Camada[]): Promise<Arte | null> {
   const [arte] = await banco.update(artes).set({ camadas, atualizadaEm: new Date() }).where(eq(artes.id, id)).returning();
   return arte ?? null;
