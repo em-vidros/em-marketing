@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import type { NovoBot as Pedido } from "../../agent/config";
+import type { PedidoDeNovoBot as Pedido } from "../../agent/equipe";
 import type { Modelo } from "../../agent/models";
 import { useApi } from "../api";
 import { CORES, FORMAS, recarregarBots, useEquipe, visualCriado, type Forma } from "../bots";

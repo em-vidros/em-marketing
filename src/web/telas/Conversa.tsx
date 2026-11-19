@@ -20,14 +20,14 @@ import { pilhaDeDesfazer } from "../componentes/menu/desfazer";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
 import { Passos, trechosDe } from "../componentes/Passos";
-import { useEquipe } from "../bots";
+import { recarregarBots, useEquipe } from "../bots";
 import { Chevron } from "../componentes/ia/Raciocinio";
 import { Check } from "../componentes/Passos";
 import { estadoDe, type EstadoBot, type EstadosDaEquipe } from "../equipe";
 import { criarEscolhaDoBot, criarTransporte, type EscolhaDoBot } from "../escolhaDoBot";
 import { navegar } from "../rota";
 import { ehCampo, executar, useAtalho } from "../teclado/motor";
-import { type BotId, ehAprovacao, ehDelegacao, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao } from "../tipos";
+import { type BotId, botDaDelegacao, ehAprovacao, ehDelegacao, mudaAEquipe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao } from "../tipos";
 
 export interface Vivo {
   mensagens: readonly Mensagem[];
@@ -247,9 +247,10 @@ function Chat({
     messages: inicial,
     transport: transporte,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
-    onFinish: () => {
+    onFinish: ({ message }) => {
       pendente.current = null;
       aoTerminarTurno();
+      if (message.parts.some(mudaAEquipe)) void recarregarBots();
     },
     onError: (e) => {
       const p = pendente.current;
@@ -587,7 +588,10 @@ function ParteDoChefe({
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
   if (ehMostrarArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
-  if (ehDelegacao(parte)) return <CartaoTarefa parte={parte as ParteDelegacao} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
+  if (ehDelegacao(parte)) {
+    const quem = botDaDelegacao(parte as ParteDelegacao);
+    return quem && <CartaoTarefa parte={parte as ParteDelegacao} bot={quem} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
+  }
   if (ehAprovacao(parte))
     return <CartaoAprovacao parte={parte} respondida={parte.state === "approval-requested" && respondidas.has(parte.approval.id)} responder={responder} />;
   return null;

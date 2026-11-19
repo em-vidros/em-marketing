@@ -144,6 +144,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: Op
         segredoAprovacao,
         inspiracoes,
         abortSignal: turno.sinal,
+        autor: usuario.email,
       });
       const mensagemId = crypto.randomUUID();
       const [paraOCliente, paraGravar] = toUIMessageStream({

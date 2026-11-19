@@ -1,10 +1,10 @@
 import type { InferUITools, UIDataTypes, UIMessage } from "ai";
-import type { BotId, Especialista } from "../agent/bots";
+import type { BotId } from "../agent/bots";
 import type { Conversa } from "../agent/conversas";
 import type { ResumoTarefa, Tarefa } from "../agent/tarefas";
 import type { Catalogo, SaidaDelegacao, ToolName } from "../agent/tools";
 
-export type { BotId, Conversa, Especialista, ResumoTarefa, SaidaDelegacao, Tarefa, ToolName };
+export type { BotId, Conversa, ResumoTarefa, SaidaDelegacao, Tarefa, ToolName };
 
 /** As tools do servidor, como o useChat as vê. Os tipos de entrada e saída vêm das definições. */
 export type Ferramentas = InferUITools<Catalogo>;
@@ -12,10 +12,17 @@ export type Ferramentas = InferUITools<Catalogo>;
 export type Mensagem = UIMessage<unknown, UIDataTypes, Ferramentas>;
 export type Parte = Mensagem["parts"][number];
 
-export type ParteDelegacao = Extract<Parte, { type: `tool-delegar_${Especialista}` }>;
+export type ParteDelegacao = Extract<Parte, { type: `tool-delegar_${string}` }>;
 export type ParteAprovacao = Extract<Parte, { type: "tool-publicar_agora" | "tool-agendar_publicacao" }>;
 
-export const especialistaDa = (p: ParteDelegacao) => p.type.slice("tool-delegar_".length) as Especialista;
+/** Quem faz a tarefa: o especialista do nome da tool, ou o bot criado da entrada de delegar_bot, que só existe depois que a entrada chega. */
+export const botDaDelegacao = (p: ParteDelegacao): BotId | null =>
+  p.type === "tool-delegar_bot" ? (p.input?.botId ?? null) : p.type.slice("tool-delegar_".length);
+
+const MUDAM_A_EQUIPE: ReadonlySet<string> = new Set(["tool-criar_bot", "tool-editar_bot", "tool-remover_bot", "tool-restaurar_bot"]);
+
+/** O Chefe criou, editou, apagou ou restaurou um bot: a barra precisa reler a lista. */
+export const mudaAEquipe = (p: Parte) => MUDAM_A_EQUIPE.has(p.type) && "state" in p && p.state === "output-available";
 
 export const ehDelegacao = (p: Parte): p is ParteDelegacao => p.type.startsWith("tool-delegar_");
 
@@ -34,6 +41,14 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
   definir_headline: { fazendo: "Escrevendo a headline", feito: "Headline escrita" },
   gerar_3_artes: { fazendo: "Gerando 3 artes", feito: "3 artes geradas" },
   pesquisar_referencias: { fazendo: "Pesquisando referências", feito: "Referências pesquisadas" },
+  pesquisar_web: { fazendo: "Pesquisando na web", feito: "Pesquisa feita" },
+  ler_pagina: { fazendo: "Lendo a página", feito: "Página lida" },
+  listar_bots: { fazendo: "Olhando a equipe", feito: "Equipe listada" },
+  criar_bot: { fazendo: "Criando o bot", feito: "Bot criado" },
+  editar_bot: { fazendo: "Editando o bot", feito: "Bot editado" },
+  remover_bot: { fazendo: "Removendo o bot", feito: "Bot removido" },
+  restaurar_bot: { fazendo: "Restaurando o bot", feito: "Bot restaurado" },
+  delegar_bot: { fazendo: "Chamando um bot da equipe", feito: "O bot terminou" },
   mostrar_artes: { fazendo: "Separando as artes", feito: "Artes para escolher" },
   escolher_arte: { fazendo: "Registrando a escolha", feito: "Arte escolhida" },
   buscar_fotos: { fazendo: "Buscando fotos", feito: "Fotos buscadas" },

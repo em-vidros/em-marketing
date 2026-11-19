@@ -2,7 +2,7 @@ import type { UIMessage } from "ai";
 import { useEffect, useRef } from "react";
 import { useApi } from "../api";
 import { useEquipe } from "../bots";
-import { especialistaDa, type ParteDelegacao, type Tarefa } from "../tipos";
+import { botDaDelegacao, type ParteDelegacao, type Tarefa } from "../tipos";
 import { Avatar } from "./Avatar";
 import { Falha } from "./Falha";
 import { Pensando } from "./ia/Pensando";
@@ -53,7 +53,7 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
   const [carga, recarregar] = useApi<Tarefa>(`/api/tarefas/${tarefaId}`);
   useEffect(recarregar, [status, recarregar]);
   const tarefa = carga.estado === "pronto" ? carga.dados : null;
-  const bot = parte ? especialistaDa(parte) : tarefa?.botId === "chefe" ? null : tarefa?.botId;
+  const bot = (parte && botDaDelegacao(parte)) ?? (tarefa?.botId === "chefe" ? null : tarefa?.botId);
   const fecharBotao = useRef<HTMLButtonElement>(null);
 
   useEffect(() => fecharBotao.current?.focus(), [tarefaId]);

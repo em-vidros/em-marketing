@@ -1,28 +1,40 @@
-import { openai } from "@ai-sdk/openai";
 import { toolsDeAgenda } from "./agenda";
-import { toolsDeDelegacao, type RodarEspecialista } from "./delegar";
+import { toolsDeDelegacao, type RodarDelegado } from "./delegar";
 import type { BotId } from "../bots";
+import { toolsDeEquipe } from "./equipe";
 import { toolsDeFotos } from "./fotos";
 import { toolsDeMemoria } from "./memoria";
 import { toolsDePost, type Inspiracoes } from "./post";
 import { toolsDeTexto } from "./texto";
+import { buscaNaWeb, toolsDeWeb } from "./web";
 
 export { APROVACAO } from "./post";
-export type { RodarEspecialista, SaidaDelegacao } from "./delegar";
+export type { RodarDelegado, SaidaDelegacao } from "./delegar";
 export type { Inspiracoes } from "./post";
+
+export interface Turno {
+  conversaId: string;
+  botId: BotId;
+  /** Quem está na conversa. Vai como autor das versões que o Chefe grava ao criar ou editar um bot. */
+  autor: string;
+  rodar: RodarDelegado;
+  inspiracoes?: Inspiracoes;
+}
 
 /**
  * Todas as tools. As de post leem e gravam o post da conversa; as de delegação rodam especialistas nela;
  * lembrar grava na memória do bot que está no turno.
  */
-export const catalogo = async (conversaId: string, botId: BotId, rodar: RodarEspecialista, inspiracoes?: Inspiracoes) => ({
+export const catalogo = async ({ conversaId, botId, autor, rodar, inspiracoes }: Turno) => ({
   ...toolsDePost(conversaId, inspiracoes),
   ...toolsDeFotos,
   ...toolsDeAgenda,
   ...toolsDeTexto,
   ...toolsDeMemoria(botId),
-  // Busca na web da OpenAI, executada pelo provedor: o Post procura referências quando o usuário pede outro estilo.
-  pesquisar_referencias: openai.tools.webSearch({ searchContextSize: "medium" }),
+  ...toolsDeWeb,
+  // A mesma busca de pesquisar_web, com o nome que o fluxo de estilo do Post e as conversas gravadas dele usam.
+  pesquisar_referencias: buscaNaWeb(),
+  ...toolsDeEquipe(autor),
   ...(await toolsDeDelegacao(conversaId, rodar)),
 });
 

@@ -1,6 +1,6 @@
 import { primeira } from "../db";
-import { q, transacao } from "../v2/banco";
-import { BOTS, ehBotFixo, LIVRES, MARCA, SETOR_PADRAO, type BotFixo, type BotId, type Forma } from "./bots";
+import { q } from "../v2/banco";
+import { BOTS, ehBotFixo, ehMarketing, LIVRES, MARCA, SETOR_PADRAO, type BotFixo, type BotId, type Forma } from "./bots";
 import { contextoDeData, diaDe } from "./hoje";
 import { ehModelId, type ModelId } from "./models";
 import type { ToolName } from "./tools";
@@ -70,17 +70,6 @@ export interface DetalheBot extends ConfigBot {
   /** As regras do padrão, para voltar só elas. */
   regrasPadrao: string;
   memoria: Memoria;
-}
-
-/** POST /api/bots */
-export interface NovoBot {
-  nome: string;
-  descricao: string;
-  setor: string;
-  forma: Forma;
-  cor: string;
-  prompt: string;
-  modelo: ModelId;
 }
 
 export const LIMITE_DA_MEMORIA = 20_000;
@@ -223,15 +212,34 @@ export async function listarBots(): Promise<ConfigBot[]> {
 const DELEGADA =
   "Você está numa tarefa delegada pelo Chefe, não falando com o usuário. Não faça perguntas: decida com o que tem e siga o fluxo até onde o pedido manda. Termine com um resumo curto do que fez e do que ficou pendente; só ele volta para o Chefe.";
 
-/**
- * O system prompt inteiro de um turno, na ordem em que o modelo lê: prompt, regras, marca,
- * data, aviso de tarefa delegada, memória e estado do post. GET /api/bots/:id/prompt mostra o mesmo texto.
- */
 /** O bot criado tem todas as ferramentas livres; esta linha é o que o faz usar só as do papel dele. */
 const papelDoCriado = (bot: DetalheBot) =>
-  `Você é ${bot.nome}, do setor ${bot.setor} da EM Vidros. ${bot.descricao} Você tem várias ferramentas: use só as que servem a esse papel e a esse setor, e ignore as outras. Se o pedido for de outra área, diga qual bot da equipe cuida disso.`;
+  [
+    `Você é ${bot.nome}, do setor ${bot.setor} da EM Vidros. ${bot.descricao}`,
+    "Você tem várias ferramentas: use só as que servem a esse papel e a esse setor, e ignore as outras.",
+    ehMarketing(bot.setor) ? "" : "As de post, arte, legenda, fotos e agenda são do marketing: não use.",
+    "Quando a resposta depende de lei, norma, preço ou outro fato que muda, pesquise com pesquisar_web, leia a fonte com ler_pagina e diga de onde tirou.",
+    "Se o pedido for de outra área, diga qual bot da equipe cuida disso.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
-export function instrucoesDe(bot: DetalheBot, turno: { delegada: boolean; estadoDoPost: string; agora?: number }): string {
+/** Os bots criados que este bot pode chamar com delegar_bot. Vazio para quem não tem a tool. */
+export async function botsParaDelegar(bot: ConfigBot): Promise<ConfigBot[]> {
+  return bot.tools.includes("delegar_bot") ? (await listarBots()).filter((b) => b.criado) : [];
+}
+
+const listaDaEquipe = (bots: readonly ConfigBot[]) =>
+  bots.length === 0 ? "" : `--- BOTS DA EQUIPE (para delegar_bot) ---\n${bots.map((b) => `- ${b.id}: ${b.nome}, setor ${b.setor}. ${b.descricao}`).join("\n")}`;
+
+/**
+ * O system prompt inteiro de um turno, na ordem em que o modelo lê: prompt, papel do criado, regras, marca,
+ * data, aviso de tarefa delegada, memória, bots da equipe e estado do post. GET /api/bots/:id/prompt mostra o mesmo texto.
+ */
+export function instrucoesDe(
+  bot: DetalheBot,
+  turno: { delegada: boolean; estadoDoPost: string; equipe?: readonly ConfigBot[]; agora?: number },
+): string {
   const memoria = bot.memoria.texto.trim();
   return [
     bot.prompt,
@@ -241,6 +249,7 @@ export function instrucoesDe(bot: DetalheBot, turno: { delegada: boolean; estado
     contextoDeData(turno.agora),
     turno.delegada ? DELEGADA : "",
     memoria && `--- MEMÓRIA ---\n${memoria}`,
+    listaDaEquipe(turno.equipe ?? []),
     `--- ESTADO DO POST DESTA CONVERSA ---\n${turno.estadoDoPost}`,
   ]
     .filter(Boolean)
@@ -277,28 +286,6 @@ export const restaurarVersao = ({ botId, ...versao }: VersaoBot, autor: string):
   gravarVersao(botId, Object.fromEntries(CAMPOS.map((c) => [c, versao[c]])), autor);
 
 export const restaurarPadrao = async (botId: BotId, autor: string): Promise<DetalheBot> => gravarVersao(botId, (await lerBot(botId)).base.padrao, autor);
-
-/** Cria o bot e a primeira versão dele, que passa a ser o padrão. */
-export async function criarBot(novo: NovoBot, autor: string): Promise<DetalheBot> {
-  const id = `b-${crypto.randomUUID().replaceAll("-", "").slice(0, 8)}`;
-  const agora = Date.now();
-  await transacao(async () => {
-    await q`INSERT INTO bots (id, forma, cor, criado_por, criado_em) VALUES (${id}, ${novo.forma}, ${novo.cor}, ${autor}, ${agora})`;
-    await q`INSERT INTO versoes_bot (bot_id, nome, descricao, modelo, prompt, setor, regras, marca, tools, criada_em, autor)
-      VALUES (${id}, ${novo.nome}, ${novo.descricao}, ${novo.modelo}, ${novo.prompt}, ${novo.setor}, ${""}, ${true},
-        ${null}, ${agora}, ${autor})`;
-  });
-  return detalheDoBot(id);
-}
-
-/** Só bots criados. Repetir não muda a data da primeira vez. */
-export async function apagarBot(botId: BotId): Promise<void> {
-  await q`UPDATE bots SET apagado_em = ${Date.now()} WHERE id = ${botId} AND apagado_em IS NULL`;
-}
-
-export async function restaurarBot(botId: BotId): Promise<void> {
-  await q`UPDATE bots SET apagado_em = NULL WHERE id = ${botId}`;
-}
 
 export async function gravarMemoria(botId: BotId, texto: string, autor: string): Promise<Memoria> {
   await q`INSERT INTO memorias_bot (bot_id, texto, atualizada_em, autor) VALUES (${botId}, ${texto}, ${Date.now()}, ${autor})

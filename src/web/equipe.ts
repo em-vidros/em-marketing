@@ -1,6 +1,6 @@
-import { BOT_IDS, type BotId } from "./bots";
+import type { BotId } from "./bots";
 import { atividadeDe, textoDa } from "./componentes/ia/atividade";
-import { ehAprovacao, ehDelegacao, especialistaDa, type Mensagem, type ParteDelegacao, type ResumoTarefa } from "./tipos";
+import { botDaDelegacao, ehAprovacao, ehDelegacao, type Mensagem, type ParteDelegacao, type ResumoTarefa } from "./tipos";
 
 export type EstadoBot =
   | { tipo: "parado"; texto: string }
@@ -58,10 +58,11 @@ export function estadosDaEquipe(
   for (const p of ultima?.parts ?? []) {
     if (!ehDelegacao(p)) continue;
     const passo = passoAtual(p);
-    if (passo) estados[especialistaDa(p)] = passo === "Na fila" ? { tipo: "parado", texto: passo } : { tipo: "trabalhando", texto: passo };
+    const quem = botDaDelegacao(p);
+    if (passo && quem) estados[quem] = passo === "Na fila" ? { tipo: "parado", texto: passo } : { tipo: "trabalhando", texto: passo };
   }
 
-  const trabalhando = BOT_IDS.find((id) => id !== "chefe" && estadoDe(estados, id).tipo === "trabalhando");
+  const trabalhando = Object.keys(estados).find((id) => id !== "chefe" && estadoDe(estados, id).tipo === "trabalhando");
   if (ultima?.parts.some((p) => ehAprovacao(p) && p.state === "approval-requested"))
     estados.chefe = { tipo: "esperando", texto: "Esperando você" };
   else if (trabalhando) estados.chefe = { tipo: "delegando", texto: `Esperando ${nomeDe(trabalhando).nome}` };
@@ -95,7 +96,7 @@ export function agoraDasConversas(
   const estado = estadoDe(estados, bot);
   if (estado.tipo === "esperando") agora[id] = { texto: estado.texto, trabalhando: false };
   else if (estado.tipo === "delegando") {
-    const especialista = BOT_IDS.find((b) => b !== "chefe" && estadoDe(estados, b).tipo === "trabalhando");
+    const especialista = Object.keys(estados).find((b) => b !== "chefe" && estadoDe(estados, b).tipo === "trabalhando");
     agora[id] = { texto: especialista ? `${nomeDe(especialista).nome}: ${estadoDe(estados, especialista).texto}` : estado.texto, trabalhando: true };
   } else if (respondendo && estado.tipo === "trabalhando") agora[id] = { texto: estado.texto, trabalhando: true };
   else if (!respondendo) delete agora[id];

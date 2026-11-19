@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useEquipe } from "../bots";
-import { especialistaDa, passosDe, type ParteDelegacao, type Passo } from "../tipos";
+import { passosDe, type BotId, type ParteDelegacao, type Passo } from "../tipos";
 import { Avatar } from "./Avatar";
 import { atividadeDe, textoDa } from "./ia/atividade";
 import { LinhasDeTarefa, type LinhaDeTarefa } from "./ia/LinhasDeTarefa";
@@ -60,14 +60,15 @@ export const tarefaIdDa = (p: ParteDelegacao) => (p.state === "output-available"
 
 export function CartaoTarefa({
   parte,
+  bot,
   aberta,
   abrir,
 }: {
   parte: ParteDelegacao;
+  bot: BotId;
   aberta: boolean;
   abrir: (tarefaId: string, origem: HTMLElement) => void;
 }) {
-  const bot = especialistaDa(parte);
   const { nome } = useEquipe().de(bot);
   const tempoDe = useTempos();
   const vistas = useRef<LinhaDeTarefa[]>([]);

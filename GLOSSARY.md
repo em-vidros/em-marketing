@@ -5,7 +5,7 @@ Fábrica de conteúdo da EM Vidros: a equipe pede uma peça em linguagem natural
 ## Bots
 
 **Chefe**:
-O bot que recebe todo pedido, divide em partes, entrega cada parte a um especialista e junta o resultado. Não cria arte nem escreve legenda.
+O bot que recebe todo pedido, divide em partes, entrega cada parte a um especialista ou a um bot criado e junta o resultado. Também cria, edita e remove bots criados quando alguém pede. Não cria arte nem escreve legenda.
 _Evite_: orquestrador, agente principal
 
 **Especialista**:
@@ -13,8 +13,16 @@ Um dos bots de papel fixo (Post, Legenda, Agenda, Fotos, Reels) que executa uma 
 _Evite_: subagente, worker
 
 **Bot criado**:
-Um bot que alguém da equipe criou pela tela, com prompt, regras e ferramentas próprios. Só atende conversa direta: o Chefe não delega a ele.
+Um bot de qualquer setor que alguém da equipe criou, pela tela ou pedindo ao Chefe, com prompt e regras próprios e as ferramentas livres. Atende conversa direta e recebe tarefas do Chefe.
 _Evite_: bot customizado, agente
+
+**Ferramentas livres**:
+As ferramentas que todo bot criado recebe: pesquisa na web, leitura de página e as de marketing. Ele usa só as que servem ao papel e ao setor dele.
+_Evite_: tools padrão, permissões
+
+**Marca**:
+O brandbook de conteúdo que entra no prompt de um bot quando está ligado. Nasce ligado só nos bots de Marketing.
+_Evite_: contexto de marca, brand
 
 **Setor**:
 O grupo de um bot na barra lateral, como Marketing ou Comercial. Texto livre; os bots fixos começam em Marketing.
@@ -29,7 +37,7 @@ Uma troca contínua entre uma pessoa e um bot. Cada bot tem uma conversa atual p
 _Evite_: chat, thread, sessão
 
 **Tarefa**:
-Uma parte de um pedido que o Chefe entregou a um especialista, com a própria conversa e um status.
+Uma parte de um pedido que o Chefe entregou a um especialista ou a um bot criado, com a própria conversa e um status.
 _Evite_: job, delegação
 
 ## Peças

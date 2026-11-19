@@ -8,7 +8,7 @@ export type BotId = string;
 /** Os bots que vêm no código. */
 export type BotFixo = "chefe" | "post" | "legenda" | "agenda" | "fotos" | "reels";
 
-/** Os bots que o Chefe pode chamar. Cada um tem uma tool delegar_<id>. Os criados pela equipe só atendem conversa direta. */
+/** Os bots fixos que o Chefe pode chamar. Cada um tem uma tool delegar_<id>; os criados pela equipe, delegar_bot. */
 export type Especialista = Exclude<BotFixo, "chefe">;
 
 /**
@@ -30,12 +30,29 @@ export interface Bot {
 
 export const SETOR_PADRAO = "Marketing";
 
+export const ehMarketing = (setor: string) => setor.trim().toLocaleLowerCase("pt-BR") === SETOR_PADRAO.toLocaleLowerCase("pt-BR");
+
 /** Os corpos que um bot criado pode ter. O desenho de cada um está no front (src/web/bots.ts). */
 export const FORMAS = ["circulo", "squircle", "nuvem", "triangulo"] as const;
 export type Forma = (typeof FORMAS)[number];
 
-/** As tools que um bot criado pode escolher. Delegar e publicar ficam com o Chefe; lembrar, todo bot tem. */
-export type Livre = Exclude<ToolName, `delegar_${string}` | "publicar_agora" | "agendar_publicacao" | "lembrar">;
+/**
+ * As tools de um bot criado. Delegar, publicar e cuidar dos bots ficam com o Chefe; lembrar, todo bot tem.
+ * pesquisar_referencias é a busca de pesquisar_web com o nome que o Post usa: as duas juntas mandariam a mesma tool duas vezes.
+ */
+export type Livre = Exclude<
+  ToolName,
+  | `delegar_${string}`
+  | "publicar_agora"
+  | "agendar_publicacao"
+  | "lembrar"
+  | "pesquisar_referencias"
+  | "listar_bots"
+  | "criar_bot"
+  | "editar_bot"
+  | "remover_bot"
+  | "restaurar_bot"
+>;
 
 /** A descrição de cada tool na tela de configuração. */
 export const FERRAMENTAS = {
@@ -43,7 +60,8 @@ export const FERRAMENTAS = {
   definir_formato: "Escolhe o formato do post: feed, stories ou os dois.",
   definir_headline: "Escreve e valida a headline do post.",
   gerar_3_artes: "Gera 3 artes do post para a pessoa escolher.",
-  pesquisar_referencias: "Pesquisa referências de estilo na web.",
+  pesquisar_web: "Pesquisa na web: leis, normas, preços, notícias, referências.",
+  ler_pagina: "Lê o texto de uma página pública da internet.",
   mostrar_artes: "Mostra as artes geradas na conversa.",
   escolher_arte: "Registra a arte que a pessoa escolheu.",
   buscar_fotos: "Busca no banco de fotos reais.",
@@ -87,12 +105,14 @@ export const BOTS: Record<BotFixo, Bot> = {
   chefe: {
     id: "chefe",
     nome: "Chefe",
-    descricao: "Recebe o pedido, delega aos especialistas, junta o resultado e pede aprovação para publicar.",
+    descricao: "Recebe o pedido, delega aos bots da equipe, junta o resultado, pede aprovação para publicar e cria, edita ou remove bots.",
     modelo: "openai:gpt-6-luna",
     papel: juntar(
-      TOM,
-      "Você é o Chefe. Não gera arte, não escreve legenda nem roteiro: quebra o pedido, delega ao especialista certo e junta o que voltou.",
-      "Post: brief, headline, artes e legenda de uma peça. Legenda: legenda avulsa ou revisão de texto. Agenda: fila, cota do mês e datas. Fotos: banco de fotos reais. Reels: pauta e roteiro de vídeo.",
+      "Você é o Chefe da equipe de bots da EM Vidros. Fala português coloquial, é direto e eficiente.",
+      "Não gera arte, não escreve legenda nem roteiro e não responde no lugar de um bot da equipe: quebra o pedido, delega ao bot certo e junta o que voltou.",
+      "Os especialistas de marketing: Post (brief, headline, artes e legenda de uma peça), Legenda (legenda avulsa ou revisão de texto), Agenda (fila, cota do mês e datas), Fotos (banco de fotos reais) e Reels (pauta e roteiro de vídeo).",
+      "A equipe também cria bots de qualquer setor, como RH, Comercial ou Financeiro. Os ativos estão em BOTS DA EQUIPE; delegue a eles com delegar_bot quando o pedido for da área deles.",
+      "Você cria, edita e remove bots da equipe quando alguém pede.",
       "Se uma tarefa falhar, diga ao usuário o erro em português claro e proponha o próximo passo.",
     ),
     regras: juntar(
@@ -104,6 +124,13 @@ export const BOTS: Record<BotFixo, Bot> = {
         "Quando o usuário pedir outro estilo de arte, repasse ao Post o pedido com as palavras dele e mande gerar de novo seguindo esse estilo, com pesquisa de referências. Repasse também os links de imagem que ele colou. Ao mostrar as novas artes, pergunte se ele tem referências desse estilo: um link direto de imagem colado aqui, ou imagens subidas na Biblioteca, que entram na próxima rodada.",
         PEDIDO_MANDA,
         PILARES,
+        "Pedido de fora do marketing: se houver em BOTS DA EQUIPE um bot daquela área, delegue com delegar_bot e mande o pedido completo, porque ele não vê esta conversa. Se não houver, diga isso e ofereça criar um.",
+        "Criar um bot (\"cria um bot de RH que tira dúvidas de férias\"): não faça questionário. Escreva você mesmo, a partir do pedido, um nome curto, o setor, uma descrição de uma ou duas frases, o prompt e as regras; escolha forma e cor, use o modelo openai:gpt-6-luna e chame criar_bot. Só pergunte se não der para saber a área ou o objetivo.",
+        "O prompt do bot novo fala com ele na segunda pessoa: quem ele é, para quem da EM Vidros trabalha, o que responde, o que não faz e como responde (tom, tamanho, quando perguntar de volta). Em assunto de lei, norma ou política interna, ele cita a fonte e avisa quando a resposta depende do caso ou da política da empresa. As regras dizem quando ele usa pesquisar_web e ler_pagina.",
+        "marca é true só em bot de Marketing; nos outros setores, false.",
+        "Depois de criar, responda com o nome, o que o bot faz e o link no formato [Nome](/bots/<id>).",
+        "Editar: se não souber o id, chame listar_bots; em editar_bot mande só os campos que mudam.",
+        "Remover: antes de chamar remover_bot, diga qual bot sai (nome e setor) e pergunte se pode. Só chame depois que o usuário confirmar nesta conversa. Os bots que vêm com o sistema não saem. Se ele se arrepender, restaurar_bot traz o bot de volta.",
       ),
     contexto: () => "",
     tools: [
@@ -117,8 +144,14 @@ export const BOTS: Record<BotFixo, Bot> = {
       "publicar_agora",
       "agendar_publicacao",
       "listar_agenda",
+      "delegar_bot",
+      "listar_bots",
+      "criar_bot",
+      "editar_bot",
+      "remover_bot",
+      "restaurar_bot",
     ],
-    sugestoes: ["Post para o Dia do Vidraceiro, 18 de maio", "O que falta postar este mês?", "Publique o post de hoje às 18h"],
+    sugestoes: ["Post para o Dia do Vidraceiro, 18 de maio", "O que falta postar este mês?", "Cria um bot de RH que tira dúvidas sobre férias"],
   },
   post: {
     id: "post",

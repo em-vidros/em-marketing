@@ -286,7 +286,7 @@ describe("config dos bots", () => {
     }
   });
 
-  test("um bot criado recebe prompt, regras e memória da equipe; apagado, some da lista e recusa conversa; restaurado, volta", async () => {
+  test("um bot criado fora do Marketing nasce sem brandbook e recebe prompt, regras e memória da equipe; apagado, some da lista e recusa conversa; restaurado, volta", async () => {
     const { cookie } = await sessao("ana@emvidros.com.br");
     const { cookie: daBia } = await sessao("bia@emvidros.com.br");
 
@@ -315,13 +315,13 @@ describe("config dos bots", () => {
     const listaComEle = await comCookie<ConfigBot[]>("/api/bots", cookie);
 
     expect(criacao.status).toBe(201);
-    expect(criado).toMatchObject({ setor: "Comercial", criado: { forma: "nuvem", cor: "#1AAE9F", por: "ana@emvidros.com.br" } });
+    expect(criado).toMatchObject({ setor: "Comercial", marca: false, criado: { forma: "nuvem", cor: "#1AAE9F", por: "ana@emvidros.com.br" } });
     expect(criado.tools).toEqual(expect.arrayContaining(["buscar_fotos", "proximas_datas", "roteiro_reel"]));
     expect(await memoria.json()).toMatchObject({ texto: "O cliente Vidraçaria Sol paga à vista.", autor: "bia@emvidros.com.br" });
     expect(prompt).toStartWith("Você ajuda o comercial a montar orçamentos.\n\nVocê é Orçamentos, do setor Comercial da EM Vidros. Responde dúvidas de orçamento de vidro temperado.");
     expect(prompt).toContain("\n\nSempre peça a espessura do vidro.\n\n");
     expect(prompt).toContain("--- MEMÓRIA ---\nO cliente Vidraçaria Sol paga à vista.");
-    expect(prompt).toContain("--- BRANDBOOK");
+    expect(prompt).not.toContain("--- BRANDBOOK");
     expect([fixoApagado.status, apagado.status]).toEqual([400, 204]);
     expect(listaSemEle.map((b) => b.id)).not.toContain(criado.id);
     expect([conversa.status, await conversa.json()]).toEqual([410, { erro: "Este bot foi apagado. Restaure o bot na configuração dele para continuar a conversa." }]);
