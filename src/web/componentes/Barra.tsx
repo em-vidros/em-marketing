@@ -323,7 +323,7 @@ export function Barra({
         </button>
         <a
           href="/uso"
-          aria-label="Uso da API e crédito da OpenAI"
+          aria-label="Crédito OpenAI e uso da API"
           aria-current={telaAtual === "/uso" ? "page" : undefined}
           onClick={(e) => (aoClicarLink(e), aoNavegar())}
           className={`mt-2 flex rounded-item px-3 py-2.5 hover:bg-hover ${telaAtual === "/uso" ? "bg-ativo" : ""}`}
