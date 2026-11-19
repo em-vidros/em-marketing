@@ -974,6 +974,8 @@ export function getPeriodStart(
 ): Date {
   if (view === "year") return startOfYear(date);
   if (view === "day" || view === "agenda") return startOfDay(date);
+  // Month view starts on the week of the 1st, so the title names this month
+  if (view === "month") return startOfWeek(startOfMonth(date), { weekStartsOn });
   if (view === "week" && getWeekViewStepDays(numberOfDays) < DAYS_PER_WEEK) {
     return startOfDay(date);
   }
