@@ -31,7 +31,7 @@ function Barra({ restante, alta = false }: { restante: number; alta?: boolean })
 }
 
 function aviso(s: Saldo): string | null {
-  if (s.estado === "sem-chave") return "Falta conectar a conta da OpenAI (OPENAI_SESSION_KEY).";
+  if (s.estado === "sem-chave") return "O saldo não aparece porque falta a chave de sessão da OpenAI no servidor.";
   if (s.estado === "erro") return `A OpenAI não respondeu: ${s.erro}. Se a sessão caiu, gere uma chave nova.`;
   return null;
 }
