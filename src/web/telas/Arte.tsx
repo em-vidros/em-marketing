@@ -3,7 +3,7 @@ import { HugeiconsIcon, type IconSvgElement } from "@hugeicons/react";
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import type { Edicao } from "../../v2/artes";
 import { FORMATOS } from "../../v2/camadas";
-import { apiArtes, useApi, type ArteDaApi } from "../api";
+import { apiArtes, ErroDeApi, useApi, type ArteDaApi } from "../api";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Falha } from "../componentes/Falha";
 import { Dica } from "../componentes/menu/Teclas";
@@ -53,7 +53,7 @@ function recarregarUmaVez(erro: unknown): never {
 
 const ESPERA_PARA_GRAVAR = 450;
 
-type Gravacao = { tipo: "salvo" } | { tipo: "pendente" } | { tipo: "salvando" } | { tipo: "erro"; mensagem: string };
+type Gravacao = { tipo: "salvo" } | { tipo: "pendente" } | { tipo: "salvando" } | { tipo: "erro"; mensagem: string } | { tipo: "conflito"; mensagem: string };
 
 export function Arte({ id, abrirMenu }: { id: string; abrirMenu: () => void }) {
   const [carga, tentar] = useApi<ArteDaApi>(`/api/artes/${id}`);
@@ -75,34 +75,40 @@ export function Arte({ id, abrirMenu }: { id: string; abrirMenu: () => void }) {
 }
 
 /**
- * Grava camadas e ajustes depois de uma pausa na edição. Só a resposta do pedido mais novo vale.
+ * Grava camadas e ajustes depois de uma pausa na edição. Uma gravação espera a anterior, porque cada
+ * uma manda a versão que a anterior devolveu. Se outra pessoa gravou no meio, para e avisa em vez de sobrescrever.
  * `gravarAgora` espera o que estiver pendente ou em curso e devolve a arte gravada, ou null se falhou.
  */
-function useGravacao(id: string, aoGravar: (arte: ArteDaApi) => void) {
+function useGravacao(arte: ArteDaApi, aoGravar: (arte: ArteDaApi) => void) {
   const [gravacao, setGravacao] = useState<Gravacao>({ tipo: "salvo" });
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const pendente = useRef<Edicao | null>(null);
   const emCurso = useRef<Promise<ArteDaApi | null> | null>(null);
-  const ultimo = useRef(0);
+  const base = useRef(arte.atualizadaEm);
+  base.current = arte.atualizadaEm;
+  const travada = useRef(false);
+  const { id } = arte;
 
   const gravarAgora = useCallback(async (): Promise<ArteDaApi | null> => {
     clearTimeout(timer.current);
+    await emCurso.current;
     const edicao = pendente.current;
-    if (!edicao) return emCurso.current;
+    if (!edicao || travada.current) return emCurso.current;
     pendente.current = null;
-    const pedido = ++ultimo.current;
     setGravacao({ tipo: "salvando" });
-    const gravando = apiArtes.gravar(id, edicao).then(
+    const gravando = apiArtes.gravar(id, edicao, base.current).then(
       (gravada) => {
-        if (pedido !== ultimo.current) return gravada;
+        base.current = gravada.atualizadaEm;
         aoGravar(gravada);
-        setGravacao({ tipo: "salvo" });
+        setGravacao(pendente.current ? { tipo: "pendente" } : { tipo: "salvo" });
         return gravada;
       },
       (e: Error) => {
-        if (pedido !== ultimo.current) return null;
         pendente.current ??= edicao;
-        setGravacao({ tipo: "erro", mensagem: e.message });
+        if (e instanceof ErroDeApi && e.status === 409) {
+          travada.current = true;
+          setGravacao({ tipo: "conflito", mensagem: e.message });
+        } else setGravacao({ tipo: "erro", mensagem: e.message });
         return null;
       },
     );
@@ -128,7 +134,7 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
   const [arte, setArte] = useState(inicial);
   const [painel, setPainel] = useState<Painel | null>(null);
   const [cena, setCena] = useState<{ tipo: "parada" } | { tipo: "gerando" } | { tipo: "erro"; mensagem: string }>({ tipo: "parada" });
-  const { gravacao, agendar, gravarAgora } = useGravacao(arte.id, setArte);
+  const { gravacao, agendar, gravarAgora } = useGravacao(arte, setArte);
   const editor = useEditor({ inicial: { camadas: inicial.camadas, ajustes: inicial.ajustes }, formato: arte.formato, gravar: agendar });
   const tela = useRef<ControleDaTela>(null);
   const focarPalco = () => tela.current?.focar();
@@ -175,7 +181,7 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
           <BotaoDoHistorico rotulo="Desfazer" atalho="desfazer" icone={Undo02Icon} disabled={!editor.podeDesfazer} onClick={editor.desfazer} />
           <BotaoDoHistorico rotulo="Refazer" atalho="refazer" icone={Redo02Icon} disabled={!editor.podeRefazer} onClick={editor.refazer} />
         </div>
-        <span aria-live="off" className={`mr-auto ml-1 text-[13px] text-tinta-3 ${gravacao.tipo === "erro" ? "invisible" : ""}`}>
+        <span aria-live="off" className={`mr-auto ml-1 text-[13px] text-tinta-3 ${gravacao.tipo === "erro" || gravacao.tipo === "conflito" ? "invisible" : ""}`}>
           {gravacao.tipo === "salvo" ? "Salvo" : "Salvando…"}
         </span>
         <button
@@ -197,6 +203,9 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
       </header>
       <div role="alert" className="empty:hidden flex flex-col gap-2 px-4 pt-3 sm:px-6">
         {gravacao.tipo === "erro" && <Falha texto="A última edição não foi salva." erro={gravacao.mensagem} tentar={() => void gravarAgora()} />}
+        {gravacao.tipo === "conflito" && (
+          <Falha texto="Suas últimas edições não foram salvas." erro={`${gravacao.mensagem} Recarregue para ver a versão dela.`} rotulo="Recarregar" tentar={() => location.reload()} />
+        )}
         {cena.tipo === "erro" && <Falha texto="Não deu para gerar outra cena. A arte continua com a cena de antes." erro={cena.mensagem} />}
       </div>
       <p role="status" className="px-4 pt-3 text-[13px] text-tinta-3 empty:hidden sm:px-6">

@@ -78,6 +78,20 @@ describe("biblioteca de referências", () => {
 });
 
 describe("artes", () => {
+  test("duas pessoas na mesma arte: quem grava por cima de uma versão velha recebe 409 e não apaga a edição da outra", async () => {
+    const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post sobre espelho", formato: "feed" }) })).json();
+    const comTitulo = (texto: string) => arte.camadas.map((c: { id: string }) => (c.id === "titulo" ? { ...c, texto } : c));
+    const gravar = (texto: string, base: string) =>
+      pedir(`/api/artes/${arte.id}`, { method: "PUT", body: JSON.stringify({ camadas: comTitulo(texto), ajustes: AJUSTES_NEUTROS }), headers: { "content-type": "application/json", "if-match": base } });
+
+    const daAna = await gravar("Da Ana", arte.atualizadaEm);
+    expect(daAna.status).toBe(200);
+    const doBeto = await gravar("Do Beto", arte.atualizadaEm);
+    expect(doBeto.status).toBe(409);
+    expect((await doBeto.json()).arte.camadas.find((c: { id: string }) => c.id === "titulo").texto).toBe("Da Ana");
+    expect((await gravar("Da Ana de novo", (await daAna.json()).atualizadaEm)).status).toBe(200);
+  });
+
   test("cria com as leituras da biblioteca, edita as camadas e renderiza o PNG no tamanho do formato", async () => {
     await enviarReferencia();
     const criada = await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post sobre box de banheiro", formato: "story" }) });

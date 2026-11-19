@@ -20,7 +20,10 @@ export class ErroDeApi extends Error {
 }
 
 async function pedir(caminho: string, init: RequestInit): Promise<Response> {
-  const res = await fetch(caminho, { ...init, headers: { accept: "application/json", ...(typeof init.body === "string" ? { "content-type": "application/json" } : {}) } });
+  const res = await fetch(caminho, {
+    ...init,
+    headers: { accept: "application/json", ...(typeof init.body === "string" ? { "content-type": "application/json" } : {}), ...(init.headers as Record<string, string> | undefined) },
+  });
   if (res.status === 401) navegar("/entrar", { substituir: true });
   if (!res.ok) {
     const corpo = (await res.json().catch(() => null)) as { erro?: string } | null;
@@ -70,7 +73,9 @@ export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: st
 
 /** As rotas de artes do backend novo (src/v2/api.ts). */
 export const apiArtes = {
-  gravar: (id: string, edicao: Edicao) => comCorpo<ArteDaApi>(`/api/artes/${id}`, "PUT", edicao),
+  /** `base` é o atualizadaEm da versão editada; se outra pessoa gravou depois, o servidor recusa com 409. */
+  gravar: async (id: string, edicao: Edicao, base: string) =>
+    (await pedir(`/api/artes/${id}`, { method: "PUT", body: JSON.stringify(edicao), headers: { "if-match": base } })).json() as Promise<ArteDaApi>,
   novaCena: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}/cena`, "POST"),
   /** Imagem ou SVG para uma camada. O servidor devolve o PNG guardado e a proporção dele. */
   enviarImagem: async (id: string, arquivo: File) => {

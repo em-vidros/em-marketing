@@ -1,5 +1,17 @@
 /** Uma leitura que falhou: o que não carregou, o detalhe do servidor e, quando dá, o botão de tentar de novo. */
-export function Falha({ texto, erro, tentar, className = "" }: { texto: string; erro?: Error | string | null; tentar?: () => void; className?: string }) {
+export function Falha({
+  texto,
+  erro,
+  tentar,
+  rotulo = "Tentar de novo",
+  className = "",
+}: {
+  texto: string;
+  erro?: Error | string | null;
+  tentar?: () => void;
+  rotulo?: string;
+  className?: string;
+}) {
   const detalhe = typeof erro === "string" ? erro : erro?.message;
   return (
     <div role="alert" className={`flex flex-col items-start gap-2 ${className}`}>
@@ -13,7 +25,7 @@ export function Falha({ texto, erro, tentar, className = "" }: { texto: string; 
           onClick={tentar}
           className="pressiona cursor-pointer rounded-full bg-linha px-3.5 py-1.5 text-[13px] font-medium hover:bg-linha-forte"
         >
-          Tentar de novo
+          {rotulo}
         </button>
       )}
     </div>

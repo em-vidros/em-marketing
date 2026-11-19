@@ -135,8 +135,13 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     const recusa = await fonteRecusada(r.dados.camadas);
     if (recusa) return c.json(erro(recusa), 400);
 
-    const arte = await gravarEdicao(banco, c.req.param("id"), r.dados);
-    return arte ? c.json(arte) : c.json(erro("Não encontrado."), 404);
+    const base = c.req.header("if-match");
+    const data = base ? new Date(base) : undefined;
+    if (data && Number.isNaN(data.getTime())) return c.json(erro("Versão da arte inválida."), 400);
+    const gravada = await gravarEdicao(banco, c.req.param("id"), r.dados, data);
+    if (!gravada) return c.json(erro("Não encontrado."), 404);
+    if ("conflito" in gravada) return c.json({ ...erro("Outra pessoa mudou esta arte enquanto você editava."), arte: gravada.conflito }, 409);
+    return c.json(gravada.arte);
   });
 
   api.post("/artes/:id/cena", async (c) => {

@@ -1,4 +1,4 @@
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Arquivos } from "./arquivos";
 import type { Banco } from "./banco";
 import { camadasIniciais, type Ajustes, type Camada, type Formato } from "./camadas";
@@ -89,9 +89,17 @@ export async function arteDaImagem(
 
 export type Edicao = { camadas: Camada[]; ajustes: Ajustes };
 
-export async function gravarEdicao(banco: Banco, id: string, edicao: Edicao): Promise<Arte | null> {
-  const [arte] = await banco.update(artes).set({ ...edicao, atualizadaEm: new Date() }).where(eq(artes.id, id)).returning();
-  return arte ?? null;
+/**
+ * Grava a edição. Com `base`, a versão que a pessoa estava editando, só grava se ninguém gravou
+ * outra depois dela: duas pessoas na mesma arte não apagam o trabalho uma da outra em silêncio.
+ * O banco guarda microssegundos e a API devolve milissegundos, por isso a comparação trunca.
+ */
+export async function gravarEdicao(banco: Banco, id: string, edicao: Edicao, base?: Date): Promise<{ arte: Arte } | { conflito: Arte } | null> {
+  const mesmaVersao = base ? sql`date_trunc('milliseconds', ${artes.atualizadaEm}) = ${base.toISOString()}::timestamptz` : undefined;
+  const [arte] = await banco.update(artes).set({ ...edicao, atualizadaEm: new Date() }).where(and(eq(artes.id, id), mesmaVersao)).returning();
+  if (arte) return { arte };
+  const atual = await pegarArte(banco, id);
+  return atual ? { conflito: atual } : null;
 }
 
 /** O botão "Nova cena": gera outra cena com o mesmo prompt e mantém as camadas. */
