@@ -47,6 +47,17 @@ const Texto = z
 
 const Logo = z.object({ id, tipo: z.literal("logo"), variante: z.enum(["cor", "branca"]), x: px, y: px, largura: z.number().int().min(40).max(1080) });
 
+/** Imagem ou SVG enviado pelo usuário, guardado como PNG. `proporcao` é altura sobre largura. */
+const Imagem = z.object({
+  id,
+  tipo: z.literal("imagem"),
+  chave: z.string().regex(/^[0-9a-f-]{36}\.(png|jpg|webp)$/, "Arquivo de imagem inválido."),
+  proporcao: z.number().positive().max(20),
+  x: px,
+  y: px,
+  largura: z.number().int().min(20).max(4000),
+});
+
 const Forma = z.object({
   id,
   tipo: z.literal("forma"),
@@ -59,7 +70,7 @@ const Forma = z.object({
 });
 
 /** A ordem do array é a ordem de empilhamento: a primeira camada fica logo acima da cena. */
-export const Camadas = z.array(z.union([Texto, Logo, Forma])).max(30, "Uma arte tem no máximo 30 camadas.");
+export const Camadas = z.array(z.union([Texto, Logo, Imagem, Forma])).max(30, "Uma arte tem no máximo 30 camadas.");
 export type Camada = z.infer<typeof Camadas>[number];
 
 /** O que o modelo de texto devolve para montar uma arte nova. A cena vai sozinha para o modelo de imagem. */

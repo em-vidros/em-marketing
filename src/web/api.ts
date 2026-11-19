@@ -72,6 +72,12 @@ export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: st
 export const apiArtes = {
   trocarCamadas: (id: string, camadas: Camada[]) => comCorpo<ArteDaApi>(`/api/artes/${id}/camadas`, "PUT", { camadas }),
   novaCena: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}/cena`, "POST"),
+  /** Imagem ou SVG para uma camada. O servidor devolve o PNG guardado e a proporção dele. */
+  enviarImagem: async (id: string, arquivo: File) => {
+    const form = new FormData();
+    form.set("arquivo", arquivo);
+    return (await pedir(`/api/artes/${id}/imagens`, { method: "POST", body: form })).json() as Promise<{ chave: string; proporcao: number }>;
+  },
   /** O PNG final. A versão na query troca a URL a cada gravação, para o navegador não mostrar o render velho. */
   png: (arte: ArteDaApi) => `/api/artes/${arte.id}/png?v=${Date.parse(arte.atualizadaEm)}`,
 };

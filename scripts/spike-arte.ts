@@ -33,7 +33,6 @@ if (problemas.length) {
 const arg = (process.argv[2] ?? "ambos") as Formato | "ambos";
 const formatos: Formato[] = arg === "ambos" ? ["feed", "stories"] : [arg];
 const STYLES = stylesFor(BRIEF.pilar);
-const DARK = new Set(["faixa-teal"]);
 mkdirSync("out/spike", { recursive: true });
 
 console.log(`Pilar ${BRIEF.pilar} → estilos: ${STYLES.join(", ")}`);
@@ -46,7 +45,6 @@ for (const formato of formatos) {
       generateArt({
         prompt: buildPrompt({ styleId, formato, brief: BRIEF, headline: HEADLINE, apoio: APOIO }),
         formato,
-        logoVariant: DARK.has(styleId) ? "branco" : "cor",
       }),
     ),
   );

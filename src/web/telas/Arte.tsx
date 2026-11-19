@@ -21,8 +21,8 @@ const PALETA = [
 
 const ESPERA_PARA_GRAVAR = 450;
 
-const TIPO = { texto: "Texto", logo: "Logo", forma: "Faixa" } as const;
-const REMOVIDO = { texto: "Texto removido.", logo: "Logo removido.", forma: "Faixa removida." } as const;
+const TIPO = { texto: "Texto", logo: "Logo", imagem: "Imagem", forma: "Faixa" } as const;
+const REMOVIDO = { texto: "Texto removido.", logo: "Logo removido.", imagem: "Imagem removida.", forma: "Faixa removida." } as const;
 
 type Gravacao = { tipo: "salvo" } | { tipo: "pendente" } | { tipo: "salvando" } | { tipo: "erro"; mensagem: string };
 
@@ -192,7 +192,7 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
         <Preview arte={arte} camadas={camadas} selecionada={selecionada} selecionar={setSelecionada} gerando={cena.tipo === "gerando"} />
         <aside aria-label="Camadas" className="flex w-full flex-col gap-5 border-linha p-4 lg:w-[340px] lg:flex-none lg:overflow-y-auto lg:border-l">
-          <ListaDeCamadas camadas={camadas} selecionada={selecionada} selecionar={setSelecionada} acrescentar={acrescentar} formato={arte.formato} />
+          <ListaDeCamadas arteId={arte.id} camadas={camadas} selecionada={selecionada} selecionar={setSelecionada} acrescentar={acrescentar} formato={arte.formato} />
           {camada ? (
             <Controles key={camada.id} camada={camada} mudar={mudar} remover={() => remover(camada)} />
           ) : removida ? (
@@ -217,9 +217,10 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
 }
 
 const alturaDa = (c: Camada) =>
-  c.tipo === "forma" ? c.altura : c.tipo === "logo" ? c.largura * PROPORCAO_DO_LOGO : c.tamanho * c.entrelinha * linhasEstimadas(c.texto, c.fonte, c.tamanho, c.largura);
+  c.tipo === "forma" ? c.altura : c.tipo === "logo" ? c.largura * PROPORCAO_DO_LOGO : c.tipo === "imagem" ? c.largura * c.proporcao : c.tamanho * c.entrelinha * linhasEstimadas(c.texto, c.fonte, c.tamanho, c.largura);
 
-const descricaoDa = (c: Camada) => (c.tipo === "texto" ? c.texto : c.tipo === "logo" ? (c.variante === "cor" ? "Colorido" : "Branco") : c.cor);
+const descricaoDa = (c: Camada) =>
+  c.tipo === "texto" ? c.texto : c.tipo === "logo" ? (c.variante === "cor" ? "Colorido" : "Branco") : c.tipo === "imagem" ? "Imagem enviada" : c.cor;
 
 function Preview(props: { arte: ArteDaApi; camadas: Camada[]; selecionada: string | null; selecionar: (id: string) => void; gerando: boolean }) {
   const { largura, altura } = FORMATOS[props.arte.formato];
@@ -253,6 +254,7 @@ function Preview(props: { arte: ArteDaApi; camadas: Camada[]; selecionada: strin
 }
 
 function ListaDeCamadas(props: {
+  arteId: string;
   camadas: Camada[];
   selecionada: string | null;
   selecionar: (id: string) => void;
@@ -276,9 +278,40 @@ function ListaDeCamadas(props: {
     largura: largura - 160,
   });
   const novaFaixa = (): Camada => ({ id: novoId(), tipo: "forma", cor: "#2F646A", x: 0, y: altura - 320, largura, altura: 320, raio: 0 });
+  const LARGURA_DO_LOGO = 200;
+  const novoLogo = (): Camada => ({
+    id: novoId(),
+    tipo: "logo",
+    variante: "cor",
+    x: largura - 64 - LARGURA_DO_LOGO,
+    y: Math.round(altura - (props.formato === "story" ? 360 : 64) - LARGURA_DO_LOGO * PROPORCAO_DO_LOGO),
+    largura: LARGURA_DO_LOGO,
+  });
+  const [envio, setEnvio] = useState<{ tipo: "parado" } | { tipo: "enviando" } | { tipo: "erro"; mensagem: string }>({ tipo: "parado" });
+  async function enviarImagem(arquivo: File | undefined) {
+    if (!arquivo) return;
+    setEnvio({ tipo: "enviando" });
+    try {
+      const { chave, proporcao } = await apiArtes.enviarImagem(props.arteId, arquivo);
+      // Entra centralizada, com 40% da largura da arte e sem passar da altura dela.
+      const larguraDaImagem = Math.round(Math.min(largura * 0.4, (altura * 0.6) / proporcao));
+      props.acrescentar({
+        id: novoId(),
+        tipo: "imagem",
+        chave,
+        proporcao,
+        largura: larguraDaImagem,
+        x: Math.round((largura - larguraDaImagem) / 2),
+        y: Math.round((altura - larguraDaImagem * proporcao) / 2),
+      });
+      setEnvio({ tipo: "parado" });
+    } catch (e) {
+      setEnvio({ tipo: "erro", mensagem: (e as Error).message });
+    }
+  }
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
         <h2 className="mr-auto text-xs text-tinta-3">Camadas</h2>
         <button type="button" aria-label="Adicionar texto" onClick={() => props.acrescentar(novoTexto())} className={BOTAO_PEQUENO}>
           + Texto
@@ -286,7 +319,29 @@ function ListaDeCamadas(props: {
         <button type="button" aria-label="Adicionar faixa" onClick={() => props.acrescentar(novaFaixa())} className={BOTAO_PEQUENO}>
           + Faixa
         </button>
+        <button type="button" aria-label="Adicionar logo oficial" onClick={() => props.acrescentar(novoLogo())} className={BOTAO_PEQUENO}>
+          + Logo
+        </button>
+        <label className={`${BOTAO_PEQUENO} focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-tinta ${envio.tipo === "enviando" ? "pointer-events-none opacity-50" : ""}`}>
+          {envio.tipo === "enviando" ? "Enviando…" : "+ Imagem"}
+          <input
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg"
+            aria-label="Adicionar imagem ou SVG"
+            className="sr-only"
+            disabled={envio.tipo === "enviando"}
+            onChange={(e) => {
+              void enviarImagem(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </label>
       </div>
+      {envio.tipo === "erro" && (
+        <p role="alert" className="text-[13px] text-erro">
+          Não deu para enviar a imagem: {envio.mensagem}
+        </p>
+      )}
       <ul className="flex flex-col gap-0.5">
         {[...props.camadas].reverse().map((c) => (
           <li key={c.id}>

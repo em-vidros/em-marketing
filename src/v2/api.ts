@@ -1,4 +1,6 @@
+import { Resvg } from "@resvg/resvg-js";
 import { Hono } from "hono";
+import sharp from "sharp";
 import { z } from "zod";
 import type { Usuario } from "../server/auth";
 import { criarArte, listarArtes, novaCena, pegarArte, trocarCamadas, type Estudio } from "./artes";
@@ -118,11 +120,35 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     return arte ? c.json(arte) : c.json(erro("Não encontrado."), 404);
   });
 
+  // Imagem ou SVG para uma camada do editor. Tudo vira PNG aqui: o SVG é rasterizado pelo resvg, que não roda
+  // script, e o arquivo servido depois nunca é um SVG executável no domínio do app.
+  api.post("/artes/:id/imagens", async (c) => {
+    const form = await c.req.formData().catch(() => null);
+    const arquivo = form?.get("arquivo");
+    if (!(arquivo instanceof File)) return c.json(erro("Mande a imagem no campo arquivo."), 400);
+    if (arquivo.size > TAMANHO_MAXIMO) return c.json(erro("A imagem passa de 10 MB."), 400);
+    const ehSvg = arquivo.type === "image/svg+xml" || arquivo.name.toLowerCase().endsWith(".svg");
+    if (!ehSvg && !(arquivo.type in EXTENSOES)) return c.json(erro("A imagem precisa ser PNG, JPEG, WebP ou SVG."), 400);
+    const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    let png: Uint8Array;
+    try {
+      png = ehSvg
+        ? new Resvg(Buffer.from(bytes), { fitTo: { mode: "width", value: 2048 } }).render().asPng()
+        : new Uint8Array(await sharp(bytes).rotate().resize(2048, 2048, { fit: "inside", withoutEnlargement: true }).png().toBuffer());
+    } catch {
+      return c.json(erro("Não deu para ler essa imagem. Confira se o arquivo não está corrompido."), 400);
+    }
+    const { width, height } = await sharp(png).metadata();
+    if (!width || !height) return c.json(erro("Não deu para ler o tamanho da imagem."), 400);
+    const chave = await arquivos.salvar(png, "png");
+    return c.json({ chave, proporcao: height / width }, 201);
+  });
+
   api.get("/artes/:id/png", async (c) => {
     const arte = await pegarArte(banco, c.req.param("id"));
     const cena = arte && (await arquivos.ler(arte.cena));
     if (!arte || !cena) return c.json(erro("Não encontrado."), 404);
-    return new Response(await renderizar(arte.formato, cena, arte.camadas), { headers: { "content-type": "image/png" } });
+    return new Response(await renderizar(arte.formato, cena, arte.camadas, (chave) => arquivos.ler(chave)), { headers: { "content-type": "image/png" } });
   });
 
   return api;

@@ -96,6 +96,31 @@ describe("artes", () => {
     expect({ width, height }).toEqual({ width: 1080, height: 1920 });
   });
 
+  test("um SVG enviado vira PNG, entra como camada e aparece no render no lugar certo", async () => {
+    const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100"><rect width="200" height="100" fill="#FF0000"/></svg>';
+    const form = new FormData();
+    form.set("arquivo", new File([svg], "selo.svg", { type: "image/svg+xml" }));
+    const enviada = await pedir(`/api/artes/${arte.id}/imagens`, { method: "POST", body: form });
+    expect(enviada.status).toBe(201);
+    const { chave, proporcao } = await enviada.json();
+    expect(chave).toMatch(/\.png$/);
+    expect(proporcao).toBeCloseTo(0.5);
+
+    const camadas = [{ id: "selo", tipo: "imagem", chave, proporcao, x: 100, y: 100, largura: 400 }];
+    expect((await pedir(`/api/artes/${arte.id}/camadas`, { method: "PUT", ...json({ camadas }) })).status).toBe(200);
+    const png = Buffer.from(await (await pedir(`/api/artes/${arte.id}/png`)).arrayBuffer());
+    const { data } = await sharp(png).extract({ left: 300, top: 200, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
+    expect([...data.subarray(0, 3)]).toEqual([255, 0, 0]);
+  });
+
+  test("recusa arquivo de camada que não é imagem", async () => {
+    const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
+    const form = new FormData();
+    form.set("arquivo", new File(["oi"], "nota.txt", { type: "text/plain" }));
+    expect((await pedir(`/api/artes/${arte.id}/imagens`, { method: "POST", body: form })).status).toBe(400);
+  });
+
   test("recusa camada com peso que a fonte não tem", async () => {
     const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
     const camadas = arte.camadas.map((c: { id: string }) => (c.id === "titulo" ? { ...c, fonte: "Playfair Display", peso: 900 } : c));

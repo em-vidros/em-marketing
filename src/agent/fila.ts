@@ -139,7 +139,7 @@ async function agendarArte(
   const ocupada = await recusaSeOcupada(fonte, midia);
   if (ocupada) return ocupada;
 
-  const jpegPath = await gravarArquivo("fila", `${crypto.randomUUID()}.jpg`, await renderizarJpeg(arte.formato, cena, arte.camadas), "image/jpeg");
+  const jpegPath = await gravarArquivo("fila", `${crypto.randomUUID()}.jpg`, await renderizarJpeg(arte.formato, cena, arte.camadas, (c) => estudio.arquivos.ler(c)), "image/jpeg");
   return enfileirarSeLivre({ fonte, midia, jpegPath, legenda: legendaDa(midia, legenda, null) }, publicaEm);
 }
 

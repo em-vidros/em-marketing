@@ -31,7 +31,10 @@ const ALINHAMENTO = {
   direita: { textAlign: "right", justifyContent: "flex-end" },
 } as const;
 
-function noDaCamada(camada: Camada): No {
+/** Lê o arquivo de uma camada de imagem. Vem de fora para o render não depender do Blob. */
+export type LerArquivo = (chave: string) => Promise<Uint8Array | null>;
+
+function noDaCamada(camada: Camada, imagens: Map<string, string>): No {
   const lugar = { position: "absolute", left: camada.x, top: camada.y, width: camada.largura };
   switch (camada.tipo) {
     case "texto":
@@ -53,21 +56,32 @@ function noDaCamada(camada: Camada): No {
       };
     case "logo":
       return { type: "img", props: { src: logos[camada.variante], width: camada.largura, height: Math.round(camada.largura * PROPORCAO_DO_LOGO), style: lugar } };
+    case "imagem": {
+      const src = imagens.get(camada.chave);
+      const altura = Math.round(camada.largura * camada.proporcao);
+      return src ? { type: "img", props: { src, width: camada.largura, height: altura, style: lugar } } : { type: "div", props: { style: { ...lugar, height: altura } } };
+    }
     case "forma":
       return { type: "div", props: { style: { ...lugar, height: camada.altura, backgroundColor: camada.cor, borderRadius: camada.raio } } };
   }
 }
 
 /** A arte pronta para baixar: a cena no fundo e as camadas por cima, na ordem do array. */
-export async function renderizar(formato: Formato, cena: Uint8Array, camadas: Camada[]): Promise<Uint8Array<ArrayBuffer>> {
+export async function renderizar(formato: Formato, cena: Uint8Array, camadas: Camada[], ler?: LerArquivo): Promise<Uint8Array<ArrayBuffer>> {
   const { largura, altura } = FORMATOS[formato];
+  const imagens = new Map<string, string>();
+  for (const c of camadas)
+    if (c.tipo === "imagem" && ler && !imagens.has(c.chave)) {
+      const bytes = await ler(c.chave);
+      if (bytes) imagens.set(c.chave, dataUri(c.chave.endsWith(".jpg") ? "image/jpeg" : c.chave.endsWith(".webp") ? "image/webp" : "image/png", bytes));
+    }
   const raiz: No = {
     type: "div",
     props: {
       style: { width: largura, height: altura, display: "flex", position: "relative", backgroundColor: "#F0EFEA" },
       children: [
         { type: "img", props: { src: dataUri("image/jpeg", cena), width: largura, height: altura, style: { position: "absolute", left: 0, top: 0 } } },
-        ...camadas.map(noDaCamada),
+        ...camadas.map((c) => noDaCamada(c, imagens)),
       ],
     },
   };
@@ -79,7 +93,7 @@ export async function renderizar(formato: Formato, cena: Uint8Array, camadas: Ca
  * A arte como o Instagram aceita: JPEG em sRGB. O limite da API é 8 MB, e nem o maior formato chega
  * perto: 1080×1920 em RGB cru já são 6,2 MB, e o JPEG fica bem abaixo disso.
  */
-export async function renderizarJpeg(formato: Formato, cena: Uint8Array, camadas: Camada[]): Promise<Uint8Array> {
-  const png = await renderizar(formato, cena, camadas);
+export async function renderizarJpeg(formato: Formato, cena: Uint8Array, camadas: Camada[], ler?: LerArquivo): Promise<Uint8Array> {
+  const png = await renderizar(formato, cena, camadas, ler);
   return new Uint8Array(await sharp(png).toColorspace("srgb").jpeg({ quality: 90, mozjpeg: true }).toBuffer());
 }

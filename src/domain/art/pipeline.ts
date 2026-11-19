@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { gravarArquivo } from "../../armazem";
 import { generateArt, type Formato } from "./generate";
+import { aplicarLogo, type Canto } from "./logo";
 import { validarArte } from "./validate";
 import type { Problema } from "../brand/validate";
 import styleMap from "../../../styles/map.json";
@@ -29,8 +30,10 @@ export interface ArtVariant {
   problemas: Problema[];
 }
 
-/** §3.5 — fundo escuro pede a versão branca do logotipo. */
-const DARK_STYLES = new Set(["faixa-teal", "faixa-foto", "teal-parabens", "teal-chamada"]);
+/** Onde a logo oficial entra em cada estilo, igual aos posts reais. A versão (colorida ou branca) sai do fundo. */
+const CANTO_DA_LOGO: Record<string, Canto> = { "teal-parabens": "inferior-centro", "teal-chamada": "inferior-esquerdo" };
+const cantoDa = (style: string): Canto => CANTO_DA_LOGO[style] ?? "inferior-direito";
+const ONDE: Record<Canto, string> = { "inferior-direito": "bottom-right", "inferior-esquerdo": "bottom-left", "inferior-centro": "bottom-centre" };
 
 /** §8.2 — estilos que representam algo real e por isso nunca são gerados. */
 const STYLES_SEM_GERACAO = new Set(["foto-real"]);
@@ -50,10 +53,10 @@ const NEGATIVOS_IA = `
 HARD CONSTRAINTS (brand policy — violating any of these makes the image unusable):
 - Do NOT depict identifiable people presented as EM Vidros employees, customers or partners. Generic people must be small, from behind or out of focus.
 - Do NOT present anything as a real EM Vidros store, factory, truck, delivered project or product photo; that must be real photography. Aspirational architecture with glass is fine as inspiration.
-- Do NOT invent a logo. The EM Vidros logo is supplied as the first reference image and must be reproduced faithfully, never redrawn or restyled. No other brand logos.
+- Do NOT draw any logo, brand mark, emblem or the words "EM Vidros" / "VIDROS" anywhere. The official logo is placed afterwards by the design team. Ignore the logos that appear in the reference images. No other brand logos either.
 - Colour family: teal (#2F646A, #63B5AF and their tints and shades), white, off-white #F0EFEA, greys #414141 and #8A8A8A. Photographs may keep their natural colours. No purple, no blue as an accent, no neon.
 - All text must be in correct Brazilian Portuguese, spelled exactly as given. No invented extra text, no lorem ipsum, no fake small print.
-- The other reference images are real EM Vidros posts: follow their quality, finish and palette, never their exact text or layout.
+- The reference images are real EM Vidros posts: follow their quality, finish and palette, never their exact text, layout or logo.
 `.trim();
 
 /** As referências reais de um estilo, em ordem estável a partir de uma semente, para variar entre gerações. */
@@ -95,7 +98,12 @@ export function buildPrompt(opts: {
       : "story (9:16 vertical, 1080x1920 — keep the top 250px and the bottom 320px free of any critical element; 80px side margins)";
   const desc = `${opts.brief.tema}${opts.brief.angulo ? ` — angle: ${opts.brief.angulo}` : ""}${opts.brief.data ? ` (date: ${opts.brief.data})` : ""} [content pillar: ${opts.brief.pilar}]`;
 
-  const preenchido = template
+  // A logo é colada por código depois; linha de template que fala dela sairia como logo desenhada pelo modelo.
+  const semLogo = template
+    .split("\n")
+    .filter((l) => !/logo/i.test(l))
+    .join("\n");
+  const preenchido = semLogo
     .replace("{FORMAT_DESC}", formatDesc)
     .replace("{TIPO_POST_DESCRIPTION}", desc)
     .replace("{HEADLINE}", opts.headline)
@@ -107,7 +115,8 @@ export function buildPrompt(opts: {
   const direcao = opts.direcao
     ? `\n\nART DIRECTION FROM THE CLIENT (this overrides the visual language above wherever they conflict; keep the brand logo, colour family and professional agency quality):\n${opts.direcao}`
     : "";
-  return `${preenchido}${inspiracao}${direcao}\n\n${NEGATIVOS_IA}`;
+  const canto = `\n\nLOGO AREA: keep the ${ONDE[cantoDa(opts.styleId)]} corner (about 260x220px of the final ${opts.formato === "feed" ? "1080x1350" : "1080x1920, above the bottom 320px"} canvas) clean and calm, with no text and no key element, because the official logo goes there.`;
+  return `${preenchido}${inspiracao}${direcao}${canto}\n\n${NEGATIVOS_IA}`;
 }
 
 /** US-3: gera exatamente 3 variações em estilos distintos, em paralelo. */
@@ -138,12 +147,12 @@ export async function generate3Arts(opts: {
   return Promise.all(
     styles.slice(0, 3).map(async (styleId, i) => {
       const daCasa = referenciasDoEstilo(styleId, semente + i).slice(0, doUsuario.length ? 1 : REFERENCIAS_POR_ARTE);
-      const jpeg = await generateArt({
+      const gerada = await generateArt({
         prompt: buildPrompt({ styleId, formato: opts.formato, brief: opts.brief, headline: opts.headline, apoio: opts.apoio, inspiracoes: opts.inspiracoes, direcao: opts.direcao }),
         formato: opts.formato,
-        logoVariant: DARK_STYLES.has(styleId) ? "branco" : "cor",
         referencias: [...daCasa.map((c) => readFileSync(c)), ...doUsuario],
       });
+      const jpeg = await aplicarLogo(gerada, opts.formato, cantoDa(styleId));
       const estilo = opts.direcao ? `${styleId}+pedido` : styleId;
       const path = await gravarArquivo("arts", `post${opts.postId}-${opts.formato}-v${i + 1}-${styleId}.jpg`, jpeg, "image/jpeg");
       const problemas = await validarArte(jpeg, opts.formato, { paleta: !STYLES_COM_CENA.has(styleId) && !opts.direcao });
@@ -161,14 +170,14 @@ export async function deriveStory(opts: {
   headline: string;
   chosen: ArtVariant;
 }): Promise<{ path: string; problemas: Problema[] }> {
-  const jpeg = await generateArt({
+  const gerada = await generateArt({
     prompt:
       buildPrompt({ styleId: estiloBase(opts.chosen.style), formato: "stories", brief: opts.brief, headline: opts.headline }) +
-      "\n\nIMPORTANT: keep the exact same visual concept, colors, hero element and mood as the second reference image — this is the 9:16 Stories adaptation of that approved artwork, recomposed for vertical (not cropped).",
+      "\n\nIMPORTANT: keep the exact same visual concept, colors, hero element and mood as the reference image: this is the 9:16 Stories adaptation of that approved artwork, recomposed for vertical (not cropped). Leave out its logo; the official logo is added afterwards.",
     formato: "stories",
-    logoVariant: DARK_STYLES.has(estiloBase(opts.chosen.style)) ? "branco" : "cor",
     base: opts.chosen.path,
   });
+  const jpeg = await aplicarLogo(gerada, "stories", cantoDa(estiloBase(opts.chosen.style)));
   const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived.jpg`, jpeg, "image/jpeg");
   return { path, problemas: await validarArte(jpeg, "stories", { paleta: !STYLES_COM_CENA.has(estiloBase(opts.chosen.style)) }) };
 }
