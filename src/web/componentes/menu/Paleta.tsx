@@ -1,8 +1,8 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { Command } from "cmdk";
 import { useState, type ReactNode } from "react";
-import type { NomesDosBots } from "../../api";
-import { BOT_IDS } from "../../bots";
+import type { Equipe } from "../../bots";
+import { BOT_IDS, ehBotFixo } from "../../bots";
 import { navegar } from "../../rota";
 import { type AtalhoId, atalhoDeConversa, atalhoDoBot, rotuloDe } from "../../teclado/atalhos";
 import { estaLigado, executar, useLigados } from "../../teclado/motor";
@@ -32,7 +32,7 @@ export function Paleta({
   /** A conversa da tela, para o grupo contextual. */
   aberta: Conversa | null;
   acoes: AcoesConversa;
-  bots: NomesDosBots;
+  bots: Equipe;
 }) {
   const [busca, setBusca] = useState("");
   // As ações listadas dependem do que está ligado agora (⌘I só existe com a conversa aberta).
@@ -122,18 +122,18 @@ export function Paleta({
 
               {!so && (
                 <Grupo titulo="Bots">
-                  {BOT_IDS.map((id) => (
+                  {bots.lista.map(({ id, nome, descricao, setor }) => (
                     <Linha
                       key={id}
                       valor={`bot ${id}`}
-                      palavras={[bots[id].nome, bots[id].descricao, "bot"]}
-                      atalho={atalhoDoBot(id)}
+                      palavras={[nome, descricao, setor, "bot"]}
+                      atalho={ehBotFixo(id) ? atalhoDoBot(id) : undefined}
                       aoEscolher={() => rodar(() => navegar(`/bots/${id}`))}
                     >
                       <Avatar bot={id} tamanho={20} />
                       <span className="truncate">
-                        {bots[id].nome}
-                        <span className="ml-2 text-tinta-3 max-sm:hidden">{bots[id].descricao}</span>
+                        {nome}
+                        <span className="ml-2 text-tinta-3 max-sm:hidden">{descricao}</span>
                       </span>
                     </Linha>
                   ))}
@@ -146,7 +146,7 @@ export function Paleta({
                     const atalho = atalhoDeConversa(id);
                     const rotulo = rotuloDe(atalho, bots);
                     return (
-                      <Linha key={id} valor={`conversar ${id}`} palavras={[rotulo, bots[id].nome, "conversa", "pedido"]} atalho={atalho} aoEscolher={() => rodar(() => executar(atalho))}>
+                      <Linha key={id} valor={`conversar ${id}`} palavras={[rotulo, bots.de(id).nome, "conversa", "pedido"]} atalho={atalho} aoEscolher={() => rodar(() => executar(atalho))}>
                         <Avatar bot={id} tamanho={20} />
                         <span className="truncate">{rotulo}</span>
                       </Linha>

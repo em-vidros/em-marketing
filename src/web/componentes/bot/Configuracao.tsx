@@ -1,16 +1,17 @@
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useEffect, useId, useLayoutEffect, useRef, useState, type Dispatch, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type Dispatch } from "react";
 import { flushSync } from "react-dom";
 import type { Modelo } from "../../../agent/models";
-import { recarregarBots, useApi, useNomesDosBots, type Carga } from "../../api";
-import { BOTS } from "../../bots";
+import { useApi, type Carga } from "../../api";
+import { recarregarBots, useEquipe, type BotId } from "../../bots";
 import { MOLA, MOLA_REDUZIDA } from "../../movimento";
+import { navegar } from "../../rota";
 import { ehCampo } from "../../teclado/motor";
-import type { BotId } from "../../tipos";
 import { Falha } from "../Falha";
 import { fecharAviso, mostrarAviso } from "../menu/Avisos";
 import { pilhaDeDesfazer } from "../menu/desfazer";
 import { dataCurta } from "../peca";
+import { Cartao, Confirmar, Descricao, estiloCampo, Ferramentas, Linha, Problema, SeletorDeModelo, Setor, TextoLongo } from "./campos";
 import { enviar } from "./enviar";
 import {
   CAMPOS,
@@ -22,9 +23,12 @@ import {
   type Acao,
   type CampoEditavel,
   type DetalheBot,
+  type Edicao,
+  type Editavel,
   type Formulario,
   type VersaoBot,
 } from "./formulario";
+import { Memoria, PromptFinal } from "./Memoria";
 
 type Pronto = Extract<Formulario, { fase: "pronto" }>;
 
@@ -66,271 +70,6 @@ export function useFormularioDoBot(id: BotId, despachar: Dispatch<Acao>) {
   }, [id, despachar]);
 }
 
-const conta = (n: number) => n.toLocaleString("pt-BR");
-
-const estiloCampo =
-  "w-full rounded-[10px] border border-borda-campo bg-superficie px-3 py-2 text-base text-tinta transition-[border-color] duration-150 hover:border-tinta-3 focus-visible:border-tinta sm:text-sm aria-invalid:border-erro";
-
-function Linha({ rotulo, para, ajuda, children }: { rotulo: string; para?: string; ajuda?: ReactNode; children: ReactNode }) {
-  return (
-    <div className="grid gap-x-10 gap-y-2.5 border-t border-linha px-5 py-5 first:border-t-0 md:grid-cols-[minmax(0,200px)_minmax(0,1fr)]">
-      <div className="flex flex-col gap-1">
-        {para ? (
-          <label htmlFor={para} className="font-medium">
-            {rotulo}
-          </label>
-        ) : (
-          <span className="font-medium">{rotulo}</span>
-        )}
-        {ajuda && <p className="text-[13px] text-pretty text-tinta-3">{ajuda}</p>}
-      </div>
-      <div className="flex min-w-0 flex-col gap-1.5">{children}</div>
-    </div>
-  );
-}
-
-function Problema({ id, texto }: { id: string; texto: string | undefined }) {
-  return texto ? (
-    <p id={id} className="text-[13px] text-erro">
-      {texto}
-    </p>
-  ) : null;
-}
-
-const Cartao = ({ children, titulo }: { children: ReactNode; titulo?: string }) => (
-  <section aria-label={titulo} className="flex flex-col gap-2.5">
-    {titulo && <h2 className="px-1 text-[13px] font-medium text-tinta-3">{titulo}</h2>}
-    <div className="rounded-cartao bg-superficie shadow-[0_0_0_1px_var(--color-linha-forte)]">{children}</div>
-  </section>
-);
-
-/** Cresce com o texto. Altura não anima: muda a cada tecla. */
-function useAutoAltura(valor: string) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${el.scrollHeight + 2}px`;
-  }, [valor]);
-  return ref;
-}
-
-/** Uma frase, mas pode passar de uma linha: cresce em vez de esconder o fim. Enter não quebra linha. */
-function Descricao({
-  id,
-  valor,
-  aoMudar,
-  campoRef,
-  placeholder,
-  invalido,
-  descrito,
-}: {
-  id: string;
-  valor: string;
-  aoMudar: (v: string) => void;
-  campoRef: (el: HTMLTextAreaElement | null) => void;
-  placeholder: string;
-  invalido: boolean;
-  descrito: string | undefined;
-}) {
-  const ref = useAutoAltura(valor);
-  return (
-    <textarea
-      id={id}
-      ref={(el) => {
-        ref.current = el;
-        campoRef(el);
-      }}
-      rows={1}
-      value={valor}
-      onChange={(e) => aoMudar(e.target.value.replace(/\n/g, " "))}
-      onKeyDown={(e) => e.key === "Enter" && e.preventDefault()}
-      placeholder={placeholder}
-      aria-invalid={invalido || undefined}
-      aria-describedby={descrito}
-      className={`${estiloCampo} resize-none overflow-hidden`}
-    />
-  );
-}
-
-function SeletorDeModelo({
-  valor,
-  salvo,
-  modelos,
-  aoMudar,
-  relerModelos,
-}: {
-  valor: string;
-  salvo: string;
-  modelos: Carga<Modelo[]>;
-  aoMudar: (id: string) => void;
-  relerModelos: () => void;
-}) {
-  const nome = useId();
-  if (modelos.estado === "carregando") return <p className="text-tinta-3">Carregando os modelos…</p>;
-  if (modelos.estado === "erro") return <Falha texto="Não deu para listar os modelos." erro={modelos.erro} tentar={relerModelos} />;
-  return (
-    <div role="radiogroup" aria-label="Modelo" className="flex flex-col overflow-hidden rounded-[12px] border border-linha-forte">
-      {modelos.dados.map((m) => {
-        const marcado = m.id === valor;
-        const motivo = !m.disponivel ? "Falta a chave de API no servidor" : null;
-        // O modelo em uso continua marcável mesmo sem chave, para não sumir da lista.
-        const desabilitado = !m.disponivel && m.id !== salvo;
-        return (
-          <label
-            key={m.id}
-            className={`flex min-h-12 items-center gap-3 border-t border-linha px-3.5 py-2.5 first:border-t-0 has-[input:focus-visible]:outline-2 has-[input:focus-visible]:-outline-offset-2 has-[input:focus-visible]:outline-tinta ${
-              m.disponivel ? "cursor-pointer transition-colors duration-150 hover:bg-fundo" : "cursor-not-allowed"
-            } ${marcado ? "bg-fundo" : ""}`}
-          >
-            <input
-              type="radio"
-              name={nome}
-              value={m.id}
-              checked={marcado}
-              disabled={desabilitado}
-              onChange={() => aoMudar(m.id)}
-              className="sr-only"
-            />
-            <span
-              aria-hidden="true"
-              className={`grid size-4 flex-none place-items-center rounded-full border ${marcado ? "border-tinta bg-tinta" : "border-tinta/25"}`}
-            >
-              {marcado && <span className="size-1.5 rounded-full bg-sobre-tinta" />}
-            </span>
-            <span className={`flex min-w-0 flex-1 flex-col ${desabilitado ? "text-tinta-4" : m.disponivel ? "" : "text-tinta-2"}`}>
-              <span className="font-medium">{m.nome}</span>
-              <span className="truncate font-mono text-xs text-tinta-3">{m.id}</span>
-            </span>
-            {motivo && <span className="flex-none text-right text-xs text-tinta-3">{motivo}</span>}
-          </label>
-        );
-      })}
-    </div>
-  );
-}
-
-function Prompt({
-  id,
-  valor,
-  problema,
-  aoMudar,
-  campoRef,
-}: {
-  id: string;
-  valor: string;
-  problema: string | undefined;
-  aoMudar: (v: string) => void;
-  campoRef: (el: HTMLTextAreaElement | null) => void;
-}) {
-  const ref = useAutoAltura(valor);
-  const n = valor.trim().length;
-  const cor = n > LIMITE.prompt ? "text-erro" : n > LIMITE.prompt * 0.95 ? "text-esperando-texto" : "text-tinta-3";
-  return (
-    <>
-      <textarea
-        id={id}
-        ref={(el) => {
-          ref.current = el;
-          campoRef(el);
-        }}
-        value={valor}
-        onChange={(e) => aoMudar(e.target.value)}
-        spellCheck
-        aria-invalid={problema ? true : undefined}
-        aria-describedby={`${id}-conta ${problema ? `${id}-erro` : ""}`}
-        className={`${estiloCampo} max-h-[60vh] min-h-64 resize-none overflow-y-auto overscroll-contain font-mono text-base/relaxed sm:text-[13px]/relaxed`}
-      />
-      <div className="flex items-start justify-between gap-3">
-        <Problema id={`${id}-erro`} texto={problema} />
-        <span id={`${id}-conta`} className={`tabular ml-auto flex-none font-mono text-xs ${cor}`}>
-          {conta(n)} de {conta(LIMITE.prompt)} caracteres
-        </span>
-      </div>
-    </>
-  );
-}
-
-function RegrasFixas({ fixo, tools }: { fixo: string; tools: readonly string[] }) {
-  return (
-    <details className="group">
-      <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-[10px] text-[13px] font-medium text-tinta-2 hover:text-tinta [&::-webkit-details-marker]:hidden">
-        <svg
-          aria-hidden="true"
-          width="12"
-          height="12"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="transition-transform duration-200 ease-(--ease-saida) group-open:rotate-90"
-        >
-          <path d="M9 6l6 6-6 6" />
-        </svg>
-        Regras fixas da marca
-      </summary>
-      <div className="flex flex-col gap-3 pt-1 pb-1">
-        <p className="text-[13px] text-pretty text-tinta-3">
-          O código acrescenta estas regras depois do prompt, em toda mensagem. Editar o prompt não as remove.
-        </p>
-        <pre className="max-h-80 overflow-auto overscroll-contain rounded-[10px] bg-fundo px-3 py-2.5 font-mono text-xs/relaxed whitespace-pre-wrap text-tinta-2">
-          {fixo}
-        </pre>
-        {tools.length > 0 && (
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[13px] text-tinta-3">Ferramentas, também definidas no código:</p>
-            <ul className="flex flex-wrap gap-1.5">
-              {tools.map((t) => (
-                <li key={t} className="rounded-[6px] bg-ativo px-1.5 py-0.5 font-mono text-xs text-tinta-2">
-                  {t}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    </details>
-  );
-}
-
-/** Confirmação no lugar do botão. Esc cancela antes de chegar ao "Esc descarta" da página. */
-function Confirmar({
-  pergunta,
-  confirmar,
-  rotulo,
-  cancelar,
-}: {
-  pergunta: string;
-  confirmar: () => void;
-  rotulo: string;
-  cancelar: () => void;
-}) {
-  const botao = useRef<HTMLButtonElement>(null);
-  useEffect(() => botao.current?.focus(), []);
-  return (
-    <div
-      role="group"
-      aria-label={pergunta}
-      onKeyDown={(e) => {
-        if (e.key !== "Escape") return;
-        e.preventDefault();
-        cancelar();
-      }}
-      className="sobe flex flex-wrap items-center gap-2"
-    >
-      <p className="mr-auto text-[13px] text-pretty text-tinta-2">{pergunta}</p>
-      <button type="button" onClick={cancelar} className="pressiona rounded-full px-3.5 py-1.5 font-medium text-tinta-2 hover:bg-hover">
-        Cancelar
-      </button>
-      <button ref={botao} type="button" onClick={confirmar} className="pressiona rounded-full bg-tinta px-3.5 py-1.5 font-medium text-sobre-tinta">
-        {rotulo}
-      </button>
-    </div>
-  );
-}
 
 const autorCurto = (email: string) => email.split("@")[0] ?? email;
 
@@ -349,7 +88,9 @@ function Versoes({
   useEffect(recarregar, [f.salvo.versaoId, recarregar]);
   const [confirmando, setConfirmando] = useState<number | "padrao" | null>(null);
   const [erro, setErro] = useState<string | null>(null);
-  const nomes = useNomesDosBots();
+  const nomes = useEquipe();
+  const criado = f.salvo.criado !== null;
+  const padraoEh = criado ? "a primeira versão" : "o texto original do código";
   const abridores = useRef(new Map<number | "padrao", HTMLButtonElement | null>());
   /** Cancelar devolve o foco ao botão que abriu a confirmação, que volta a existir ao fechar. */
   const cancelar = () => {
@@ -360,6 +101,7 @@ function Versoes({
   const temRascunho = sujo(f);
   const nomeDo = (m: string) => (modelos.estado === "pronto" ? (modelos.dados.find((x) => x.id === m)?.nome ?? m) : m);
   const noPadrao = CAMPOS.every((c) => f.salvo.padrao[c]);
+  const voltarAoPadrao = criado ? "Voltar à primeira versão?" : "Voltar ao texto original do código?";
 
   const fazer = async (caminho: string, texto: string) => {
     setConfirmando(null);
@@ -378,17 +120,17 @@ function Versoes({
           <Confirmar
             pergunta={
               temRascunho
-                ? "Voltar ao texto original do código? O que você editou e não salvou se perde; a versão atual fica no histórico."
-                : "Voltar ao texto original do código? A versão atual fica no histórico."
+                ? `${voltarAoPadrao} O que você editou e não salvou se perde; a versão atual fica no histórico.`
+                : `${voltarAoPadrao} A versão atual fica no histórico.`
             }
             rotulo="Restaurar padrão"
-            confirmar={() => fazer(padrao, "Padrão do código restaurado.")}
+            confirmar={() => fazer(padrao, criado ? "Primeira versão restaurada." : "Padrão do código restaurado.")}
             cancelar={cancelar}
           />
         ) : (
           <div className="flex flex-wrap items-center gap-3">
             <p className="mr-auto text-[13px] text-pretty text-tinta-3">
-              {noPadrao ? "Em uso: o texto original do código." : "Cada gravação vira uma versão. Restaurar grava uma versão nova, então nada se perde."}
+              {noPadrao ? `Em uso: ${padraoEh}.` : "Cada gravação vira uma versão. Restaurar grava uma versão nova, então nada se perde."}
             </p>
             <button
               ref={(el) => void abridores.current.set("padrao", el)}
@@ -413,7 +155,7 @@ function Versoes({
         <Falha texto="Não deu para carregar as versões." erro={carga.erro} tentar={recarregar} className="border-t border-linha px-5 py-4" />
       ) : carga.dados.length === 0 ? (
         <p className="border-t border-linha px-5 py-4 text-pretty text-tinta-3">
-          Nenhuma versão gravada. {nomes[id].nome} usa o texto original do código até alguém salvar uma mudança.
+          Nenhuma versão gravada. {nomes.de(id).nome} usa o texto original do código até alguém salvar uma mudança.
         </p>
       ) : (
         <ol className="flex flex-col">
@@ -465,7 +207,15 @@ function Versoes({
                     <p className="text-pretty">
                       <span className="text-tinta-3">Descrição:</span> {v.descricao}
                     </p>
+                    <p>
+                      <span className="text-tinta-3">Setor:</span> {v.setor}
+                    </p>
                     <pre className="mt-1 max-h-60 overflow-auto overscroll-contain font-mono text-xs/relaxed whitespace-pre-wrap text-tinta-2">{v.prompt}</pre>
+                    {v.regras && (
+                      <pre className="mt-1 max-h-60 overflow-auto overscroll-contain border-t border-linha pt-2 font-mono text-xs/relaxed whitespace-pre-wrap text-tinta-2">
+                        {v.regras}
+                      </pre>
+                    )}
                   </div>
                 </details>
               </li>
@@ -523,9 +273,58 @@ function Barra({ f, salvar, descartar }: { f: Pronto; salvar: () => void; descar
   );
 }
 
+/** Apagar some com o bot da barra; as conversas dele continuam abertas para leitura. O desfazer do toast traz de volta. */
+function Apagar({ id, nome }: { id: BotId; nome: string }) {
+  const [confirmando, setConfirmando] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
+  const apagar = async () => {
+    setConfirmando(false);
+    setErro(null);
+    try {
+      await enviar<undefined>(`/api/bots/${id}`, "DELETE");
+    } catch (e) {
+      return setErro((e as Error).message);
+    }
+    void recarregarBots();
+    navegar("/");
+    const chave = pilhaDeDesfazer.empilhar(() =>
+      enviar<DetalheBot>(`/api/bots/${id}/restaurar`, "POST")
+        .then(() => recarregarBots())
+        .catch((e: Error) => mostrarAviso({ tipo: "erro", texto: `Não deu para desfazer. ${e.message}` })),
+    );
+    mostrarAviso({ tipo: "desfazivel", chave, texto: `${nome} apagado.` });
+  };
+  return (
+    <Cartao titulo="Apagar">
+      <div className="flex flex-col gap-3 px-5 py-4">
+        {confirmando ? (
+          <Confirmar
+            pergunta={`Apagar ${nome}? Ele sai da barra para todo mundo. As conversas com ele continuam abertas para leitura.`}
+            rotulo="Apagar bot"
+            confirmar={() => void apagar()}
+            cancelar={() => setConfirmando(false)}
+          />
+        ) : (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="mr-auto text-[13px] text-pretty text-tinta-3">Tira o bot da equipe. Dá para desfazer logo depois.</p>
+            <button type="button" onClick={() => setConfirmando(true)} className="pressiona rounded-full px-3.5 py-1.5 font-medium text-erro hover:bg-erro/10">
+              Apagar bot
+            </button>
+          </div>
+        )}
+        {erro && (
+          <p role="alert" className="text-[13px] text-erro">
+            Não deu para apagar. {erro}
+          </p>
+        )}
+      </div>
+    </Cartao>
+  );
+}
+
 /**
  * A aba Configuração. O estado do formulário mora na página (Bot.tsx), que mostra o nome salvo no
- * cabeçalho; aqui ficam os campos, o histórico e os atalhos ⌘S e Esc.
+ * cabeçalho; aqui ficam os campos, a memória, o prompt final, o histórico e os atalhos ⌘S e Esc.
  */
 export function Configuracao({
   id,
@@ -542,11 +341,15 @@ export function Configuracao({
 }) {
   const ids = useId();
   const campos = useRef<Partial<Record<CampoEditavel, HTMLElement | null>>>({});
+  const equipe = useEquipe();
+  const setores = [...new Set(equipe.lista.map((b) => b.setor))];
+  const [memoriaEm, setMemoriaEm] = useState(f.salvo.memoria.atualizadaEm);
+  const criado = f.salvo.criado !== null;
 
-  const editar = (campo: CampoEditavel, valor: string) => {
+  const editar = (edicao: Edicao) => {
     largar(id, "descarte");
     largar(id, "restauro");
-    despachar({ tipo: "editar", campo, valor });
+    despachar(edicao);
   };
 
   const salvar = async () => {
@@ -629,10 +432,9 @@ export function Configuracao({
             id={`${ids}-nome`}
             ref={campoDe("nome")}
             value={r.nome}
-            onChange={(e) => editar("nome", e.target.value)}
+            onChange={(e) => editar({ tipo: "editar", campo: "nome", valor: e.target.value })}
             autoComplete="off"
             maxLength={LIMITE.nome + 20}
-            placeholder={BOTS[id].nome}
             aria-invalid={p.nome ? true : undefined}
             aria-describedby={descrito("nome")}
             className={estiloCampo}
@@ -644,29 +446,118 @@ export function Configuracao({
             id={`${ids}-descricao`}
             campoRef={campoDe("descricao")}
             valor={r.descricao}
-            aoMudar={(v) => editar("descricao", v)}
-            placeholder={BOTS[id].papel}
+            aoMudar={(v) => editar({ tipo: "editar", campo: "descricao", valor: v })}
+            placeholder=""
             invalido={!!p.descricao}
             descrito={descrito("descricao")}
           />
           <Problema id={`${ids}-descricao-erro`} texto={p.descricao} />
         </Linha>
-        <Linha rotulo="Modelo" ajuda="O modelo de IA que responde por este bot.">
-          <SeletorDeModelo valor={r.modelo} salvo={f.salvo.modelo} modelos={modelos} relerModelos={relerModelos} aoMudar={(m) => editar("modelo", m)} />
+        <Linha rotulo="Setor" para={`${ids}-setor`} ajuda="O grupo do bot na barra lateral, como Marketing ou Comercial.">
+          <Setor
+            id={`${ids}-setor`}
+            valor={r.setor}
+            setores={setores}
+            aoMudar={(v) => editar({ tipo: "editar", campo: "setor", valor: v })}
+            campoRef={campoDe("setor")}
+            invalido={!!p.setor}
+            descrito={descrito("setor")}
+          />
+          <Problema id={`${ids}-setor-erro`} texto={p.setor} />
         </Linha>
+        <Linha rotulo="Modelo" ajuda="O modelo de IA que responde por este bot.">
+          <SeletorDeModelo
+            valor={r.modelo}
+            salvo={f.salvo.modelo}
+            modelos={modelos}
+            relerModelos={relerModelos}
+            aoMudar={(m) => editar({ tipo: "editar", campo: "modelo", valor: m as Editavel["modelo"] })}
+          />
+        </Linha>
+      </Cartao>
+
+      <Cartao titulo="O que o modelo recebe">
         <Linha
           rotulo="Prompt"
           para={`${ids}-prompt`}
           ajuda="O papel do bot: o que ele faz, em que ordem e o que evita. Escreva como se explicasse a uma pessoa nova na equipe."
         >
-          <Prompt id={`${ids}-prompt`} valor={r.prompt} problema={p.prompt} aoMudar={(v) => editar("prompt", v)} campoRef={campoDe("prompt")} />
-          <RegrasFixas fixo={f.salvo.fixo} tools={f.salvo.tools} />
+          <TextoLongo
+            id={`${ids}-prompt`}
+            valor={r.prompt}
+            limite={LIMITE.prompt}
+            problema={p.prompt}
+            aoMudar={(v) => editar({ tipo: "editar", campo: "prompt", valor: v })}
+            campoRef={campoDe("prompt")}
+          />
+        </Linha>
+        <Linha rotulo="Regras" para={`${ids}-regras`} ajuda="Como usar as ferramentas: o que chamar, em que ordem e quando parar. Entram depois do prompt.">
+          <TextoLongo
+            id={`${ids}-regras`}
+            valor={r.regras}
+            limite={LIMITE.regras}
+            problema={p.regras}
+            aoMudar={(v) => editar({ tipo: "editar", campo: "regras", valor: v })}
+            campoRef={campoDe("regras")}
+            baixo={!criado}
+            placeholder="Sem regras. Escreva aqui como o bot deve usar as ferramentas."
+          />
+          {r.regras !== f.salvo.regrasPadrao && (
+            <button
+              type="button"
+              onClick={() => editar({ tipo: "editar", campo: "regras", valor: f.salvo.regrasPadrao })}
+              className="pressiona self-start rounded-full bg-tinta/[0.06] px-3 py-1.5 text-[13px] font-medium hover:bg-tinta/10"
+            >
+              {criado ? "Voltar às regras da primeira versão" : "Voltar às regras originais"}
+            </button>
+          )}
+        </Linha>
+        {f.salvo.contexto && (
+          <Linha rotulo="Brandbook" ajuda="Os capítulos do brandbook e os tokens da marca, gerados da pasta brand. Entram depois das regras.">
+            <label className="flex min-h-11 cursor-pointer items-center gap-3">
+              <input
+                type="checkbox"
+                checked={r.marca}
+                onChange={(e) => editar({ tipo: "editar", campo: "marca", valor: e.target.checked })}
+                className="size-4 flex-none accent-tinta"
+              />
+              <span className="text-[13px]">Incluir o brandbook no prompt</span>
+            </label>
+            <details className="group">
+              <summary className="w-fit cursor-pointer list-none text-xs text-tinta-3 hover:text-tinta [&::-webkit-details-marker]:hidden">
+                <span className="group-open:hidden">Ver o texto</span>
+                <span className="hidden group-open:inline">Esconder o texto</span>
+              </summary>
+              <pre className="mt-2 max-h-80 overflow-auto overscroll-contain rounded-[10px] bg-fundo px-3 py-2.5 font-mono text-xs/relaxed whitespace-pre-wrap text-tinta-2">
+                {f.salvo.contexto}
+              </pre>
+            </details>
+          </Linha>
+        )}
+        <Linha
+          rotulo="Ferramentas"
+          ajuda={criado ? "O que o bot pode fazer além de conversar. Lembrar, que grava na memória, todo bot tem." : "As ferramentas dos bots que vêm com o sistema são definidas no código."}
+        >
+          {criado ? (
+            <Ferramentas marcadas={r.tools} aoMudar={(tools) => editar({ tipo: "editar", campo: "tools", valor: tools })} />
+          ) : (
+            <ul className="flex flex-wrap gap-1.5">
+              {[...f.salvo.tools, "lembrar"].map((t) => (
+                <li key={t} className="rounded-[6px] bg-ativo px-1.5 py-0.5 font-mono text-xs text-tinta-2">
+                  {t}
+                </li>
+              ))}
+            </ul>
+          )}
         </Linha>
       </Cartao>
       <p className="-mt-5 px-1 text-[13px] text-pretty text-tinta-3">
         As mudanças valem a partir da próxima mensagem, inclusive nas conversas que já existem. Não precisa reiniciar nada.
       </p>
+      <Memoria id={id} inicial={f.salvo.memoria} aoGravar={(m) => setMemoriaEm(m.atualizadaEm)} />
+      <PromptFinal id={id} versao={`${f.salvo.versaoId}-${memoriaEm}`} />
       <Versoes id={id} f={f} modelos={modelos} restaurar={restaurar} />
+      {criado && <Apagar id={id} nome={f.salvo.nome} />}
       <Barra f={f} salvar={() => void salvar()} descartar={descartar} />
     </form>
   );

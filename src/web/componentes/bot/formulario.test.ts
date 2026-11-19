@@ -6,12 +6,19 @@ const detalhe: DetalheBot = {
   nome: "Post",
   descricao: "Brief, headline e artes",
   modelo: "openai:gpt-6-luna",
+  setor: "Marketing",
   prompt: "Você monta o post.",
+  regras: "Chame montar_brief primeiro.",
+  marca: true,
+  tools: [],
+  criado: null,
+  apagadoEm: null,
   sugestoes: [],
   versaoId: null,
-  padrao: { nome: true, descricao: true, modelo: true, prompt: true },
-  fixo: "Regras da marca",
-  tools: [],
+  padrao: { nome: true, descricao: true, setor: true, modelo: true, prompt: true, regras: true, marca: true, tools: true },
+  contexto: "Regras da marca",
+  regrasPadrao: "Chame montar_brief primeiro.",
+  memoria: { texto: "", atualizadaEm: null, autor: null },
 };
 
 const aplicar = (...acoes: Parameters<typeof formulario>[1][]) =>

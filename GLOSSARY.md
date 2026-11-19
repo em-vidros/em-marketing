@@ -12,6 +12,18 @@ _Evite_: orquestrador, agente principal
 Um dos bots de papel fixo (Post, Legenda, Agenda, Fotos, Reels) que executa uma parte do trabalho e também atende conversa direta.
 _Evite_: subagente, worker
 
+**Bot criado**:
+Um bot que alguém da equipe criou pela tela, com prompt, regras e ferramentas próprios. Só atende conversa direta: o Chefe não delega a ele.
+_Evite_: bot customizado, agente
+
+**Setor**:
+O grupo de um bot na barra lateral, como Marketing ou Comercial. Texto livre; os bots fixos começam em Marketing.
+_Evite_: time, categoria
+
+**Memória**:
+O texto que um bot recebe em toda conversa, o mesmo para a equipe toda. Qualquer pessoa edita, e o próprio bot acrescenta notas quando alguém pede para ele lembrar.
+_Evite_: contexto, histórico
+
 **Conversa**:
 Uma troca contínua entre uma pessoa e um bot. Cada bot tem uma conversa atual por pessoa, e a pessoa pode abrir uma nova a qualquer momento.
 _Evite_: chat, thread, sessão

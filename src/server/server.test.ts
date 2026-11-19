@@ -235,7 +235,11 @@ const enviar = (caminho: string, cookie: string, method: string, corpo?: unknown
   });
 
 describe("config dos bots", () => {
-  afterAll(() => q`DELETE FROM versoes_bot`);
+  afterAll(async () => {
+    await q`DELETE FROM versoes_bot`;
+    await q`DELETE FROM bots`;
+    await q`DELETE FROM memorias_bot`;
+  });
 
   test("a edição vale na leitura seguinte, cada gravação vira versão, e restaurar grava de novo o texto antigo", async () => {
     const { cookie } = await sessao("ana@emvidros.com.br");
@@ -251,7 +255,7 @@ describe("config dos bots", () => {
     const voltaAoPadrao = await (await enviar("/api/bots/agenda/padrao", cookie, "POST")).json() as DetalheBot;
 
     expect(padrao).toMatchObject({ nome: "Agenda", versaoId: null, padrao: { nome: true, descricao: true, modelo: true, prompt: true } });
-    expect(padrao.fixo).toContain("--- BRANDBOOK");
+    expect(padrao.contexto).toContain("--- BRANDBOOK");
     expect(primeira).toMatchObject({ nome: "Calendário", prompt: "Você cuida do calendário.", descricao: padrao.descricao, padrao: { nome: false, prompt: false, descricao: true } });
     expect(versoes.map((v) => [v.prompt, v.autor])).toEqual([
       ["Você cuida da fila.", "bia@emvidros.com.br"],
@@ -280,6 +284,50 @@ describe("config dos bots", () => {
     } finally {
       if (chave !== undefined) process.env.ANTHROPIC_API_KEY = chave;
     }
+  });
+
+  test("um bot criado recebe prompt, regras e memória da equipe; apagado, some da lista e recusa conversa; restaurado, volta", async () => {
+    const { cookie } = await sessao("ana@emvidros.com.br");
+    const { cookie: daBia } = await sessao("bia@emvidros.com.br");
+
+    const criacao = await enviar("/api/bots", cookie, "POST", {
+      nome: "Orçamentos",
+      descricao: "Responde dúvidas de orçamento de vidro temperado.",
+      setor: "Comercial",
+      forma: "nuvem",
+      cor: "#1AAE9F",
+      prompt: "Você ajuda o comercial a montar orçamentos.",
+      modelo: "openai:gpt-6-luna",
+      tools: ["proximas_datas", "buscar_fotos", "buscar_fotos"],
+    });
+    const criado = (await criacao.json()) as DetalheBot;
+    await enviar(`/api/bots/${criado.id}/config`, daBia, "PUT", { regras: "Sempre peça a espessura do vidro." });
+    const memoria = await enviar(`/api/bots/${criado.id}/memoria`, daBia, "PUT", { texto: "O cliente Vidraçaria Sol paga à vista." });
+    const { texto: prompt } = await comCookie<{ texto: string }>(`/api/bots/${criado.id}/prompt`, cookie);
+    const ferramentasDeFixo = await enviar("/api/bots/post/config", cookie, "PUT", { tools: ["buscar_fotos"] });
+    const fixoApagado = await enviar("/api/bots/post", cookie, "DELETE");
+    const apagado = await enviar(`/api/bots/${criado.id}`, cookie, "DELETE");
+    const listaSemEle = await comCookie<ConfigBot[]>("/api/bots", cookie);
+    const conversa = await fetch(url("/api/chat"), {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie },
+      body: JSON.stringify({ id: `com-${criado.id}`, botId: criado.id, messages: [{ id: "m1", role: "user", parts: [{ type: "text", text: "Oi" }] }] }),
+    });
+    const restaurado = await enviar(`/api/bots/${criado.id}/restaurar`, daBia, "POST");
+    const listaComEle = await comCookie<ConfigBot[]>("/api/bots", cookie);
+
+    expect(criacao.status).toBe(201);
+    expect(criado).toMatchObject({ setor: "Comercial", criado: { forma: "nuvem", cor: "#1AAE9F", por: "ana@emvidros.com.br" }, tools: ["buscar_fotos", "proximas_datas"] });
+    expect(await memoria.json()).toMatchObject({ texto: "O cliente Vidraçaria Sol paga à vista.", autor: "bia@emvidros.com.br" });
+    expect(prompt).toStartWith("Você ajuda o comercial a montar orçamentos.\n\nSempre peça a espessura do vidro.");
+    expect(prompt).toContain("--- MEMÓRIA ---\nO cliente Vidraçaria Sol paga à vista.");
+    expect(prompt).toContain("--- BRANDBOOK");
+    expect([ferramentasDeFixo.status, fixoApagado.status, apagado.status]).toEqual([400, 400, 204]);
+    expect(listaSemEle.map((b) => b.id)).not.toContain(criado.id);
+    expect([conversa.status, await conversa.json()]).toEqual([410, { erro: "Este bot foi apagado. Restaure o bot na configuração dele para continuar a conversa." }]);
+    expect(await q`SELECT 1 FROM conversas WHERE id = ${`com-${criado.id}`}`).toEqual([]);
+    expect(restaurado.status).toBe(200);
+    expect(listaComEle.find((b) => b.id === criado.id)).toMatchObject({ nome: "Orçamentos", regras: "Sempre peça a espessura do vidro.", padrao: { regras: false, prompt: true } });
   });
 });
 

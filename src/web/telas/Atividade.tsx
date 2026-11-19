@@ -1,6 +1,7 @@
 import { useEffect, useId, useState, type ReactNode } from "react";
 import type { Agendamento, Agora, AprovacaoPendente, Historico, Publicacao, TarefaEmCurso, TarefaFeita } from "../../db";
-import { useApi, useNomesDosBots, type Carga } from "../api";
+import { useApi, type Carga } from "../api";
+import { useEquipe } from "../bots";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
@@ -88,7 +89,7 @@ const linkDaConversa = (id: string) => `/c/${encodeURIComponent(id)}`;
 function PainelAgora() {
   const [carga, tentar] = useApi<Agora>("/api/atividade/agora", 4000);
   const agora = useRelogio(carga.estado === "pronto" && carga.dados.trabalhando.length > 0);
-  const { chefe } = useNomesDosBots();
+  const chefe = useEquipe().de("chefe");
   return (
     <Conteudo carga={carga} tentar={tentar}>
       {(d) => (
@@ -115,7 +116,7 @@ function PainelAgora() {
 }
 
 function LinhaTrabalhando({ tarefa: t, agora }: { tarefa: TarefaEmCurso; agora: number }) {
-  const { nome } = useNomesDosBots()[t.botId];
+  const { nome } = useEquipe().de(t.botId);
   const passo =
     t.status === "na_fila" ? "Na fila" : (passosDe(t.ultima).findLast((p) => p.estado === "fazendo")?.rotulo ?? "Pensando");
   return (
@@ -139,7 +140,7 @@ function LinhaTrabalhando({ tarefa: t, agora }: { tarefa: TarefaEmCurso; agora: 
 }
 
 function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
-  const { chefe } = useNomesDosBots();
+  const chefe = useEquipe().de("chefe");
   const peca = a.headline ? `"${a.headline}"` : "a peça";
   const onde = a.tipo ? ` no ${MIDIA[a.tipo].toLowerCase()}` : "";
   const titulo = `${a.acao === "publicar_agora" ? "Publicar agora" : "Agendar"} ${peca}${onde}`;
@@ -163,7 +164,7 @@ function CartaoEsperando({ aprovacao: a }: { aprovacao: AprovacaoPendente }) {
 }
 
 function LinhaFeita({ tarefa: t, quando }: { tarefa: TarefaFeita; quando: string }) {
-  const { nome } = useNomesDosBots()[t.botId];
+  const { nome } = useEquipe().de(t.botId);
   const texto = t.status === "falhou" ? `falhou. ${semMarkdown(t.erro ?? t.pedido)}` : semMarkdown(t.resumo ?? "") || "Concluída";
   return (
     <a
@@ -190,7 +191,7 @@ const ESTADO_FILA: Record<Agendamento["status"], { rotulo: string; cor: string }
 
 function PainelAgendado() {
   const [carga, tentar] = useApi<Agendamento[]>("/api/atividade/agendado", 30000);
-  const { chefe } = useNomesDosBots();
+  const chefe = useEquipe().de("chefe");
   return (
     <Conteudo carga={carga} tentar={tentar}>
       {(itens) => (

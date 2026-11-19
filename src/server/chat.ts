@@ -13,8 +13,7 @@ import {
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
 import type { Inspiracoes } from "../agent/tools";
-import { ehBotId } from "../agent/bots";
-import { configDoBot } from "../agent/config";
+import { configDoBot, situacaoDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
 import {
   AINDA_RESPONDENDO,
@@ -35,7 +34,7 @@ export interface OpcoesChat {
 /** O corpo do DefaultChatTransport do useChat, mais o botId que o front manda em `body`. */
 const Corpo = z.object({
   id: z.string().min(1).max(100),
-  botId: z.string().refine(ehBotId, "bot desconhecido"),
+  botId: z.string().min(1).max(40),
   messages: z.array(z.unknown()).min(1),
 });
 
@@ -122,6 +121,10 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: Op
     const validada = await safeValidateUIMessages({ messages: messages.slice(-1) });
     if (!validada.success) return erro(400, validada.error.message);
     const [ultima] = validada.data as [UIMessage];
+
+    const situacao = await situacaoDoBot(botId);
+    if (situacao === null) return erro(400, "Este bot não existe.");
+    if (situacao === "apagado") return erro(410, "Este bot foi apagado. Restaure o bot na configuração dele para continuar a conversa.");
 
     const conversa = await abrirConversaDoUsuario(usuario.id, id, botId, tituloDe(ultima));
     if (!conversa) return erro(404, "Conversa não encontrada.");

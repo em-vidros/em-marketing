@@ -1,5 +1,5 @@
 import { useSyncExternalStore, type MouseEvent } from "react";
-import { BOT_IDS, type BotId } from "./bots";
+import type { BotId } from "../agent/bots";
 
 export type Rota =
   | { tela: "entrar" }
@@ -11,6 +11,7 @@ export type Rota =
   | { tela: "calendario" }
   | { tela: "uso" }
   | { tela: "bot"; id: BotId; aba: "trabalho" | "config" }
+  | { tela: "novo-bot" }
   | { tela: "nao-encontrada" };
 
 export function lerRota(caminho: string): Rota {
@@ -23,9 +24,10 @@ export function lerRota(caminho: string): Rota {
   if (caminho === "/uso") return { tela: "uso" };
   const arte = /^\/artes\/([0-9a-f-]{36})$/.exec(caminho);
   if (arte?.[1]) return { tela: "arte", id: arte[1] };
+  if (caminho === "/bots/novo") return { tela: "novo-bot" };
+  // Um id que não é de nenhum bot abre a página do bot, que mostra que ele não existe.
   const bot = /^\/bots\/([^/]+)(\/config)?$/.exec(caminho);
-  const botId = BOT_IDS.find((id) => id === bot?.[1]);
-  if (botId) return { tela: "bot", id: botId, aba: bot?.[2] ? "config" : "trabalho" };
+  if (bot?.[1]) return { tela: "bot", id: decodeURIComponent(bot[1]), aba: bot[2] ? "config" : "trabalho" };
   const conversa = /^\/c\/([^/]+)$/.exec(caminho);
   if (conversa?.[1]) return { tela: "conversa", id: decodeURIComponent(conversa[1]) };
   return { tela: "nao-encontrada" };

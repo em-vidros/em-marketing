@@ -50,6 +50,7 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
   roteiro_reel: { fazendo: "Escrevendo o roteiro", feito: "Roteiro escrito" },
   publicar_agora: { fazendo: "Publicando", feito: "Publicado" },
   agendar_publicacao: { fazendo: "Agendando", feito: "Agendado" },
+  lembrar: { fazendo: "Guardando na memória", feito: "Guardado na memória" },
   delegar_post: { fazendo: "Chamando o Post", feito: "Post terminou" },
   delegar_legenda: { fazendo: "Chamando o Legenda", feito: "Legenda terminou" },
   delegar_agenda: { fazendo: "Chamando o Agenda", feito: "Agenda terminou" },

@@ -5,14 +5,14 @@
 // Repetir o mesmo conversa-id continua o post em andamento daquela conversa.
 import { getToolName, isToolUIPart, type UIMessage } from "ai";
 import { executar } from "../src/agent";
-import { BOTS, ehBotId } from "../src/agent/bots";
+import { BOTS, ehBotFixo } from "../src/agent/bots";
 import { tarefasDaConversa } from "../src/agent/tarefas";
 import type { SaidaDelegacao } from "../src/agent/tools";
 import { criarTabelas } from "../src/db";
 import { abrirBanco } from "../src/v2/banco";
 
 const [botArg = "", pedido, conversaId = `cli-${crypto.randomUUID().slice(0, 8)}`] = process.argv.slice(2);
-if (!ehBotId(botArg) || !pedido) {
+if (!ehBotFixo(botArg) || !pedido) {
   console.error(`Uso: bun scripts/conversa.ts <${Object.keys(BOTS).join("|")}> "<pedido>" [conversa-id]`);
   process.exit(1);
 }

@@ -10,7 +10,15 @@ export type EstadoBot =
   /** O Chefe esperando um especialista. Sem ponto: quem tem de agir é o bot, não você. */
   | { tipo: "delegando"; texto: string };
 
+/** Por id. Um bot sem entrada está parado. */
 export type EstadosDaEquipe = Record<BotId, EstadoBot>;
+
+const PARADO: EstadoBot = { tipo: "parado", texto: "Parado" };
+
+export const estadoDe = (estados: EstadosDaEquipe, id: BotId): EstadoBot => estados[id] ?? PARADO;
+
+/** O nome em vigor de um bot, que o usuário pode trocar na config. */
+type NomeDe = (id: BotId) => { nome: string };
 
 /** O que o especialista de uma delegação faz agora, a partir da prévia da mensagem dele. */
 export function passoAtual(p: ParteDelegacao): string | null {
@@ -24,21 +32,21 @@ export function passoAtual(p: ParteDelegacao): string | null {
 /**
  * O estado de cada bot, juntando as tarefas ativas do usuário (todas as conversas) com o
  * que está ao vivo na conversa aberta, que tem o passo atual e manda quando os dois falam.
- * `nomes` são os nomes em vigor, que o usuário pode trocar na config do bot. `bot` é quem responde
- * a conversa aberta: numa conversa direta com um especialista, é ele que trabalha, não o Chefe.
+ * `bot` é quem responde a conversa aberta: numa conversa direta com um especialista ou com um bot
+ * criado pela equipe, é ele que trabalha, não o Chefe.
  */
 export function estadosDaEquipe(
   atividade: readonly ResumoTarefa[],
   mensagens: readonly Mensagem[],
   respondendo: boolean,
-  nomes: Record<BotId, { nome: string }>,
+  nomeDe: NomeDe,
   bot: BotId = "chefe",
 ): EstadosDaEquipe {
-  const estados = Object.fromEntries(BOT_IDS.map((id) => [id, { tipo: "parado", texto: "Parado" }])) as EstadosDaEquipe;
+  const estados: EstadosDaEquipe = {};
 
   for (const t of [...atividade].reverse()) {
     if (t.status === "trabalhando") estados[t.botId] = { tipo: "trabalhando", texto: "Trabalhando" };
-    else if (estados[t.botId].tipo === "parado") estados[t.botId] = { tipo: "parado", texto: "Na fila" };
+    else if (estadoDe(estados, t.botId).tipo === "parado") estados[t.botId] = { tipo: "parado", texto: "Na fila" };
   }
 
   // Só a resposta do turno corrente: logo depois do envio, a última mensagem é a do usuário.
@@ -53,10 +61,10 @@ export function estadosDaEquipe(
     if (passo) estados[especialistaDa(p)] = passo === "Na fila" ? { tipo: "parado", texto: passo } : { tipo: "trabalhando", texto: passo };
   }
 
-  const trabalhando = BOT_IDS.find((id) => id !== "chefe" && estados[id].tipo === "trabalhando");
+  const trabalhando = BOT_IDS.find((id) => id !== "chefe" && estadoDe(estados, id).tipo === "trabalhando");
   if (ultima?.parts.some((p) => ehAprovacao(p) && p.state === "approval-requested"))
     estados.chefe = { tipo: "esperando", texto: "Esperando você" };
-  else if (trabalhando) estados.chefe = { tipo: "delegando", texto: `Esperando ${nomes[trabalhando].nome}` };
+  else if (trabalhando) estados.chefe = { tipo: "delegando", texto: `Esperando ${nomeDe(trabalhando).nome}` };
   else if (respondendo) estados.chefe = { tipo: "trabalhando", texto: textoDa(atividadeDe(ultima, true)) };
 
   return estados;
@@ -76,19 +84,19 @@ export interface AgoraDaConversa {
 export function agoraDasConversas(
   atividade: readonly ResumoTarefa[],
   aberta: { id: string; bot: BotId; estados: EstadosDaEquipe; respondendo: boolean } | null,
-  nomes: Record<BotId, { nome: string }>,
+  nomeDe: NomeDe,
 ): Record<string, AgoraDaConversa> {
   const agora: Record<string, AgoraDaConversa> = {};
   for (const t of [...atividade].reverse())
-    agora[t.conversaId] = t.status === "trabalhando" ? { texto: `${nomes[t.botId].nome} trabalhando`, trabalhando: true } : { texto: "Na fila", trabalhando: false };
+    agora[t.conversaId] = t.status === "trabalhando" ? { texto: `${nomeDe(t.botId).nome} trabalhando`, trabalhando: true } : { texto: "Na fila", trabalhando: false };
 
   if (!aberta) return agora;
   const { id, bot, estados, respondendo } = aberta;
-  const estado = estados[bot];
+  const estado = estadoDe(estados, bot);
   if (estado.tipo === "esperando") agora[id] = { texto: estado.texto, trabalhando: false };
   else if (estado.tipo === "delegando") {
-    const especialista = BOT_IDS.find((b) => b !== "chefe" && estados[b].tipo === "trabalhando");
-    agora[id] = { texto: especialista ? `${nomes[especialista].nome}: ${estados[especialista].texto}` : estado.texto, trabalhando: true };
+    const especialista = BOT_IDS.find((b) => b !== "chefe" && estadoDe(estados, b).tipo === "trabalhando");
+    agora[id] = { texto: especialista ? `${nomeDe(especialista).nome}: ${estadoDe(estados, especialista).texto}` : estado.texto, trabalhando: true };
   } else if (respondendo && estado.tipo === "trabalhando") agora[id] = { texto: estado.texto, trabalhando: true };
   else if (!respondendo) delete agora[id];
   return agora;

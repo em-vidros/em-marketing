@@ -3,7 +3,7 @@ import { Menu } from "@base-ui/react/menu";
 import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { pararResposta, useApi, useNomesDosBots } from "../api";
+import { pararResposta, useApi } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
@@ -20,10 +20,10 @@ import { pilhaDeDesfazer } from "../componentes/menu/desfazer";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
 import { Passos, trechosDe } from "../componentes/Passos";
-import { BOT_IDS } from "../bots";
+import { useEquipe } from "../bots";
 import { Chevron } from "../componentes/ia/Raciocinio";
 import { Check } from "../componentes/Passos";
-import type { EstadoBot, EstadosDaEquipe } from "../equipe";
+import { estadoDe, type EstadoBot, type EstadosDaEquipe } from "../equipe";
 import { criarEscolhaDoBot, criarTransporte, type EscolhaDoBot } from "../escolhaDoBot";
 import { navegar } from "../rota";
 import { ehCampo, executar, useAtalho } from "../teclado/motor";
@@ -54,11 +54,11 @@ export function TelaConversa(props: Props) {
   const [carga] = useApi<ConversaComMensagens>(props.escolha ? null : `/api/conversas/${props.id}`);
   const bot = props.botDaLista ?? "chefe";
   if (props.escolha) return <Chat {...props} escolha={props.escolha} inicial={[]} titulo={null} />;
-  if (carga.estado === "carregando") return <Cabecalho abrirMenu={props.abrirMenu} bot={bot} estado={props.estados[bot]} titulo={null} />;
+  if (carga.estado === "carregando") return <Cabecalho abrirMenu={props.abrirMenu} bot={bot} estado={estadoDe(props.estados, bot)} titulo={null} />;
   if (carga.estado === "erro")
     return (
       <div className="flex flex-1 flex-col">
-        <Cabecalho abrirMenu={props.abrirMenu} bot={bot} estado={props.estados[bot]} titulo={null} />
+        <Cabecalho abrirMenu={props.abrirMenu} bot={bot} estado={estadoDe(props.estados, bot)} titulo={null} />
         <div className="grid flex-1 place-items-center px-6 text-center">
           <div className="flex flex-col items-center gap-3">
             <h1 className="text-lg font-semibold">Conversa não encontrada</h1>
@@ -85,7 +85,7 @@ function ConversaSalva({ dados, ...props }: Props & { dados: ConversaComMensagen
 
 /** O título da conversa em cima e, embaixo, o bot e o que ele está fazendo. Sem título ainda, o nome do bot. */
 function Cabecalho({ abrirMenu, bot, estado, titulo }: { abrirMenu: () => void; bot: BotId; estado: EstadoBot; titulo: string | null }) {
-  const { nome, descricao } = useNomesDosBots()[bot];
+  const { nome, descricao } = useEquipe().de(bot);
   const ativo = estado.tipo !== "parado";
   useEffect(() => {
     document.title = titulo ? `${titulo} · EM Marketing` : "EM Marketing";
@@ -108,7 +108,7 @@ function Cabecalho({ abrirMenu, bot, estado, titulo }: { abrirMenu: () => void; 
 
 /** O estado vazio de uma conversa: o bot que vai responder e as sugestões dele, de /api/bots. */
 function Sugestoes({ bot, enviar }: { bot: BotId; enviar: (t: string) => void }) {
-  const { nome } = useNomesDosBots()[bot];
+  const { nome } = useEquipe().de(bot);
   const [bots] = useApi<{ id: string; sugestoes: string[] }[]>("/api/bots");
   const sugestoes = bots.estado === "pronto" ? (bots.dados.find((b) => b.id === bot)?.sugestoes ?? []) : [];
   return (
@@ -140,22 +140,22 @@ function Sugestoes({ bot, enviar }: { bot: BotId; enviar: (t: string) => void })
  */
 function SeletorDeBot({ escolha }: { escolha: EscolhaDoBot }) {
   const bot = useSyncExternalStore(escolha.assinar, escolha.ler);
-  const nomes = useNomesDosBots();
+  const nomes = useEquipe();
   return (
     <Menu.Root>
       <Menu.Trigger
-        aria-label={`Quem responde: ${nomes[bot].nome}. Trocar o bot`}
+        aria-label={`Quem responde: ${nomes.de(bot).nome}. Trocar o bot`}
         className="pressiona -ml-2 flex h-9 max-w-[60vw] min-w-0 cursor-pointer items-center gap-2 rounded-full px-2.5 text-[13px] font-medium text-tinta-2 hover:bg-hover hover:text-tinta data-popup-open:bg-hover data-popup-open:text-tinta sm:max-w-xs"
       >
         <Avatar bot={bot} tamanho={18} anel="var(--color-superficie)" />
-        <span className="truncate">Para {nomes[bot].nome}</span>
+        <span className="truncate">Para {nomes.de(bot).nome}</span>
         <Chevron aberto={false} />
       </Menu.Trigger>
       <Menu.Portal>
         <Menu.Positioner side="top" align="start" sideOffset={6} className="z-[60]">
           <Menu.Popup className="menu-popup w-[min(340px,calc(100vw-32px))] rounded-cartao border border-linha bg-superficie p-1.5 shadow-[0_8px_28px_rgb(15_13_10/0.12),0_1px_3px_rgb(15_13_10/0.06)] outline-none">
             <Menu.RadioGroup value={bot} onValueChange={(b: BotId) => escolha.escolher(b)}>
-              {BOT_IDS.map((id) => (
+              {nomes.lista.map(({ id }) => (
                 <Menu.RadioItem
                   key={id}
                   value={id}
@@ -163,8 +163,8 @@ function SeletorDeBot({ escolha }: { escolha: EscolhaDoBot }) {
                 >
                   <Avatar bot={id} tamanho={20} anel="var(--color-superficie)" />
                   <span className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate font-medium">{nomes[id].nome}</span>
-                    <span className="truncate text-xs text-tinta-3">{nomes[id].descricao}</span>
+                    <span className="truncate font-medium">{nomes.de(id).nome}</span>
+                    <span className="truncate text-xs text-tinta-3">{nomes.de(id).descricao}</span>
                   </span>
                   <Menu.RadioItemIndicator className="flex-none text-tinta">
                     <Check />
@@ -267,7 +267,7 @@ function Chat({
     throttle: 50,
   });
   const respondendo = chat.status === "submitted" || chat.status === "streaming";
-  const nomes = useNomesDosBots();
+  const nomes = useEquipe();
 
   // O histórico que apagar, desfazer e a volta de uma edição recusada leem e escrevem. A leitura vê a
   // escrita na hora, antes do próximo render.
@@ -453,7 +453,7 @@ function Chat({
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <Cabecalho abrirMenu={abrirMenu} bot={bot} estado={estados[bot]} titulo={titulo} />
+        <Cabecalho abrirMenu={abrirMenu} bot={bot} estado={estadoDe(estados, bot)} titulo={titulo} />
         {chat.messages.length === 0 ? (
           <Sugestoes bot={bot} enviar={enviar} />
         ) : (
@@ -469,7 +469,7 @@ function Chat({
                   key={m.id}
                   id={m.id}
                   papel={m.role === "user" ? "user" : "assistant"}
-                  rotulo={m.role === "user" ? "Sua mensagem" : `Resposta de ${nomes[bot].nome}`}
+                  rotulo={m.role === "user" ? "Sua mensagem" : `Resposta de ${nomes.de(bot).nome}`}
                   atual={m.id === tabulavel}
                   nova={!jaEstavam.has(m.id) && !voltando.has(m.id)}
                   voltando={voltando.has(m.id)}
@@ -540,8 +540,8 @@ function Chat({
           </div>
         )}
         <Composer
-          rotulo={`Mensagem para ${nomes[bot].nome}`}
-          placeholder={bot === "chefe" ? "O que vamos postar?" : `Escreva para ${nomes[bot].nome}`}
+          rotulo={`Mensagem para ${nomes.de(bot).nome}`}
+          placeholder={bot === "chefe" ? "O que vamos postar?" : `Escreva para ${nomes.de(bot).nome}`}
           extra={chat.messages.length === 0 && !travada ? <SeletorDeBot escolha={escolha} /> : null}
           respondendo={respondendo}
           aoSubirVazio={() => executar("mensagem-editar-ultima")}

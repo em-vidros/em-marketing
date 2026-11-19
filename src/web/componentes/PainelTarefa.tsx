@@ -1,6 +1,7 @@
 import type { UIMessage } from "ai";
 import { useEffect, useRef } from "react";
-import { useApi, useNomesDosBots } from "../api";
+import { useApi } from "../api";
+import { useEquipe } from "../bots";
 import { especialistaDa, type ParteDelegacao, type Tarefa } from "../tipos";
 import { Avatar } from "./Avatar";
 import { Falha } from "./Falha";
@@ -62,8 +63,8 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
     ? { id: `${tarefaId}-pedido`, role: "user", parts: [{ type: "text", text: parte.input.pedido }] }
     : null;
   const mensagens = aoVivo && pedido ? [pedido, aoVivo] : (tarefa?.mensagens ?? (pedido ? [pedido] : []));
-  const nomes = useNomesDosBots();
-  const nome = bot ? nomes[bot].nome : "especialista";
+  const nomes = useEquipe();
+  const nome = bot ? nomes.de(bot).nome : "especialista";
 
   return (
     <div className="flex h-full flex-col">
@@ -72,7 +73,7 @@ export function PainelTarefa({ tarefaId, parte, fechar }: { tarefaId: string; pa
         <span className="flex min-w-0 flex-col">
           <h2 className="truncate font-semibold">Tarefa de {nome}</h2>
           <span className="text-xs text-tinta-3">
-            {tarefa ? `Pedida por ${nomes.chefe.nome} às ${hora.format(tarefa.criadaEm)}` : `Pedida por ${nomes.chefe.nome}`}
+            {tarefa ? `Pedida por ${nomes.de("chefe").nome} às ${hora.format(tarefa.criadaEm)}` : `Pedida por ${nomes.de("chefe").nome}`}
           </span>
         </span>
         <button
