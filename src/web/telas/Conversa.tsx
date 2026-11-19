@@ -27,7 +27,7 @@ import { estadoDe, type EstadoBot, type EstadosDaEquipe } from "../equipe";
 import { criarEscolhaDoBot, criarTransporte, type EscolhaDoBot } from "../escolhaDoBot";
 import { navegar } from "../rota";
 import { ehCampo, executar, useAtalho } from "../teclado/motor";
-import { type BotId, botDaDelegacao, ehAprovacao, ehDelegacao, mudaAEquipe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao } from "../tipos";
+import { type BotId, botDaDelegacao, ehAprovacao, ehDelegacao, mudaAEquipe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao, type Pessoa } from "../tipos";
 
 export interface Vivo {
   mensagens: readonly Mensagem[];
@@ -53,7 +53,7 @@ interface Props {
 export function TelaConversa(props: Props) {
   const [carga] = useApi<ConversaComMensagens>(props.escolha ? null : `/api/conversas/${props.id}`);
   const bot = props.botDaLista ?? "chefe";
-  if (props.escolha) return <Chat {...props} escolha={props.escolha} inicial={[]} titulo={null} />;
+  if (props.escolha) return <Chat {...props} escolha={props.escolha} inicial={[]} titulo={null} dono={null} />;
   if (carga.estado === "carregando") return <Cabecalho abrirMenu={props.abrirMenu} bot={bot} estado={estadoDe(props.estados, bot)} titulo={null} />;
   if (carga.estado === "erro")
     return (
@@ -80,11 +80,23 @@ export function TelaConversa(props: Props) {
 /** Uma conversa que já existe responde sempre com o bot dela: a escolha nasce travada. */
 function ConversaSalva({ dados, ...props }: Props & { dados: ConversaComMensagens }) {
   const [escolha] = useState(() => criarEscolhaDoBot(dados.conversa.botId, { travada: true }));
-  return <Chat {...props} escolha={escolha} inicial={dados.mensagens} titulo={dados.conversa.titulo} />;
+  return <Chat {...props} escolha={escolha} inicial={dados.mensagens} titulo={dados.conversa.titulo} dono={dados.dono} />;
 }
 
 /** O título da conversa em cima e, embaixo, o bot e o que ele está fazendo. Sem título ainda, o nome do bot. */
-function Cabecalho({ abrirMenu, bot, estado, titulo }: { abrirMenu: () => void; bot: BotId; estado: EstadoBot; titulo: string | null }) {
+function Cabecalho({
+  abrirMenu,
+  bot,
+  estado,
+  titulo,
+  dono = null,
+}: {
+  abrirMenu: () => void;
+  bot: BotId;
+  estado: EstadoBot;
+  titulo: string | null;
+  dono?: Pessoa | null;
+}) {
   const { nome, descricao } = useEquipe().de(bot);
   const ativo = estado.tipo !== "parado";
   useEffect(() => {
@@ -98,6 +110,7 @@ function Cabecalho({ abrirMenu, bot, estado, titulo }: { abrirMenu: () => void; 
         <span className="truncate leading-tight font-semibold">{titulo ?? nome}</span>
         <span aria-live="polite" className="truncate text-xs text-tinta-3">
           {titulo ? nome : ativo ? null : descricao}
+          {dono && ` · conversa de ${dono.nome}`}
           {titulo && ativo && " · "}
           {ativo && <span className={estado.tipo === "trabalhando" ? "brilho" : undefined}>{estado.texto}</span>}
         </span>
@@ -236,7 +249,8 @@ function Chat({
   aoTerminarTurno,
   abrirMenu,
   estados,
-}: Omit<Props, "escolha" | "botDaLista"> & { escolha: EscolhaDoBot; inicial: Mensagem[]; titulo: string | null }) {
+  dono,
+}: Omit<Props, "escolha" | "botDaLista"> & { escolha: EscolhaDoBot; inicial: Mensagem[]; titulo: string | null; dono: Pessoa | null }) {
   const [transporte] = useState(() => criarTransporte(escolha));
   const bot = useSyncExternalStore(escolha.assinar, escolha.ler);
   const travada = useSyncExternalStore(escolha.assinar, escolha.travada);
@@ -454,7 +468,7 @@ function Chat({
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
       <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <Cabecalho abrirMenu={abrirMenu} bot={bot} estado={estadoDe(estados, bot)} titulo={titulo} />
+        <Cabecalho abrirMenu={abrirMenu} bot={bot} estado={estadoDe(estados, bot)} titulo={titulo} dono={dono} />
         {chat.messages.length === 0 ? (
           <Sugestoes bot={bot} enviar={enviar} />
         ) : (
@@ -470,7 +484,7 @@ function Chat({
                   key={m.id}
                   id={m.id}
                   papel={m.role === "user" ? "user" : "assistant"}
-                  rotulo={m.role === "user" ? "Sua mensagem" : `Resposta de ${nomes.de(bot).nome}`}
+                  rotulo={m.role === "user" ? (dono ? "Mensagem" : "Sua mensagem") : `Resposta de ${nomes.de(bot).nome}`}
                   atual={m.id === tabulavel}
                   nova={!jaEstavam.has(m.id) && !voltando.has(m.id)}
                   voltando={voltando.has(m.id)}

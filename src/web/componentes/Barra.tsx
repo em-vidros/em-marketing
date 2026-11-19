@@ -6,6 +6,7 @@ import { aoClicarLink } from "../rota";
 import { ariaDe, atalhoDoBot, ehMac } from "../teclado/atalhos";
 import type { Conversa } from "../tipos";
 import { Avatar } from "./Avatar";
+import { ConversasDaEquipe } from "./ConversasDaEquipe";
 import { Expansivel } from "./Expansivel";
 import { SaldoCompacto } from "./Saldo";
 import { type AcoesConversa, BotaoAcoes, MenuDeContexto } from "./menu/MenuConversa";
@@ -286,6 +287,7 @@ export function Barra({
             </section>
           )}
         </div>
+        <ConversasDaEquipe ativa={lista.ativa} aoNavegar={aoNavegar} />
       </div>
 
       <div className="flex flex-col gap-px px-2.5">

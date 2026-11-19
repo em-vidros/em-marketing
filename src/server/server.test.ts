@@ -2,7 +2,7 @@ import { afterAll, describe, expect, test } from "bun:test";
 import { MockLanguageModelV4 } from "ai/test";
 import type { ConfigBot, DetalheBot, VersaoBot } from "../agent/config";
 import type { UIMessage } from "ai";
-import { abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa, type Conversa } from "../agent/conversas";
+import { abrirConversa, abrirConversaDoUsuario, gravarMensagens, mensagensDaConversa, type Conversa } from "../agent/conversas";
 import type { Modelo } from "../agent/models";
 import { tarefasDaConversa, type TrabalhoDoBot } from "../agent/tarefas";
 import { emOrdem, idDaImagem, newMediaId, primeira, type Agendamento, type Agora, type Historico, type Peca } from "../db";
@@ -71,6 +71,27 @@ describe("servidor", () => {
     expect([leitura.status, chat.status, parar.status]).toEqual([404, 404, 404]);
     const dono = await q`SELECT user_id, mensagens, parar_em FROM conversas WHERE id = ${"conversa-da-ana"}`;
     expect(dono).toEqual([{ user_id: ana.id, mensagens: "[]", parar_em: null }]);
+  });
+
+  test("um admin lista, lê, continua e para a conversa de outra pessoa, e ela continua da dona", async () => {
+    const ana = await sessao("ana@emvidros.com.br");
+    const bi = await sessao("bi@emvidros.com.br");
+    await abrirConversaDoUsuario(ana.id, "conversa-vista-pelo-admin", "chefe", "Orçamento de box");
+
+    const equipe = await fetch(url("/api/conversas/equipe"), { headers: { cookie: bi.cookie } });
+    const daAnaNaEquipe = await fetch(url("/api/conversas/equipe"), { headers: { cookie: ana.cookie } });
+    const leitura = await fetch(url("/api/conversas/conversa-vista-pelo-admin"), { headers: { cookie: bi.cookie } });
+    const parar = await fetch(url("/api/conversas/conversa-vista-pelo-admin/parar"), { method: "POST", headers: { cookie: bi.cookie } });
+    const continuada = await abrirConversa({ id: bi.id, admin: true }, "conversa-vista-pelo-admin", "chefe", "Outro título");
+
+    expect(daAnaNaEquipe.status).toBe(403);
+    const lista = (await equipe.json()) as (Conversa & { dono: { email: string } })[];
+    expect(lista.find((c) => c.id === "conversa-vista-pelo-admin")?.dono.email).toBe("ana@emvidros.com.br");
+    expect(lista.some((c) => c.dono.email === "bi@emvidros.com.br")).toBe(false);
+    expect(await leitura.json()).toMatchObject({ conversa: { titulo: "Orçamento de box" }, dono: { email: "ana@emvidros.com.br" }, mensagens: [] });
+    expect(parar.status).toBe(204);
+    expect(continuada?.titulo).toBe("Orçamento de box");
+    expect(await q`SELECT user_id FROM conversas WHERE id = ${"conversa-vista-pelo-admin"}`).toEqual([{ user_id: ana.id }]);
   });
 });
 

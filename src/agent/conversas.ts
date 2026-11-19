@@ -61,6 +61,54 @@ export async function abrirConversaDoUsuario(userId: string, id: string, botId: 
   return conversaDoUsuario(userId, id);
 }
 
+/** Quem abre uma conversa. Admin lê e continua a de qualquer pessoa da equipe; os outros, só as próprias. */
+export interface Leitor {
+  id: string;
+  admin: boolean;
+}
+
+export interface Pessoa {
+  nome: string;
+  email: string;
+}
+
+/** Uma conversa de outra pessoa, como a lista da equipe mostra. */
+export type ConversaDaEquipe = Conversa & { dono: Pessoa };
+
+type LinhaComDono = Linha & { user_id: string; dono_nome: string | null; dono_email: string | null };
+
+const pessoaDa = (r: LinhaComDono): Pessoa => ({ nome: r.dono_nome ?? "Conta apagada", email: r.dono_email ?? "" });
+
+/**
+ * A conversa que o leitor pode abrir, com o dono quando ela é de outra pessoa (null quando é dele).
+ * Fora do alcance do leitor dá null, igual a uma conversa que não existe.
+ */
+export async function conversaVisivel(leitor: Leitor, id: string): Promise<{ conversa: Conversa; dono: Pessoa | null } | null> {
+  const r = await primeira(
+    q<LinhaComDono>`SELECT c.id, c.bot_id, c.titulo, c.post_id, c.created_at, c.updated_at, c.arquivada_em, c.user_id,
+        u.name AS dono_nome, u.email AS dono_email
+      FROM conversas c LEFT JOIN "user" u ON u.id = c.user_id
+      WHERE c.id = ${id} AND (c.user_id = ${leitor.id} OR ${leitor.admin})`,
+  );
+  if (!r) return null;
+  return { conversa: daLinha(r), dono: r.user_id === leitor.id ? null : pessoaDa(r) };
+}
+
+/** Cria a conversa se o id ainda não existe e devolve a que o leitor alcança: a dele ou, para admin, a de outra pessoa. */
+export async function abrirConversa(leitor: Leitor, id: string, botId: BotId, titulo: string): Promise<Conversa | null> {
+  await q`INSERT INTO conversas (id, bot_id, user_id, titulo) VALUES (${id}, ${botId}, ${leitor.id}, ${titulo}) ON CONFLICT (id) DO NOTHING`;
+  return (await conversaVisivel(leitor, id))?.conversa ?? null;
+}
+
+/** As conversas das outras pessoas da equipe, arquivadas inclusive, da mais recente para trás. */
+export async function conversasDaEquipe(menos: string, limite = 200): Promise<ConversaDaEquipe[]> {
+  const linhas = await q<LinhaComDono>`SELECT c.id, c.bot_id, c.titulo, c.post_id, c.created_at, c.updated_at, c.arquivada_em, c.user_id,
+      u.name AS dono_nome, u.email AS dono_email
+    FROM conversas c LEFT JOIN "user" u ON u.id = c.user_id
+    WHERE c.user_id <> ${menos} ORDER BY c.updated_at DESC, c.id LIMIT ${limite}`;
+  return linhas.map((r) => ({ ...daLinha(r), dono: pessoaDa(r) }));
+}
+
 /** As conversas vivas do usuário: as da lista principal, ou só as arquivadas. */
 export async function conversasDoUsuario(userId: string, arquivadas = false): Promise<Conversa[]> {
   const linhas = await q<Linha>`SELECT id, bot_id, titulo, post_id, created_at, updated_at, arquivada_em FROM conversas
@@ -216,8 +264,8 @@ function vigiar(id: string, ate: number): Turno {
 }
 
 /** Pede ao turno em andamento que pare. false se a conversa não é do usuário. */
-export async function pararTurno(userId: string, id: string): Promise<boolean> {
-  return (await q`UPDATE conversas SET parar_em = ${Date.now()} WHERE id = ${id} AND user_id = ${userId} RETURNING id`).length > 0;
+export async function pararTurno(leitor: Leitor, id: string): Promise<boolean> {
+  return (await q`UPDATE conversas SET parar_em = ${Date.now()} WHERE id = ${id} AND (user_id = ${leitor.id} OR ${leitor.admin}) RETURNING id`).length > 0;
 }
 
 export type Recusa = { ok: false; status: 404 | 409; erro: string };
@@ -229,11 +277,11 @@ const OCUPADA: Recusa = { ok: false, status: 409, erro: AINDA_RESPONDENDO };
  * Apagar e restaurar mensagens leem o histórico com a linha da conversa travada: um turno que começa no meio
  * espera a transação e já lê o histórico novo. Com um turno em andamento, recusa.
  */
-function comHistorico<T>(userId: string, conversaId: string, fn: (mensagens: UIMessage[]) => Promise<T | Recusa>): Promise<T | Recusa> {
+function comHistorico<T>(leitor: Leitor, conversaId: string, fn: (mensagens: UIMessage[]) => Promise<T | Recusa>): Promise<T | Recusa> {
   return transacao(async () => {
     const r = await primeira(
       q<{ mensagens: string; ocupada: boolean }>`SELECT mensagens, coalesce(turno_ate >= ${Date.now()}, false) AS ocupada
-        FROM conversas WHERE id = ${conversaId} AND user_id = ${userId} FOR UPDATE`,
+        FROM conversas WHERE id = ${conversaId} AND (user_id = ${leitor.id} OR ${leitor.admin}) FOR UPDATE`,
     );
     if (!r) return NAO_ENCONTRADA;
     if (r.ocupada) return OCUPADA;
@@ -252,8 +300,8 @@ export interface Remocao {
  * Apagar a mensagem do usuário tira o turno: ela e as respostas do bot até a próxima mensagem do usuário.
  * Apagar uma mensagem do bot tira só ela. Tarefas, posts, fila e artes ficam como estão.
  */
-export function apagarMensagem(userId: string, conversaId: string, mensagemId: string): Promise<({ ok: true } & Remocao) | Recusa> {
-  return comHistorico(userId, conversaId, async (mensagens) => {
+export function apagarMensagem(leitor: Leitor, conversaId: string, mensagemId: string): Promise<({ ok: true } & Remocao) | Recusa> {
+  return comHistorico(leitor, conversaId, async (mensagens) => {
     const i = mensagens.findIndex((m) => m.id === mensagemId);
     if (i === -1) return NAO_ENCONTRADA;
     const proximaDoUsuario = mensagens.findIndex((m, j) => j > i && m.role === "user");
@@ -270,11 +318,11 @@ const MUDOU: Recusa = { ok: false, status: 409, erro: "A conversa mudou depois d
  * Se as vizinhas não estão mais lado a lado, a posição é ambígua e o pedido é recusado.
  */
 export function restaurarMensagens(
-  userId: string,
+  leitor: Leitor,
   conversaId: string,
   { removidas, depoisDe, antesDe }: Remocao,
 ): Promise<{ ok: true; mensagens: UIMessage[] } | Recusa> {
-  return comHistorico(userId, conversaId, async (mensagens) => {
+  return comHistorico(leitor, conversaId, async (mensagens) => {
     const idEm = (j: number) => mensagens[j]?.id ?? null;
     const inicio = depoisDe === null ? 0 : mensagens.findIndex((m) => m.id === depoisDe) + 1;
     if (depoisDe !== null && inicio === 0) return MUDOU;

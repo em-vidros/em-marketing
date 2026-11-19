@@ -18,7 +18,7 @@ import { explicarErro } from "../agent/erros";
 import {
   AINDA_RESPONDENDO,
   PARADO_PELO_USUARIO,
-  abrirConversaDoUsuario,
+  abrirConversa,
   comecarTurno,
   gravarMensagens,
   mensagensDaConversa,
@@ -126,7 +126,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: Op
     if (situacao === null) return erro(400, "Este bot não existe.");
     if (situacao === "apagado") return erro(410, "Este bot foi apagado. Restaure o bot na configuração dele para continuar a conversa.");
 
-    const conversa = await abrirConversaDoUsuario(usuario.id, id, botId, tituloDe(ultima));
+    const conversa = await abrirConversa(usuario, id, botId, tituloDe(ultima));
     if (!conversa) return erro(404, "Conversa não encontrada.");
     if (conversa.botId !== botId) return erro(400, `Esta conversa é do bot ${(await configDoBot(conversa.botId)).nome}.`);
 

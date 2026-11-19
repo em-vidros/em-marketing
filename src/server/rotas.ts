@@ -33,7 +33,8 @@ import { apagarBot, criarBot, EdicaoBot, editarBot, NovoBot, restaurarBot, type 
 import {
   apagarConversa,
   apagarMensagem,
-  conversaDoUsuario,
+  conversaVisivel,
+  conversasDaEquipe,
   conversasDoUsuario,
   mensagensDaConversa,
   mudarConversa,
@@ -386,10 +387,15 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     "/api/conversas": {
       GET: comSessao(async (req, u) => Response.json(await conversasDoUsuario(u.id, new URL(req.url).searchParams.get("arquivadas") === "1"))),
     },
+    "/api/conversas/equipe": {
+      GET: comSessao(async (_req, u) =>
+        u.admin ? Response.json(await conversasDaEquipe(u.id)) : Response.json({ erro: "Só admins veem as conversas da equipe." }, { status: 403 }),
+      ),
+    },
     "/api/conversas/:id": {
       GET: comSessao<"/api/conversas/:id">(async (req, u) => {
-        const conversa = await conversaDoUsuario(u.id, req.params.id);
-        return conversa ? Response.json({ conversa, mensagens: await mensagensDaConversa(conversa.id) }) : naoEncontrado();
+        const visivel = await conversaVisivel(u, req.params.id);
+        return visivel ? Response.json({ ...visivel, mensagens: await mensagensDaConversa(visivel.conversa.id) }) : naoEncontrado();
       }),
       PATCH: comSessao<"/api/conversas/:id">(async (req, u) => {
         const corpo = await lerCorpo(req, EdicaoConversa);
@@ -404,7 +410,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     },
     "/api/conversas/:id/parar": {
       POST: comSessao<"/api/conversas/:id/parar">(async (req, u) =>
-        (await pararTurno(u.id, req.params.id)) ? new Response(null, { status: 204 }) : naoEncontrado(),
+        (await pararTurno(u, req.params.id)) ? new Response(null, { status: 204 }) : naoEncontrado(),
       ),
     },
     "/api/conversas/:id/restaurar": {
@@ -418,7 +424,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     },
     "/api/conversas/:id/mensagens/:mensagemId": {
       DELETE: comSessao<"/api/conversas/:id/mensagens/:mensagemId">(async (req, u) => {
-        const r = await apagarMensagem(u.id, req.params.id, req.params.mensagemId);
+        const r = await apagarMensagem(u, req.params.id, req.params.mensagemId);
         return r.ok ? Response.json({ removidas: r.removidas, depoisDe: r.depoisDe, antesDe: r.antesDe }) : recusar(r);
       }),
     },
@@ -428,19 +434,19 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         if ("resposta" in corpo) return corpo.resposta;
         const removidas = await safeValidateUIMessages({ messages: corpo.dados.removidas });
         if (!removidas.success) return invalido("As mensagens mandadas não são válidas.");
-        const r = await restaurarMensagens(u.id, req.params.id, { ...corpo.dados, removidas: removidas.data });
+        const r = await restaurarMensagens(u, req.params.id, { ...corpo.dados, removidas: removidas.data });
         return r.ok ? Response.json({ mensagens: r.mensagens }) : recusar(r);
       }),
     },
     "/api/conversas/:id/tarefas": {
       GET: comSessao<"/api/conversas/:id/tarefas">(async (req, u) =>
-        (await conversaDoUsuario(u.id, req.params.id)) ? Response.json(await tarefasDaConversa(req.params.id)) : naoEncontrado(),
+        (await conversaVisivel(u, req.params.id)) ? Response.json(await tarefasDaConversa(req.params.id)) : naoEncontrado(),
       ),
     },
     "/api/tarefas/:id": {
       GET: comSessao<"/api/tarefas/:id">(async (req, u) => {
         const tarefa = await pegarTarefa(req.params.id);
-        return tarefa && (await conversaDoUsuario(u.id, tarefa.conversaId)) ? Response.json(tarefa) : naoEncontrado();
+        return tarefa && (await conversaVisivel(u, tarefa.conversaId)) ? Response.json(tarefa) : naoEncontrado();
       }),
     },
     "/api/atividade": { GET: comSessao(async (_, u) => Response.json(await tarefasAtivas(u.id))) },

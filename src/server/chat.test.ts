@@ -157,7 +157,7 @@ describe("editar e apagar mensagens", () => {
     await postar(rota, id, doUsuario("u1", "Agende para quinta às 18h."));
     const aprovacao = await aprovar(id);
 
-    const apagada = await apagarMensagem(usuario.id, id, aprovacao.id);
+    const apagada = await apagarMensagem(usuario, id, aprovacao.id);
     const res = await pedir(rota, id, aprovacao);
 
     expect(apagada.ok).toBe(true);
@@ -181,10 +181,10 @@ describe("editar e apagar mensagens", () => {
     const emCurso = await pedir(rota, id, doUsuario("u2", "segunda"));
 
     const edicao = await pedir(rota, id, doUsuario("u1", "editada"));
-    const apagar = await apagarMensagem(usuario.id, id, "u1");
+    const apagar = await apagarMensagem(usuario, id, "u1");
     portao.resolve();
     await emCurso.text();
-    const depois = await apagarMensagem(usuario.id, id, "u2");
+    const depois = await apagarMensagem(usuario, id, "u2");
 
     expect([edicao.status, await edicao.json()]).toEqual([409, { erro: AINDA_RESPONDENDO }]);
     expect(apagar).toEqual({ ok: false, status: 409, erro: AINDA_RESPONDENDO });
@@ -225,7 +225,7 @@ describe("parar", () => {
     await gerando.promise;
 
     await emCurso.body!.cancel();
-    await pararTurno(usuario.id, id);
+    await pararTurno(usuario, id);
     const seguinte = await pedir(rota, id, doUsuario("u2", "Outra coisa."), "post");
     await seguinte.text();
 

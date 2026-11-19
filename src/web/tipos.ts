@@ -1,10 +1,10 @@
 import type { InferUITools, UIDataTypes, UIMessage } from "ai";
 import type { BotId } from "../agent/bots";
-import type { Conversa } from "../agent/conversas";
+import type { Conversa, ConversaDaEquipe, Pessoa } from "../agent/conversas";
 import type { ResumoTarefa, Tarefa } from "../agent/tarefas";
 import type { Catalogo, SaidaDelegacao, ToolName } from "../agent/tools";
 
-export type { BotId, Conversa, ResumoTarefa, SaidaDelegacao, Tarefa, ToolName };
+export type { BotId, Conversa, ConversaDaEquipe, Pessoa, ResumoTarefa, SaidaDelegacao, Tarefa, ToolName };
 
 /** As tools do servidor, como o useChat as vê. Os tipos de entrada e saída vêm das definições. */
 export type Ferramentas = InferUITools<Catalogo>;
@@ -31,6 +31,8 @@ export const ehAprovacao = (p: Parte): p is ParteAprovacao => p.type === "tool-p
 /** GET /api/conversas/:id */
 export interface ConversaComMensagens {
   conversa: Conversa;
+  /** Quem começou a conversa, quando é outra pessoa (só um admin abre a de outra pessoa). */
+  dono: Pessoa | null;
   mensagens: Mensagem[];
 }
 
