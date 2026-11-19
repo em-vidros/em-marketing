@@ -50,6 +50,11 @@ describe("ordem do fluxo", () => {
     expect(p.etapa).toBe("headline");
   });
 
+  test("depois da legenda, o usuário ainda troca de arte entre as 3 e a legenda fica", () => {
+    const p = rodar(comArtes("ambos"), { tipo: "escolha", variante: 1 }, { tipo: "story", path: "s.jpg" }, { tipo: "legenda", legenda: "L." }, { tipo: "escolha", variante: 2 });
+    expect(p).toMatchObject({ etapa: "legenda", legenda: "L.", storyPath: null, peca: { arte: arte(2) }, opcoes: [arte(1), arte(2), arte(3)] });
+  });
+
   test("escolher variação inexistente é recusado", () => {
     expect(transicionar(comArtes("feed"), { tipo: "escolha", variante: 4 }).ok).toBe(false);
   });
@@ -124,6 +129,7 @@ describe("persistência por conversa", () => {
       { tipo: "escolha", variante: 2 },
       { tipo: "story", path: "s.jpg" },
       { tipo: "legenda", legenda: "Legenda." },
+      { tipo: "escolha", variante: 3 },
     ];
     let p = inicio;
     expect(await postDaConversa("t-persist")).toEqual(p);

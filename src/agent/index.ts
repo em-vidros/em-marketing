@@ -22,6 +22,8 @@ export interface Opcoes {
 
 const doRegistry: ResolverModelo = (bot) => modelo(bot.modelo);
 
+const SO_COM_O_USUARIO = new Set(["mostrar_artes", "escolher_arte"]);
+
 const DELEGADA =
   "Você está numa tarefa delegada pelo Chefe, não falando com o usuário. Não faça perguntas: decida com o que tem e siga o fluxo até onde o pedido manda. Termine com um resumo curto do que fez e do que ficou pendente; só ele volta para o Chefe.";
 
@@ -42,8 +44,8 @@ export async function executar(botId: BotId, conversaId: string, messages: Model
     instructions: `${instrucoes}\n\n--- ESTADO DO POST DESTA CONVERSA ---\n${resumoDoPost(await postDaConversa(conversaId))}`,
     messages,
     tools: await catalogo(conversaId, rodar, inspiracoes),
-    // Numa tarefa delegada ninguém viu as artes: a escolha só acontece num turno com o usuário.
-    activeTools: BOTS[botId].tools.filter((t) => !(delegada && t === "escolher_arte")),
+    // Numa tarefa delegada ninguém vê a conversa: mostrar e escolher as artes só acontecem num turno com o usuário.
+    activeTools: BOTS[botId].tools.filter((t) => !(delegada && SO_COM_O_USUARIO.has(t))),
     toolApproval: APROVACAO,
     experimental_toolApprovalSecret: segredoAprovacao,
     // O post no formato ambos passa por 7 tools antes do resumo; 8 cortava o fluxo no fim.

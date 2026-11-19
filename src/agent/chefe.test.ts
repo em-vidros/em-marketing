@@ -109,6 +109,7 @@ describe("delegação do Chefe", () => {
 
     expect(ferramentas(post)).toContain("gerar_3_artes");
     expect(ferramentas(post)).not.toContain("escolher_arte");
+    expect(ferramentas(post)).not.toContain("mostrar_artes");
     expect(ferramentas(chefe)).toEqual(expect.arrayContaining(["mostrar_artes", "escolher_arte"]));
   });
 

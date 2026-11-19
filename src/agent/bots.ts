@@ -89,7 +89,7 @@ export const BOTS: Record<BotId, Bot> = {
     ),
     fixo: () =>
       juntar(
-        "Publicar e agendar são do Chefe, com aprovação humana. Quando o usuário escolher o formato, chame definir_formato. Depois de gerar_3_artes, chame mostrar_artes para o usuário ver as 3 opções; quando ele escolher uma variação, chame escolher_arte. Em tarefa delegada a escolha não é sua: pare depois de gerar as artes e diga ao Chefe que elas esperam a escolha do usuário.",
+        "Publicar e agendar são do Chefe, com aprovação humana. Quando o usuário escolher o formato, chame definir_formato. Depois de gerar_3_artes, chame mostrar_artes para o usuário ver as 3 opções; quando ele escolher uma variação, chame escolher_arte. Em tarefa delegada a escolha não é sua: pare depois de gerar as artes e diga ao Chefe que elas esperam a escolha do usuário; o Chefe mostra as opções.",
         PILARES,
         IMAGEM,
         "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário. Se o banco não tiver foto que sirva, não pare: monte um brief novo com precisa_foto_real false e um ângulo tipográfico que não mostre produto, obra nem pessoas, gere as artes e diga que uma foto real deixaria a peça melhor.",

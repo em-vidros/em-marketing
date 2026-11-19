@@ -11,6 +11,7 @@ export const ehMostrarArtes = (p: Parte): p is ParteMostrarArtes => p.type === "
 export function EscolhaDeArtes({ parte, escolher }: { parte: ParteMostrarArtes; escolher: ((variante: number) => void) | null }) {
   if (parte.state !== "output-available" || !parte.output.ok) return null;
   const { artes, formato } = parte.output;
+  const escolhida = "escolhida" in parte.output ? parte.output.escolhida : null;
   const proporcao = formato === "stories" ? "aspect-[9/16]" : "aspect-[4/5]";
   return (
     <section aria-label="Escolha uma arte" className="flex flex-col gap-3">
@@ -25,13 +26,15 @@ export function EscolhaDeArtes({ parte, escolher }: { parte: ParteMostrarArtes; 
                 className={`${proporcao} w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10`}
               />
             </a>
-            {escolher ? (
+            {a.variante === escolhida ? (
+              <span className="grid h-9 place-items-center rounded-full bg-ativo text-[13px] font-medium">Escolhida</span>
+            ) : escolher ? (
               <button
                 type="button"
                 onClick={() => escolher(a.variante)}
                 className="pressiona h-9 cursor-pointer rounded-full border border-linha-forte text-[13px] font-medium hover:bg-hover"
               >
-                Usar a {a.variante}
+                {escolhida ? `Trocar pela ${a.variante}` : `Usar a ${a.variante}`}
               </button>
             ) : (
               <span className="text-center text-xs text-tinta-3">Variação {a.variante}</span>

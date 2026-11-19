@@ -113,15 +113,15 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         const p = await atual();
         if (!p || p.etapa === "brief" || p.etapa === "formato" || p.etapa === "headline")
           return { ok: false as const, motivo: "Ainda não há artes neste post. Delegue ao Post a geração das 3 artes." };
-        const artes = p.etapa === "artes" ? p.artes : p.peca.origem === "gerada" ? null : [p.peca.arte];
-        if (!artes) return { ok: false as const, motivo: "A arte já foi escolhida. Para ver outras opções, gere as 3 artes de novo." };
+        const artes = p.etapa === "artes" ? p.artes : p.opcoes;
         const formato = p.formato === "stories" ? "stories" : "feed";
-        return { ok: true as const, formato, artes: await emOrdem(artes, artePublica) };
+        const escolhida = p.etapa === "artes" ? null : p.peca.arte.variant;
+        return { ok: true as const, formato, escolhida, artes: await emOrdem(artes, artePublica) };
       },
     }),
 
     escolher_arte: tool({
-      description: "Registra a variação que o usuário escolheu na conversa. Só chame com o número que o usuário disse ou clicou.",
+      description: "Registra a variação que o usuário escolheu na conversa, também para trocar uma arte já escolhida. Só chame com o número que o usuário disse ou clicou.",
       inputSchema: z.object({ variante: z.number().int().min(1).max(3) }),
       execute: async ({ variante }) => aplicar(conversaId, { tipo: "escolha", variante }),
     }),

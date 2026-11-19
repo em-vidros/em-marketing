@@ -27,6 +27,8 @@ interface Base {
 interface ComPeca extends Base {
   formato: Formato;
   peca: Peca;
+  /** As variações geradas, a escolhida entre elas. Ficam para o usuário rever e trocar de arte. Foto real tem só a própria. */
+  opcoes: Arte[];
   /** Versão 9:16 no formato "ambos". Em "stories" a própria arte já é 9:16. */
   storyPath: string | null;
 }
@@ -56,8 +58,8 @@ export type TipoEvento = Evento["tipo"];
 const ORIGEM = {
   formato: ["brief", "formato", "headline"],
   headline: ["formato", "headline", "artes"],
-  artes: ["headline", "artes", "escolhida"],
-  escolha: ["artes"],
+  artes: ["headline", "artes", "escolhida", "legenda"],
+  escolha: ["artes", "escolhida", "legenda"],
   foto: ["formato", "headline", "artes", "escolhida"],
   story: ["escolhida", "legenda"],
   legenda: ["escolhida", "legenda"],
@@ -115,8 +117,11 @@ export function exigir<T extends TipoEvento>(post: EtapaPost | null, tipo: T): P
         );
       if (!formato) return nao("Invariante 1: o formato não foi definido. Chame definir_formato.");
       if (post.etapa === "formato") return nao("Invariante 2: o headline vem antes da imagem. Chame definir_headline.");
-      if (post.etapa === "escolhida" && post.peca.origem === "foto")
+      if ("peca" in post && post.peca.origem === "foto")
         return nao("A arte deste post é uma foto real do banco. Para gerar, monte um brief novo.");
+      break;
+    case "escolha":
+      if ("peca" in post && post.peca.origem === "foto") return nao("A arte deste post é uma foto real do banco; não há variações para escolher.");
       break;
     case "legenda":
       if (formato === "stories") return nao("Invariante 3: stories não têm legenda. Não chame esta tool.");
@@ -135,7 +140,7 @@ export function exigir<T extends TipoEvento>(post: EtapaPost | null, tipo: T): P
 
 /** Headline que alimenta uma nova geração. Uma escolhida de foto real já foi recusada por exigir. */
 export function headlineParaGerar(p: Origem<"artes">): Headline | null {
-  if (p.etapa !== "escolhida") return p.headline;
+  if (!("peca" in p)) return p.headline;
   return p.peca.origem === "gerada" ? p.peca.headline : null;
 }
 
@@ -165,16 +170,25 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
     case "escolha": {
       const r = exigir(post, "escolha");
       if (!r.ok) return r;
-      const arte = r.post.artes.find((a) => a.variant === evento.variante);
-      if (!arte) return { ok: false, motivo: `Não existe a variação v${evento.variante}. As opções são ${r.post.artes.map((a) => `v${a.variant}`).join(", ")}.` };
-      const { postId, brief, formato, headline } = r.post;
-      return ok({ etapa: "escolhida", postId, brief, formato, peca: { origem: "gerada", headline, arte }, storyPath: null });
+      const p = r.post;
+      const opcoes = "peca" in p ? p.opcoes : p.artes;
+      const headline = "peca" in p ? (p.peca.origem === "gerada" ? p.peca.headline : null) : p.headline;
+      const arte = opcoes.find((a) => a.variant === evento.variante);
+      if (!arte) return { ok: false, motivo: `Não existe a variação v${evento.variante}. As opções são ${opcoes.map((a) => `v${a.variant}`).join(", ")}.` };
+      if (!headline) return { ok: false, motivo: "A arte deste post é uma foto real do banco; não há variações para escolher." };
+      const { postId, brief, formato } = p;
+      const mesma = "peca" in p && p.peca.arte.variant === arte.variant;
+      const peca: Peca = { origem: "gerada", headline, arte };
+      // A legenda é do brief e vale para qualquer variação; a versão 9:16 sai do conceito, então só fica se a arte for a mesma.
+      const storyPath = mesma ? p.storyPath : null;
+      if (p.etapa === "legenda") return ok({ etapa: "legenda", postId, brief, formato, peca, opcoes, storyPath, legenda: p.legenda });
+      return ok({ etapa: "escolhida", postId, brief, formato, peca, opcoes, storyPath });
     }
     case "foto": {
       const r = exigir(post, "foto");
       if (!r.ok) return r;
       const { postId, brief, formato } = r.post;
-      return ok({ etapa: "escolhida", postId, brief, formato, peca: { origem: "foto", arte: evento.arte }, storyPath: evento.storyPath });
+      return ok({ etapa: "escolhida", postId, brief, formato, peca: { origem: "foto", arte: evento.arte }, opcoes: [evento.arte], storyPath: evento.storyPath });
     }
     case "story": {
       const r = exigir(post, "story");
@@ -242,7 +256,7 @@ function lerLinha(row: PostRow): EtapaPost {
 
   if (arte) {
     const peca: Peca = arte.style === "foto-real" || !headline ? { origem: "foto", arte } : { origem: "gerada", headline, arte };
-    const comPeca: ComPeca = { ...base, formato, peca, storyPath: row.story_path };
+    const comPeca: ComPeca = { ...base, formato, peca, opcoes: artes, storyPath: row.story_path };
     if (row.legenda) return { ...comPeca, etapa: "legenda", legenda: row.legenda };
     return { ...comPeca, etapa: "escolhida" };
   }
@@ -305,7 +319,7 @@ export async function gravarPost(post: EtapaPost): Promise<void> {
     case "escolhida":
     case "legenda":
       headline = post.peca.origem === "gerada" ? post.peca.headline : null;
-      artes = [post.peca.arte];
+      artes = post.opcoes;
       chosen = post.peca.arte.variant;
       storyPath = post.storyPath;
       if (post.etapa === "legenda") legenda = post.legenda;
