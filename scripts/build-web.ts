@@ -8,6 +8,8 @@ const r = await Bun.build({
   outdir: "dist",
   // Caminho absoluto: em /c/:id um "./chunk.js" vira /c/chunk.js, que o rewrite da SPA responde com HTML.
   publicPath: "/",
+  // O editor de arte (Leafer e mediabunny) vira um pedaço à parte, baixado só quando a tela de arte abre.
+  splitting: true,
   minify: true,
   sourcemap: "linked",
   plugins: [tailwind],
@@ -20,5 +22,6 @@ if (!r.success) {
 await cp("brand/assets/web", "dist", { recursive: true });
 await mkdir("dist/logo", { recursive: true });
 await cp("brand/assets/logo", "dist/logo", { recursive: true, filter: (f) => f.endsWith(".svg") || !f.split("/").pop()!.includes(".") });
+await cp("brand/assets/fonts", "dist/fontes", { recursive: true, filter: (f) => f.endsWith(".ttf") || !f.split("/").pop()!.includes(".") });
 await cp("src/web/privacidade.html", "dist/privacidade.html");
 console.log(`site montado em dist/ (${r.outputs.length} arquivos)`);

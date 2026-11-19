@@ -1,7 +1,7 @@
 import { desc, eq, inArray } from "drizzle-orm";
 import type { Arquivos } from "./arquivos";
 import type { Banco } from "./banco";
-import { camadasIniciais, type Camada, type Formato } from "./camadas";
+import { camadasIniciais, type Ajustes, type Camada, type Formato } from "./camadas";
 import type { Ia } from "./ia";
 import { escolherReferencias, listarReferencias } from "./referencias";
 import { artes, type Arte } from "./schema";
@@ -87,8 +87,10 @@ export async function arteDaImagem(
   return arte!;
 }
 
-export async function trocarCamadas(banco: Banco, id: string, camadas: Camada[]): Promise<Arte | null> {
-  const [arte] = await banco.update(artes).set({ camadas, atualizadaEm: new Date() }).where(eq(artes.id, id)).returning();
+export type Edicao = { camadas: Camada[]; ajustes: Ajustes };
+
+export async function gravarEdicao(banco: Banco, id: string, edicao: Edicao): Promise<Arte | null> {
+  const [arte] = await banco.update(artes).set({ ...edicao, atualizadaEm: new Date() }).where(eq(artes.id, id)).returning();
   return arte ?? null;
 }
 

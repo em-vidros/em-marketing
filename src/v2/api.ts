@@ -4,9 +4,9 @@ import { Hono } from "hono";
 import sharp from "sharp";
 import { z } from "zod";
 import type { Usuario } from "../server/auth";
-import { criarArte, listarArtes, novaCena, pegarArte, trocarCamadas, type Estudio } from "./artes";
+import { criarArte, gravarEdicao, listarArtes, novaCena, pegarArte, type Estudio } from "./artes";
 import { EXTENSOES, ehChave, TIPO_DA_EXTENSAO, type Extensao } from "./arquivos";
-import { Camadas, FORMATOS, type Formato } from "./camadas";
+import { Ajustes, Camadas, FORMATOS, type Formato } from "./camadas";
 import { criarReferencia, editarLeitura, listarReferencias, removerReferencia, restaurarReferencia } from "./referencias";
 import { renderizar } from "./render";
 
@@ -30,7 +30,7 @@ const NovaArte = z.object({
   pedido: z.string().trim().min(3, "Descreva a arte em pelo menos 3 letras.").max(1000),
   formato: z.enum(Object.keys(FORMATOS) as [Formato, ...Formato[]], "O formato é feed ou story."),
 });
-const TrocaDeCamadas = z.object({ camadas: Camadas });
+const Edicao = z.object({ camadas: Camadas, ajustes: Ajustes });
 
 type Ambiente = { Variables: { usuario: Usuario } };
 
@@ -121,10 +121,10 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     return arte ? c.json(arte) : c.json(erro("Não encontrado."), 404);
   });
 
-  api.put("/artes/:id/camadas", async (c) => {
-    const r = await corpo(c.req.raw, TrocaDeCamadas);
+  api.put("/artes/:id", async (c) => {
+    const r = await corpo(c.req.raw, Edicao);
     if (!r.ok) return c.json(erro(r.problema), 400);
-    const arte = await trocarCamadas(banco, c.req.param("id"), r.dados.camadas);
+    const arte = await gravarEdicao(banco, c.req.param("id"), r.dados);
     return arte ? c.json(arte) : c.json(erro("Não encontrado."), 404);
   });
 
@@ -161,7 +161,7 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     const arte = await pegarArte(banco, c.req.param("id"));
     const cena = arte && (await arquivos.ler(arte.cena));
     if (!arte || !cena) return c.json(erro("Não encontrado."), 404);
-    return new Response(await renderizar(arte.formato, cena, arte.camadas, (chave) => arquivos.ler(chave)), { headers: { "content-type": "image/png" } });
+    return new Response(await renderizar(arte, cena, (chave) => arquivos.ler(chave)), { headers: { "content-type": "image/png" } });
   });
 
   return api;

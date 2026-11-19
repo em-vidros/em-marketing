@@ -28,9 +28,21 @@ const cor = z.string().regex(/^#[0-9A-Fa-f]{6}$/, "A cor precisa ser um hex como
 const px = z.number().int().min(-2000).max(4000);
 const id = z.string().min(1).max(40);
 
+/**
+ * O que toda camada tem além do tipo. Rotação gira em graus em torno do centro, e x e y continuam sendo o canto
+ * da caixa sem giro. Os dois são opcionais porque as artes gravadas antes deles não os têm; `transformacaoDa` dá o valor em vigor.
+ */
+const comum = {
+  id,
+  x: px,
+  y: px,
+  rotacao: z.number().min(-360).max(360).optional(),
+  opacidade: z.number().min(0).max(1).optional(),
+};
+
 const Texto = z
   .object({
-    id,
+    ...comum,
     tipo: z.literal("texto"),
     texto: z.string().min(1, "O texto não pode ficar vazio.").max(400),
     fonte: z.enum(Object.keys(FONTES) as [Fonte, ...Fonte[]]),
@@ -39,31 +51,25 @@ const Texto = z
     entrelinha: z.number().min(0.8).max(2.5),
     cor,
     alinhamento: z.enum(["esquerda", "centro", "direita"]),
-    x: px,
-    y: px,
     largura: z.number().int().min(20).max(4000),
   })
   .refine((t) => t.peso in FONTES[t.fonte], { message: "Essa fonte não tem esse peso.", path: ["peso"] });
 
-const Logo = z.object({ id, tipo: z.literal("logo"), variante: z.enum(["cor", "branca"]), x: px, y: px, largura: z.number().int().min(40).max(1080) });
+const Logo = z.object({ ...comum, tipo: z.literal("logo"), variante: z.enum(["cor", "branca"]), largura: z.number().int().min(40).max(1080) });
 
 /** Imagem ou SVG enviado pelo usuário, guardado como PNG. `proporcao` é altura sobre largura. */
 const Imagem = z.object({
-  id,
+  ...comum,
   tipo: z.literal("imagem"),
   chave: z.string().regex(/^[0-9a-f-]{36}\.(png|jpg|webp)$/, "Arquivo de imagem inválido."),
   proporcao: z.number().positive().max(20),
-  x: px,
-  y: px,
   largura: z.number().int().min(20).max(4000),
 });
 
 const Forma = z.object({
-  id,
+  ...comum,
   tipo: z.literal("forma"),
   cor,
-  x: px,
-  y: px,
   largura: z.number().int().min(1).max(4000),
   altura: z.number().int().min(1).max(4000),
   raio: z.number().int().min(0).max(12),
@@ -72,6 +78,34 @@ const Forma = z.object({
 /** A ordem do array é a ordem de empilhamento: a primeira camada fica logo acima da cena. */
 export const Camadas = z.array(z.union([Texto, Logo, Imagem, Forma])).max(30, "Uma arte tem no máximo 30 camadas.");
 export type Camada = z.infer<typeof Camadas>[number];
+
+export const transformacaoDa = (camada: Camada) => ({ rotacao: camada.rotacao ?? 0, opacidade: camada.opacidade ?? 1 });
+
+/**
+ * O tratamento da cena. Brilho, contraste e saturação são multiplicadores, 1 é neutro; desfoque é o raio em px da arte.
+ * O enquadramento amplia a cena em `zoom` vezes e põe no centro da arte o ponto `focoX`, `focoY` (fração da cena, 0,5 é o meio).
+ */
+export const Ajustes = z.object({
+  brilho: z.number().min(0.5).max(1.5),
+  contraste: z.number().min(0.5).max(1.5),
+  saturacao: z.number().min(0).max(2),
+  desfoque: z.number().min(0).max(30),
+  zoom: z.number().min(1).max(3),
+  focoX: z.number().min(0).max(1),
+  focoY: z.number().min(0).max(1),
+});
+
+export type Ajustes = z.infer<typeof Ajustes>;
+
+export const AJUSTES_NEUTROS: Ajustes = { brilho: 1, contraste: 1, saturacao: 1, desfoque: 0, zoom: 1, focoX: 0.5, focoY: 0.5 };
+
+/** O retângulo da cena, em px da imagem original, que o enquadramento estica sobre a arte inteira. */
+export function recorteDaCena({ zoom, focoX, focoY }: Ajustes, largura: number, altura: number) {
+  const janela = { largura: Math.round(largura / zoom), altura: Math.round(altura / zoom) };
+  const centro = (foco: number, total: number, lado: number) => Math.round(Math.min(total - lado, Math.max(0, foco * total - lado / 2)));
+
+  return { left: centro(focoX, largura, janela.largura), top: centro(focoY, altura, janela.altura), width: janela.largura, height: janela.altura };
+}
 
 /** O que o modelo de texto devolve para montar uma arte nova. A cena vai sozinha para o modelo de imagem. */
 export const Plano = z.object({

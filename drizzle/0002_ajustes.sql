@@ -1,0 +1,1 @@
+ALTER TABLE "artes" ADD COLUMN "ajustes" jsonb DEFAULT '{"brilho":1,"contraste":1,"saturacao":1,"desfoque":0,"zoom":1,"focoX":0.5,"focoY":0.5}'::jsonb NOT NULL;

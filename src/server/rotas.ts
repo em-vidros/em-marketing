@@ -54,12 +54,15 @@ import { q } from "../v2/banco";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
 
-/** Ícones e logos de brand/assets (espelho da pasta oficial; `bun run assets`). Lidos no boot, servidos da memória. */
+/** Ícones, logos e fontes de brand/assets (espelho da pasta oficial; `bun run assets`). Lidos no boot, servidos da memória. */
 const marca = Object.fromEntries([
   ...readdirSync("brand/assets/web").map((nome) => [`/${nome}`, Bun.file(`brand/assets/web/${nome}`)] as const),
   ...readdirSync("brand/assets/logo")
     .filter((nome) => nome.endsWith(".svg"))
     .map((nome) => [`/logo/${nome}`, Bun.file(`brand/assets/logo/${nome}`)] as const),
+  ...readdirSync("brand/assets/fonts")
+    .filter((nome) => nome.endsWith(".ttf"))
+    .map((nome) => [`/fontes/${nome}`, Bun.file(`brand/assets/fonts/${nome}`)] as const),
 ]);
 
 const naoEncontrado = () => Response.json({ erro: "Não encontrado." }, { status: 404 });

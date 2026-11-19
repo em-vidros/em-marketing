@@ -6,7 +6,7 @@ import sharp from "sharp";
 import { criarApi } from "./api";
 import { arquivosNoDisco } from "./arquivos";
 import { banco } from "./banco";
-import { FORMATOS, type Formato } from "./camadas";
+import { AJUSTES_NEUTROS, FORMATOS, type Formato } from "./camadas";
 import type { Ia } from "./ia";
 import { escolherReferencias } from "./referencias";
 import { artes, referencias } from "./schema";
@@ -87,8 +87,10 @@ describe("artes", () => {
     expect(arte.camadas.map((c: { id: string }) => c.id)).toEqual(["titulo", "apoio", "logo"]);
 
     const camadas = arte.camadas.map((c: { id: string }) => (c.id === "titulo" ? { ...c, texto: "Box que dura", cor: "#63B5AF" } : c));
-    const trocada = await pedir(`/api/artes/${arte.id}/camadas`, { method: "PUT", ...json({ camadas }) });
-    expect((await trocada.json()).camadas[0]).toMatchObject({ texto: "Box que dura", cor: "#63B5AF" });
+    expect(arte.ajustes).toEqual(AJUSTES_NEUTROS);
+    const ajustes = { ...AJUSTES_NEUTROS, brilho: 1.2, desfoque: 4 };
+    const trocada = await pedir(`/api/artes/${arte.id}`, { method: "PUT", ...json({ camadas, ajustes }) });
+    expect(await trocada.json()).toMatchObject({ camadas: [{ texto: "Box que dura", cor: "#63B5AF" }, {}, {}], ajustes });
 
     const png = await pedir(`/api/artes/${arte.id}/png`);
     expect(png.headers.get("content-type")).toBe("image/png");
@@ -108,7 +110,7 @@ describe("artes", () => {
     expect(proporcao).toBeCloseTo(0.5);
 
     const camadas = [{ id: "selo", tipo: "imagem", chave, proporcao, x: 100, y: 100, largura: 400 }];
-    expect((await pedir(`/api/artes/${arte.id}/camadas`, { method: "PUT", ...json({ camadas }) })).status).toBe(200);
+    expect((await pedir(`/api/artes/${arte.id}`, { method: "PUT", ...json({ camadas, ajustes: AJUSTES_NEUTROS }) })).status).toBe(200);
     const png = Buffer.from(await (await pedir(`/api/artes/${arte.id}/png`)).arrayBuffer());
     const { data } = await sharp(png).extract({ left: 300, top: 200, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true });
     expect([...data.subarray(0, 3)]).toEqual([255, 0, 0]);
@@ -125,6 +127,25 @@ describe("artes", () => {
     expect(px.filter((v) => v > 200).length).toBeGreaterThan(1000);
   });
 
+  test("o PNG gira a camada em torno do centro, aplica a opacidade e trata a cena com os ajustes", async () => {
+    const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
+    const faixa = { id: "faixa", tipo: "forma", cor: "#FF0000", x: 100, y: 500, largura: 400, altura: 40, raio: 0, rotacao: 90 };
+    const veu = { id: "veu", tipo: "forma", cor: "#000000", x: 700, y: 100, largura: 200, altura: 200, raio: 0, opacidade: 0.5 };
+    const ajustes = { ...AJUSTES_NEUTROS, brilho: 0.5 };
+    expect((await pedir(`/api/artes/${arte.id}`, { method: "PUT", ...json({ camadas: [faixa, veu], ajustes }) })).status).toBe(200);
+
+    const png = Buffer.from(await (await pedir(`/api/artes/${arte.id}/png`)).arrayBuffer());
+    const cor = async (left: number, top: number) => [...(await sharp(png).extract({ left, top, width: 1, height: 1 }).raw().toBuffer()).subarray(0, 3)];
+    // Em pé, a faixa ocupa x 280..320 e y 320..720; deitada ocuparia y 500..540.
+    expect(await cor(300, 340)).toEqual([255, 0, 0]);
+    expect(await cor(150, 520)).not.toEqual([255, 0, 0]);
+    // A cena #E4E1D8 com brilho 0.5, e meio preto por cima dela.
+    const cena = await cor(50, 1000);
+    expect(cena.map((v, i) => Math.abs(v - [114, 113, 108][i]!) <= 2)).toEqual([true, true, true]);
+    const sobVeu = await cor(800, 200);
+    expect(sobVeu.map((v, i) => Math.abs(v - cena[i]! / 2) <= 2)).toEqual([true, true, true]);
+  });
+
   test("recusa arquivo de camada que não é imagem", async () => {
     const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
     const form = new FormData();
@@ -135,7 +156,7 @@ describe("artes", () => {
   test("recusa camada com peso que a fonte não tem", async () => {
     const arte = await (await pedir("/api/artes", { method: "POST", ...json({ pedido: "Post de teste", formato: "feed" }) })).json();
     const camadas = arte.camadas.map((c: { id: string }) => (c.id === "titulo" ? { ...c, fonte: "Playfair Display", peso: 900 } : c));
-    const r = await pedir(`/api/artes/${arte.id}/camadas`, { method: "PUT", ...json({ camadas }) });
+    const r = await pedir(`/api/artes/${arte.id}`, { method: "PUT", ...json({ camadas, ajustes: AJUSTES_NEUTROS }) });
     expect(r.status).toBe(400);
     expect(await r.json()).toEqual({ erro: "Essa fonte não tem esse peso." });
   });

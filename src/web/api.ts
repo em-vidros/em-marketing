@@ -3,7 +3,7 @@ import type { ConversaExcluida } from "../agent/conversas";
 import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
 import type { ConfigBot } from "../agent/config";
 import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
-import type { Camada } from "../v2/camadas";
+import type { Edicao } from "../v2/artes";
 import type { Arte, Referencia } from "../v2/schema";
 import { BOT_IDS, BOTS, type BotId } from "./bots";
 import type { ApiConversas } from "./componentes/menu/conversas";
@@ -70,7 +70,7 @@ export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: st
 
 /** As rotas de artes do backend novo (src/v2/api.ts). */
 export const apiArtes = {
-  trocarCamadas: (id: string, camadas: Camada[]) => comCorpo<ArteDaApi>(`/api/artes/${id}/camadas`, "PUT", { camadas }),
+  gravar: (id: string, edicao: Edicao) => comCorpo<ArteDaApi>(`/api/artes/${id}`, "PUT", edicao),
   novaCena: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}/cena`, "POST"),
   /** Imagem ou SVG para uma camada. O servidor devolve o PNG guardado e a proporção dele. */
   enviarImagem: async (id: string, arquivo: File) => {

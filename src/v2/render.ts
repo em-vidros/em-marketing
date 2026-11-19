@@ -1,7 +1,8 @@
 import { Resvg } from "@resvg/resvg-js";
 import satori from "satori";
 import sharp from "sharp";
-import { FONTES, FORMATOS, PROPORCAO_DO_LOGO, type Camada, type Formato } from "./camadas";
+import { AJUSTES_NEUTROS, FONTES, FORMATOS, PROPORCAO_DO_LOGO, recorteDaCena, transformacaoDa, type Ajustes, type Camada } from "./camadas";
+import type { Arte } from "./schema";
 
 type No = { type: string; props: Record<string, unknown> };
 
@@ -34,8 +35,18 @@ const ALINHAMENTO = {
 /** Lê o arquivo de uma camada de imagem. Vem de fora para o render não depender do Blob. */
 export type LerArquivo = (chave: string) => Promise<Uint8Array | null>;
 
+export type Desenho = Pick<Arte, "formato" | "camadas" | "ajustes">;
+
 function noDaCamada(camada: Camada, imagens: Map<string, string>): No {
-  const lugar = { position: "absolute", left: camada.x, top: camada.y, width: camada.largura };
+  const { rotacao, opacidade } = transformacaoDa(camada);
+  const lugar = {
+    position: "absolute",
+    left: camada.x,
+    top: camada.y,
+    width: camada.largura,
+    ...(rotacao !== 0 && { transform: `rotate(${rotacao}deg)` }),
+    ...(opacidade !== 1 && { opacity: opacidade }),
+  };
   switch (camada.tipo) {
     case "texto":
       return {
@@ -66,9 +77,11 @@ function noDaCamada(camada: Camada, imagens: Map<string, string>): No {
   }
 }
 
-/** A arte pronta para baixar: a cena no fundo e as camadas por cima, na ordem do array. */
-export async function renderizar(formato: Formato, cena: Uint8Array, camadas: Camada[], ler?: LerArquivo): Promise<Uint8Array<ArrayBuffer>> {
+/** A arte pronta para baixar: a cena tratada no fundo e as camadas por cima, na ordem do array. */
+export async function renderizar({ formato, camadas, ajustes }: Desenho, cena: Uint8Array, ler?: LerArquivo): Promise<Uint8Array<ArrayBuffer>> {
   const { largura, altura } = FORMATOS[formato];
+  const fundo = await tratarCena(cena, ajustes, largura, altura);
+
   const imagens = new Map<string, string>();
   for (const c of camadas)
     if (c.tipo === "imagem" && ler && !imagens.has(c.chave)) {
@@ -80,7 +93,7 @@ export async function renderizar(formato: Formato, cena: Uint8Array, camadas: Ca
     props: {
       style: { width: largura, height: altura, display: "flex", position: "relative", backgroundColor: "#F0EFEA" },
       children: [
-        { type: "img", props: { src: dataUri("image/jpeg", cena), width: largura, height: altura, style: { position: "absolute", left: 0, top: 0 } } },
+        { type: "img", props: { src: dataUri("image/jpeg", fundo), width: largura, height: altura, style: { position: "absolute", left: 0, top: 0 } } },
         ...camadas.map((c) => noDaCamada(c, imagens)),
       ],
     },
@@ -93,7 +106,53 @@ export async function renderizar(formato: Formato, cena: Uint8Array, camadas: Ca
  * A arte como o Instagram aceita: JPEG em sRGB. O limite da API é 8 MB, e nem o maior formato chega
  * perto: 1080×1920 em RGB cru já são 6,2 MB, e o JPEG fica bem abaixo disso.
  */
-export async function renderizarJpeg(formato: Formato, cena: Uint8Array, camadas: Camada[], ler?: LerArquivo): Promise<Uint8Array> {
-  const png = await renderizar(formato, cena, camadas, ler);
+export async function renderizarJpeg(desenho: Desenho, cena: Uint8Array, ler?: LerArquivo): Promise<Uint8Array> {
+  const png = await renderizar(desenho, cena, ler);
   return new Uint8Array(await sharp(png).toColorspace("srgb").jpeg({ quality: 90, mozjpeg: true }).toBuffer());
+}
+
+type Imagem = ReturnType<typeof sharp>;
+type Passo = (imagem: Imagem) => Imagem;
+
+/**
+ * Enquadra a cena e aplica os ajustes como os filtros CSS que o editor usa no navegador (brightness, contrast,
+ * saturate, blur, nessa ordem), um passo por vez: o CSS corta cada filtro em 0..255 antes do próximo, e cada passo do
+ * sharp também.
+ */
+async function tratarCena(cena: Uint8Array, ajustes: Ajustes, largura: number, altura: number): Promise<Uint8Array> {
+  const enquadrada = ajustes.zoom !== AJUSTES_NEUTROS.zoom;
+  const passos = passosDosAjustes(ajustes);
+  if (!enquadrada && passos.length === 0) return cena;
+
+  const original = await sharp(cena).metadata();
+  const recorte = recorteDaCena(ajustes, original.width ?? largura, original.height ?? altura);
+  const enquadrar: Passo = (imagem) => imagem.flatten({ background: "#F0EFEA" }).extract(recorte).resize(largura, altura, { fit: "fill" });
+  let bytes = Buffer.from(cena);
+  let raw: { width: number; height: number; channels: 1 | 2 | 3 | 4 } | undefined;
+  for (const passo of [enquadrar, ...passos]) {
+    const { data, info } = await passo(sharp(bytes, raw && { raw })).raw().toBuffer({ resolveWithObject: true });
+    bytes = data;
+    raw = { width: info.width, height: info.height, channels: info.channels };
+  }
+
+  return new Uint8Array(await sharp(bytes, { raw }).jpeg({ quality: 95 }).toBuffer());
+}
+
+function passosDosAjustes({ brilho, contraste, saturacao, desfoque }: Ajustes): Passo[] {
+  const passos: Passo[] = [];
+  if (brilho !== 1) passos.push((imagem) => imagem.linear(brilho, 0));
+  if (contraste !== 1) passos.push((imagem) => imagem.linear(contraste, 127.5 * (1 - contraste)));
+  if (saturacao !== 1) passos.push((imagem) => imagem.recomb(matrizDeSaturacao(saturacao)));
+  if (desfoque > 0) passos.push((imagem) => imagem.blur(Math.max(0.3, desfoque)));
+
+  return passos;
+}
+
+/** A matriz do saturate() do CSS (feColorMatrix type="saturate"). */
+function matrizDeSaturacao(s: number): Parameters<Imagem["recomb"]>[0] {
+  return [
+    [0.213 + 0.787 * s, 0.715 - 0.715 * s, 0.072 - 0.072 * s],
+    [0.213 - 0.213 * s, 0.715 + 0.285 * s, 0.072 - 0.072 * s],
+    [0.213 - 0.213 * s, 0.715 - 0.715 * s, 0.072 + 0.928 * s],
+  ];
 }

@@ -1,5 +1,5 @@
 import { boolean, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
-import type { Camada, Formato } from "./camadas";
+import { AJUSTES_NEUTROS, type Ajustes, type Camada, type Formato } from "./camadas";
 
 export const referencias = pgTable("referencias", {
   id: uuid().primaryKey().defaultRandom(),
@@ -19,6 +19,7 @@ export const artes = pgTable("artes", {
   promptDaCena: text().notNull(),
   referencias: uuid().array().notNull(),
   camadas: jsonb().$type<Camada[]>().notNull(),
+  ajustes: jsonb().$type<Ajustes>().notNull().default(AJUSTES_NEUTROS),
   criadaPor: text().notNull(),
   criadaEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
   atualizadaEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
