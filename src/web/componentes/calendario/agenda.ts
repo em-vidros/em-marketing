@@ -1,10 +1,11 @@
 import type { NovaPauta } from "../../../agent/calendario";
+import type { DataDaEquipe, NovaData } from "../../../domain/scheduler/calendar";
 import type { PedidoDeAgendamento, Pronto } from "../../../agent/fila";
 import type { ApiCalendario } from "../../api";
 import type { Aviso } from "../menu/conversas";
 import type { PilhaDeDesfazer } from "../menu/desfazer";
 import { diasEntre, momentoPorExtenso, diaPorExtenso, somarDias, textoDaHora, type Dia } from "./datas";
-import { chaveDe, lugarDe, noLugar, ordem, tituloDe, type Chave, type ItemAgendado, type ItemCalendario, type ItemPauta, type Lugar, type Movel } from "./itens";
+import { chaveDe, lugarDe, noLugar, ordem, tituloDe, type Chave, type ItemAgendado, type ItemCalendario, type ItemDataDaEquipe, type ItemPauta, type Lugar, type Movel } from "./itens";
 
 /** Blocos de 8 semanas a partir de um domingo: cabem no limite de 62 dias da rota e cobrem o mês da tela em um ou dois pedidos. */
 const ORIGEM: Dia = "1970-01-04";
@@ -19,6 +20,9 @@ export interface Leitura {
   erro: Error | null;
   prontos: readonly Pronto[] | null;
 }
+
+/** A data no dia em que a tela a mostra. Uma que repete aparece em cada ano com o mesmo id. */
+const naTela = (d: DataDaEquipe, dia: Dia): ItemDataDaEquipe => ({ ...d, tipo: "data", dia });
 
 const mensagem = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
@@ -135,6 +139,18 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
     }
   }
 
+  async function mudarData(d: ItemDataDaEquipe, mudanca: Partial<Omit<NovaData, "mmdd">>, desfazivel = true): Promise<ItemDataDaEquipe | null> {
+    const antes = Object.fromEntries(Object.keys(mudanca).map((k) => [k, d[k as keyof typeof mudanca]])) as typeof mudanca;
+    try {
+      const nova = naTela(await aplicar(chaveDe(d), { ...d, ...mudanca }, () => api.mudarData(d.id, mudanca), (r) => naTela(r, d.dia)), d.dia);
+      if (desfazivel) oferecerDesfazer("Data alterada:", nova.nome, () => mudarData(nova, antes, false));
+      return nova;
+    } catch (e) {
+      erroDe("Não deu para mudar a data.", e);
+      return null;
+    }
+  }
+
   async function reagendar(a: ItemAgendado, publicaEm: number, desfazivel = true): Promise<boolean> {
     try {
       const r = await aplicar(chaveDe(a), { ...a, publicaEm }, () => api.reagendar(a.filaId, publicaEm), (r) => r.item);
@@ -187,6 +203,33 @@ export function criarAgenda(api: ApiCalendario, avisar: (a: Aviso) => void, pilh
         oferecerDesfazer("Pauta apagada:", p.titulo, () => aplicar(chaveDe(p), p, () => api.restaurarPauta(p.id), (r) => r));
       } catch (e) {
         erroDe("Não deu para apagar a pauta.", e);
+      }
+    },
+
+    /** Feriado ou data no dia clicado; `ano` null repete todo ano. */
+    async criarData(dia: Dia, nova: Pick<NovaData, "nome" | "ano"> & Partial<NovaData>): Promise<ItemDataDaEquipe | null> {
+      try {
+        const d = naTela(await api.criarData({ ...nova, mmdd: dia.slice(5) }), dia);
+        base.set(chaveDe(d), d);
+        mudou();
+        oferecerDesfazer("Data criada:", d.nome, async () => {
+          await aplicar(chaveDe(d), null, () => api.apagarData(d.id), () => null);
+        });
+        return d;
+      } catch (e) {
+        erroDe("Não deu para criar a data.", e);
+        return null;
+      }
+    },
+
+    mudarData,
+
+    async apagarData(d: ItemDataDaEquipe) {
+      try {
+        await aplicar(chaveDe(d), null, () => api.apagarData(d.id), () => null);
+        oferecerDesfazer("Data apagada:", d.nome, () => aplicar(chaveDe(d), d, () => api.restaurarData(d.id), (r) => naTela(r, d.dia)));
+      } catch (e) {
+        erroDe("Não deu para apagar a data.", e);
       }
     },
 

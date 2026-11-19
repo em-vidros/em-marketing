@@ -31,7 +31,7 @@ const agendado = (status: ItemAgendado["status"]): ItemAgendado => ({
 });
 
 const publicado: ItemCalendario = { tipo: "publicado", publicacaoId: 3, fonte: { tipo: "post", postId: 3 }, publicadoEm: epochDe("2026-11-16", 10 * 60), midia: "IMAGE", titulo: "Feito", pilar: "MARCA", capa: null, link: "https://www.instagram.com/p/x/" };
-const data: ItemCalendario = { tipo: "data", dia: "2026-11-20", nome: "Consciência Negra" };
+const data: ItemCalendario = { tipo: "data", dia: "2026-11-20", id: null, mmdd: "11-20", ano: null, nome: "Consciência Negra", teste: "regiao", porque: "" };
 
 /** O evento como o CalendarCN devolve depois de um arrasto: o item antigo com o início novo. */
 const arrastado = (item: ItemCalendario, inicio: Date, isAllDay = false): EventoDoCalendario => ({ ...eventoDe(item), start: inicio, isAllDay });
@@ -44,7 +44,8 @@ describe("regras por tipo", () => {
       ["agendado publicando", agendado("publishing"), false, null, "blue", false],
       ["agendado que falhou", agendado("failed"), false, "dispensar", "red", false],
       ["publicado", publicado, false, null, "orange", false],
-      ["data editorial", data, false, null, "yellow", false],
+      ["data editorial fixa", data, false, null, "yellow", false],
+      ["data da equipe", { ...data, id: 7 }, false, "apagar-data", "yellow", false],
     ];
     const visto = casos.map(([nome, item]) => {
       const e = eventoDe(item);

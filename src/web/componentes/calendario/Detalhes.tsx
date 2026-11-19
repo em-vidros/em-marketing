@@ -1,13 +1,14 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { Pronto } from "../../../agent/fila";
 import type { Fonte, Pilar, TipoMidia } from "../../../db";
+import type { Teste } from "../../../domain/scheduler/calendar";
 import { navegar } from "../../rota";
 import { MIDIA, PILARES } from "../peca";
 import type { Agenda } from "./agenda";
 import { diaDe, diaPorExtenso, epochDe, hoje, minutosDaHora, minutosDe, momentoPorExtenso, somarDias, textoDaHora, type Dia } from "./datas";
-import { Alerta, Lampada, Relogio, Visto } from "./Evento";
+import { Alerta, Estrela, Lampada, Relogio, Visto } from "./Evento";
 import { ehMovel, PASSADO, remocaoDe, ROTULO_DA_REMOCAO, type AberturaDoRascunho, type ItemNaTela, type Rascunho } from "./eventos";
-import { instanteDe, tituloDe, type ItemAgendado, type ItemCalendario, type ItemPauta, type Lugar } from "./itens";
+import { chaveDe, ehDaEquipe, instanteDe, tituloDe, type ItemAgendado, type ItemCalendario, type ItemData, type ItemDataDaEquipe, type ItemPauta, type Lugar } from "./itens";
 
 /** O que o detalhe pede à tela. `fechar` vem do CalendarCN e tira a seleção. */
 export interface AcoesDoDetalhe {
@@ -33,6 +34,8 @@ const botaoSecundario = "pressiona inline-flex h-9 whitespace-nowrap cursor-poin
 
 const botaoPerigo = "pressiona inline-flex h-9 whitespace-nowrap cursor-pointer items-center justify-center rounded-full px-3.5 font-medium text-erro hover:bg-erro/8";
 
+const ROTULO_DO_TESTE: Record<Teste, string> = { setor: "Setor", regiao: "Região", empresa: "Empresa" };
+
 const legivel = (p: string) => p.charAt(0) + p.slice(1).toLowerCase();
 
 const chaveDaFonte = (f: Fonte) => (f.tipo === "post" ? `post:${f.postId}` : `arte:${f.arteId}`);
@@ -56,7 +59,7 @@ function conteudo(item: ItemNaTela, acoes: AcoesDoDetalhe) {
     case "publicado":
       return <DetalhePublicado item={item} />;
     case "data":
-      return <DetalheData dia={item.dia} nome={item.nome} acoes={acoes} />;
+      return ehDaEquipe(item) ? <EditorData key={chaveDe(item)} data={item} acoes={acoes} /> : <DetalheData data={item} acoes={acoes} />;
   }
 }
 
@@ -66,9 +69,9 @@ function Titulo({ children }: { children: ReactNode }) {
 
 const textoDoLugar = (l: Lugar) => (l.minutos === null ? diaPorExtenso(l.dia) : `${diaPorExtenso(l.dia)}, ${textoDaHora(l.minutos)}`);
 
-type PassoDeCriar = AberturaDoRascunho | "agendar";
+type PassoDeCriar = AberturaDoRascunho | "agendar" | "data";
 
-/** O espaço vazio clicado: primeiro a escolha entre anotar uma ideia e agendar o que está pronto, depois o passo escolhido. */
+/** O espaço vazio clicado: primeiro a escolha entre anotar uma ideia, agendar o que está pronto e marcar uma data, depois o passo escolhido. */
 function Criar({ rascunho, acoes }: { rascunho: Rascunho; acoes: AcoesDoDetalhe }) {
   const [passo, setPasso] = useState<PassoDeCriar>(rascunho.abreEm);
   const [veioDe, setVeioDe] = useState<PassoDeCriar | null>(null);
@@ -80,6 +83,7 @@ function Criar({ rascunho, acoes }: { rascunho: Rascunho; acoes: AcoesDoDetalhe 
       {passo === "escolha" && <Escolha prontos={acoes.prontos} veioDe={veioDe} escolher={setPasso} fechar={acoes.fechar} />}
       {passo === "ideia" && <NovaPauta lugar={rascunho.lugar} acoes={acoes} voltar={voltar} />}
       {passo === "agendar" && <EscolherPronto lugar={rascunho.lugar} acoes={acoes} voltar={voltar} />}
+      {passo === "data" && <NovaData dia={rascunho.lugar.dia} acoes={acoes} voltar={voltar} />}
     </>
   );
 }
@@ -119,6 +123,7 @@ function Escolha({ prontos, veioDe, escolher, fechar }: PropsDaEscolha) {
           indisponivel={!prontos?.length}
           aoEscolher={() => escolher("agendar")}
         />
+        <OpcaoDeCriar icone={<Estrela tamanho={16} />} titulo="Feriado ou data" detalhe="Os bots usam para sugerir post" focar={veioDe === "data"} aoEscolher={() => escolher("data")} />
       </ul>
       {prontos?.length === 0 && (
         <button type="button" onClick={() => (fechar(), navegar("/artes"))} className={`${botaoSecundario} self-end`}>
@@ -207,6 +212,77 @@ function NovaPauta({ lugar, acoes, voltar }: { lugar: Lugar; acoes: AcoesDoDetal
         </button>
         <button type="submit" disabled={enviando} className={botaoPrincipal}>
           {enviando ? "Anotando…" : "Anotar"}
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function Testes({ nome, valor, aoMudar }: { nome: string; valor: Teste; aoMudar: (t: Teste) => void }) {
+  return (
+    <fieldset className="flex flex-col gap-1">
+      <legend className={`${rotuloCampo} mb-1`}>Tipo</legend>
+      <div className="flex flex-wrap gap-1.5">
+        {(Object.keys(ROTULO_DO_TESTE) as Teste[]).map((t) => (
+          <label key={t} data-tom="nenhum" className="cal-chip">
+            <input type="radio" name={nome} checked={valor === t} onChange={() => aoMudar(t)} className="sr-only" />
+            {ROTULO_DO_TESTE[t]}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+function RepeteTodoAno({ marcado, aoMudar }: { marcado: boolean; aoMudar: (repete: boolean) => void }) {
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-[13px] text-tinta">
+      <input type="checkbox" checked={marcado} onChange={(e) => aoMudar(e.target.checked)} className="size-4 accent-[var(--color-tinta)]" />
+      Repete todo ano
+    </label>
+  );
+}
+
+const anoDe = (dia: Dia) => Number(dia.slice(0, 4));
+
+/** O dia vem do clique. Os bots passam a ver a data no proximas_datas. */
+function NovaData({ dia, acoes, voltar }: { dia: Dia; acoes: AcoesDoDetalhe; voltar: () => void }) {
+  const id = useId();
+  const [nome, setNome] = useState("");
+  const [anual, setAnual] = useState(true);
+  const [teste, setTeste] = useState<Teste>("empresa");
+  const [porque, setPorque] = useState("");
+  const [enviando, setEnviando] = useState(false);
+
+  async function criar(e: React.FormEvent) {
+    e.preventDefault();
+    const limpo = nome.trim();
+    if (!limpo || enviando) return;
+
+    setEnviando(true);
+    const nova = await acoes.agenda.criarData(dia, { nome: limpo, ano: anual ? null : anoDe(dia), teste, porque: porque.trim() });
+    setEnviando(false);
+    if (nova) acoes.selecionar(nova);
+  }
+
+  return (
+    <form onSubmit={criar} className="flex flex-col gap-3">
+      <label htmlFor={`${id}-nome`} className="flex flex-col gap-1">
+        <span className={rotuloCampo}>Nome</span>
+        <input id={`${id}-nome`} autoFocus required value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Aniversário de Raposa" maxLength={120} autoComplete="off" className={campo} />
+      </label>
+      <RepeteTodoAno marcado={anual} aoMudar={setAnual} />
+      <Testes nome={`${id}-teste`} valor={teste} aoMudar={setTeste} />
+      <label htmlFor={`${id}-porque`} className="flex flex-col gap-1">
+        <span className={rotuloCampo}>Por que importa (opcional)</span>
+        <input id={`${id}-porque`} value={porque} onChange={(e) => setPorque(e.target.value)} placeholder="Matriz em Raposa-MA" maxLength={500} autoComplete="off" className={campo} />
+      </label>
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={voltar} className={botaoSecundario}>
+          Voltar
+        </button>
+        <button type="submit" disabled={enviando} className={botaoPrincipal}>
+          {enviando ? "Criando…" : "Criar"}
         </button>
       </div>
     </form>
@@ -592,16 +668,80 @@ function DetalhePublicado({ item }: { item: Extract<ItemCalendario, { tipo: "pub
   );
 }
 
-function DetalheData({ dia, nome, acoes }: { dia: Dia; nome: string; acoes: AcoesDoDetalhe }) {
+/** As datas fixas do código. Mudar uma delas é mudar o código, por isso a tela só mostra. */
+function DetalheData({ data, acoes }: { data: ItemData; acoes: AcoesDoDetalhe }) {
   return (
     <>
       <div className="flex flex-col gap-1">
-        <Titulo>{nome}</Titulo>
-        <p className="text-[13px] text-tinta-2">{diaPorExtenso(dia)} · data do calendário editorial</p>
+        <Titulo>{data.nome}</Titulo>
+        <p className="text-[13px] text-tinta-2">
+          {diaPorExtenso(data.dia)} · {ROTULO_DO_TESTE[data.teste]}
+        </p>
       </div>
-      <button type="button" onClick={() => acoes.rascunhar({ dia, minutos: null })} className={`${botaoSecundario} self-end`}>
+      {data.porque && <p className="text-[13px] text-pretty text-tinta-2">{data.porque}</p>}
+      <p className="text-xs text-pretty text-tinta-3">Data fixa do calendário editorial. Não dá para editar nem apagar pela tela.</p>
+      <button type="button" onClick={() => acoes.rascunhar({ dia: data.dia, minutos: null })} className={`${botaoSecundario} self-end`}>
         Anotar uma ideia neste dia
       </button>
+    </>
+  );
+}
+
+/** Feriado ou data que a equipe cadastrou. Cada campo grava ao sair dele, como na pauta. */
+function EditorData({ data, acoes }: { data: ItemDataDaEquipe; acoes: AcoesDoDetalhe }) {
+  const id = useId();
+  const [nome, setNome] = useState(data.nome);
+  const [porque, setPorque] = useState(data.porque);
+
+  function gravarNome() {
+    const limpo = nome.trim();
+    if (!limpo) return setNome(data.nome);
+    if (limpo !== data.nome) void acoes.agenda.mudarData(data, { nome: limpo });
+  }
+
+  return (
+    <>
+      <div className="flex flex-col gap-0.5">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-tinta-3">
+          <Estrela />
+          Feriado ou data · {diaPorExtenso(data.dia)}
+        </span>
+        <label htmlFor={`${id}-nome`} className="flex flex-col">
+          <span className="sr-only">Nome</span>
+          <textarea
+            id={`${id}-nome`}
+            value={nome}
+            rows={1}
+            onChange={(e) => setNome(e.target.value.replace(/\n/g, " "))}
+            onBlur={gravarNome}
+            onKeyDown={(e) => e.key === "Enter" && !e.nativeEvent.isComposing && (e.preventDefault(), e.currentTarget.blur())}
+            maxLength={120}
+            className="-mx-1.5 resize-none rounded-[8px] px-1.5 py-1 text-[15px]/snug font-semibold outline-none [field-sizing:content] [overflow-wrap:anywhere] hover:bg-hover focus-visible:bg-hover"
+          />
+        </label>
+      </div>
+      <RepeteTodoAno marcado={data.ano === null} aoMudar={(repete) => void acoes.agenda.mudarData(data, { ano: repete ? null : anoDe(data.dia) })} />
+      <Testes nome={`${id}-teste`} valor={data.teste} aoMudar={(teste) => void acoes.agenda.mudarData(data, { teste })} />
+      <label htmlFor={`${id}-porque`} className="flex flex-col gap-1">
+        <span className={rotuloCampo}>Por que importa</span>
+        <input
+          id={`${id}-porque`}
+          value={porque}
+          onChange={(e) => setPorque(e.target.value)}
+          onBlur={() => porque.trim() !== data.porque && void acoes.agenda.mudarData(data, { porque: porque.trim() })}
+          maxLength={500}
+          autoComplete="off"
+          className={campo}
+        />
+      </label>
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <button type="button" onClick={() => acoes.remover(data)} className={`${botaoPerigo} -ml-3.5`}>
+          Apagar
+        </button>
+        <button type="button" onClick={() => acoes.rascunhar({ dia: data.dia, minutos: null })} className={botaoSecundario}>
+          Anotar uma ideia neste dia
+        </button>
+      </div>
     </>
   );
 }

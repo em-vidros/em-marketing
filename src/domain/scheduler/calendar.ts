@@ -1,3 +1,5 @@
+import { q } from "../../v2/banco";
+
 /**
  * Calendário editorial: as datas recorrentes que podem virar post.
  *
@@ -8,9 +10,30 @@
  *
  * Todo seed declara em qual teste passa. Sem `teste`, o TypeScript não compila
  * e `validarSeeds` lança no boot.
+ *
+ * Além dos seeds, a equipe cadastra feriados e datas na tela do calendário
+ * (tabela datas_comemorativas). Os dois somam no calendário e nos bots.
  */
 
-type Teste = "setor" | "regiao" | "empresa";
+export const TESTES = ["setor", "regiao", "empresa"] as const;
+export type Teste = (typeof TESTES)[number];
+
+/** Uma data do calendário. id null é um seed deste arquivo, só leitura; as outras a equipe cadastrou. */
+export interface DataComemorativa {
+  id: number | null;
+  /** MM-DD */
+  mmdd: string;
+  /** null repete todo ano; com ano, a data vale só nele. */
+  ano: number | null;
+  nome: string;
+  teste: Teste;
+  porque: string;
+}
+
+/** A que a equipe cadastrou: sempre tem id e se edita. */
+export type DataDaEquipe = DataComemorativa & { id: number };
+
+export type NovaData = Omit<DataComemorativa, "id">;
 
 interface Seed {
   mmdd: string;
@@ -82,28 +105,75 @@ function dataSP(d: Date): { year: number; mmdd: string } {
   return { year: Number(ano), mmdd: `${mes}-${dia}` };
 }
 
+/** O dia existe: 04-31 nunca, 02-29 só em ano bissexto. Sem ano, 02-29 vale porque repete nos bissextos. */
+export function diaExiste(mmdd: string, ano: number | null): boolean {
+  const iso = `${ano ?? 2024}-${mmdd}`;
+  return /^\d{4}-\d{2}-\d{2}$/.test(iso) && new Date(`${iso}T00:00:00Z`).toISOString().startsWith(iso);
+}
+
+const FIXAS: readonly DataComemorativa[] = SEEDS.map((s) => ({ id: null, mmdd: s.mmdd, ano: null, nome: s.ocasiao, teste: s.teste, porque: s.porque }));
+
+const caiEm = (d: DataComemorativa, ano: number, mmdd: string) => d.mmdd === mmdd && (d.ano === null || d.ano === ano);
+
+/** Só a viva. A apagada some do calendário e dos bots até ser restaurada. */
+export async function dataPorId(id: number): Promise<DataDaEquipe | null> {
+  const [r] = await q<DataDaEquipe>`SELECT id, mmdd, ano, nome, teste, porque FROM datas_comemorativas WHERE id = ${id} AND apagada_em IS NULL`;
+  return r ?? null;
+}
+
+async function todasAsDatas(): Promise<DataComemorativa[]> {
+  return [...FIXAS, ...(await q<DataComemorativa>`SELECT id, mmdd, ano, nome, teste, porque FROM datas_comemorativas WHERE apagada_em IS NULL ORDER BY id`)];
+}
+
+export async function criarData(userId: string, d: NovaData): Promise<DataDaEquipe> {
+  const agora = Date.now();
+  const [r] = await q<{ id: number }>`INSERT INTO datas_comemorativas (mmdd, ano, nome, teste, porque, criada_por, criada_em, atualizada_em)
+    VALUES (${d.mmdd}, ${d.ano}, ${d.nome}, ${d.teste}, ${d.porque}, ${userId}, ${agora}, ${agora}) RETURNING id`;
+  return (await dataPorId(r!.id))!;
+}
+
+/** Só os campos mandados mudam. O dia fica: para trocar, apaga e cadastra de novo. */
+export async function mudarData(id: number, mudanca: Partial<Omit<NovaData, "mmdd">>): Promise<DataDaEquipe | null> {
+  const atual = await dataPorId(id);
+  if (!atual) return null;
+  const mandados = Object.fromEntries(Object.entries(mudanca).filter(([, v]) => v !== undefined));
+  const d: DataDaEquipe = { ...atual, ...mandados };
+  await q`UPDATE datas_comemorativas SET ano = ${d.ano}, nome = ${d.nome}, teste = ${d.teste}, porque = ${d.porque}, atualizada_em = ${Date.now()} WHERE id = ${id}`;
+  return dataPorId(id);
+}
+
+/** Apagar de novo mantém a data da primeira vez. false se não existe. */
+export async function apagarData(id: number): Promise<boolean> {
+  return (await q`UPDATE datas_comemorativas SET apagada_em = COALESCE(apagada_em, ${Date.now()}::double precision) WHERE id = ${id} RETURNING id`).length > 0;
+}
+
+export async function restaurarData(id: number): Promise<DataDaEquipe | null> {
+  await q`UPDATE datas_comemorativas SET apagada_em = NULL WHERE id = ${id}`;
+  return dataPorId(id);
+}
+
 /**
- * Datas do §12.4 que caem na janela pedida. Serve para o `status_do_mes` propor
- * pauta de MARCA sem inventar data.
+ * Datas do §12.4 e da equipe que caem na janela pedida. Serve para o `status_do_mes`
+ * e o `proximas_datas` proporem pauta sem inventar data.
  */
-export function proximasDatas(dias = 45): { emDias: number; ocasiao: string; porque: string }[] {
+export async function proximasDatas(dias = 45): Promise<{ emDias: number; ocasiao: string; porque: string }[]> {
+  const datas = await todasAsDatas();
   const achados: { emDias: number; ocasiao: string; porque: string }[] = [];
   for (let d = 0; d <= dias; d++) {
-    const { mmdd } = dataSP(new Date(Date.now() + d * 86400_000));
-    const hit = SEEDS.find((s) => s.mmdd === mmdd);
-    if (hit) achados.push({ emDias: d, ocasiao: hit.ocasiao, porque: hit.porque });
+    const { year, mmdd } = dataSP(new Date(Date.now() + d * 86400_000));
+    for (const hit of datas) if (caiEm(hit, year, mmdd)) achados.push({ emDias: d, ocasiao: hit.nome, porque: hit.porque });
   }
   return achados;
 }
 
-/** Datas do §12.4 entre dois dias AAAA-MM-DD, inclusive, em ordem. Para o calendário da tela. */
-export function datasEntre(de: string, ate: string): { dia: string; ocasiao: string }[] {
-  const porDia = [...SEEDS].sort((a, b) => a.mmdd.localeCompare(b.mmdd));
-  const achadas: { dia: string; ocasiao: string }[] = [];
+/** Cada data que cai entre dois dias AAAA-MM-DD, inclusive, em ordem de dia. Para o calendário da tela. */
+export async function datasEntre(de: string, ate: string): Promise<{ dia: string; data: DataComemorativa }[]> {
+  const datas = (await todasAsDatas()).sort((a, b) => a.mmdd.localeCompare(b.mmdd));
+  const achadas: { dia: string; data: DataComemorativa }[] = [];
   for (let ano = Number(de.slice(0, 4)); ano <= Number(ate.slice(0, 4)); ano++)
-    for (const s of porDia) {
-      const dia = `${ano}-${s.mmdd}`;
-      if (dia >= de && dia <= ate) achadas.push({ dia, ocasiao: s.ocasiao });
+    for (const data of datas) {
+      const dia = `${ano}-${data.mmdd}`;
+      if (dia >= de && dia <= ate && caiEm(data, ano, data.mmdd) && diaExiste(data.mmdd, ano)) achadas.push({ dia, data });
     }
   return achadas;
 }

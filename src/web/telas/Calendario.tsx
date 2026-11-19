@@ -111,6 +111,7 @@ export function Calendario({ abrirMenu }: { abrirMenu: () => void }) {
   function remover(item: ItemNaTela) {
     const r = remocaoDe(item);
     if (r?.acao === "apagar-pauta") void agenda.apagarPauta(r.pauta);
+    else if (r?.acao === "apagar-data") void agenda.apagarData(r.data);
     else if (r) void agenda.cancelar(r.agendado);
   }
 

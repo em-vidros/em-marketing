@@ -1,7 +1,10 @@
-import type { ItemAgendado, ItemCalendario, ItemPauta } from "../../../agent/calendario";
+import type { ItemAgendado, ItemCalendario, ItemData, ItemDataDaEquipe, ItemPauta } from "../../../agent/calendario";
 import { diaDe, epochDe, minutosDaHora, minutosDe, textoDaHora, type Dia } from "./datas";
 
-export type { ItemAgendado, ItemCalendario, ItemPauta };
+export type { ItemAgendado, ItemCalendario, ItemData, ItemDataDaEquipe, ItemPauta };
+
+/** As datas fixas do código não têm id e não se editam pela tela. */
+export const ehDaEquipe = (d: ItemData): d is ItemDataDaEquipe => d.id !== null;
 
 /** A identidade de um item na tela, estável entre releituras. */
 export type Chave = `pauta:${number}` | `fila:${number}` | `pub:${number}` | `data:${string}`;
@@ -21,7 +24,8 @@ export function chaveDe(i: ItemCalendario): Chave {
     case "publicado":
       return `pub:${i.publicacaoId}`;
     case "data":
-      return `data:${i.dia}:${i.nome}`;
+      // A que repete aparece uma vez por ano com o mesmo id; as fixas não têm id.
+      return `data:${i.id ?? i.nome}:${i.dia}`;
   }
 }
 

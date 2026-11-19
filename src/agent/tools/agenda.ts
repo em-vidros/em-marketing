@@ -37,7 +37,7 @@ async function statusDoMes(mes: string) {
       .filter((c) => c.faltam > 0)
       .sort((a, b) => b.faltam - a.faltam)
       .map((d) => ({ pilar: d.pilar, faltam: d.faltam, ...tokens.pilares[d.pilar] })),
-    datasDoMes: proximasDatas(45),
+    datasDoMes: await proximasDatas(45),
     fotosNoBanco: await contarFotos(),
   };
 }
@@ -70,8 +70,9 @@ export const toolsDeAgenda = {
   }),
 
   proximas_datas: tool({
-    description: "Datas do calendário da marca (§12.4) nos próximos dias, para propor pauta por conta própria. Não limita o que o usuário pede.",
+    description:
+      "Datas do calendário da marca (§12.4) e feriados que a equipe cadastrou no calendário, nos próximos dias, para propor pauta por conta própria. Não limita o que o usuário pede.",
     inputSchema: z.object({ dias: z.number().int().min(1).max(366).optional() }),
-    execute: async ({ dias }) => ({ datas: proximasDatas(dias ?? 45) }),
+    execute: async ({ dias }) => ({ datas: await proximasDatas(dias ?? 45) }),
   }),
 };

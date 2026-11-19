@@ -51,8 +51,8 @@ export const Lampada = ({ tamanho }: PropsDoIcone) => (
   </Icone>
 );
 
-const Estrela = () => (
-  <Icone>
+export const Estrela = ({ tamanho }: PropsDoIcone) => (
+  <Icone tamanho={tamanho}>
     <path d="m6 1.6 1.3 2.8 3 .3-2.3 2 .7 3L6 8.2 3.3 9.7l.7-3-2.3-2 3-.3z" />
   </Icone>
 );

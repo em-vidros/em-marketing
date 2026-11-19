@@ -17,7 +17,7 @@ type ItemCalendario =
   | { tipo: "pauta"; id: number; dia: Dia; hora: string | null; titulo: string; pilar: Pilar | null; nota: string; conversaId: string | null }
   | { tipo: "agendado"; filaId: number; fonte: Fonte; publicaEm: number; midia: "IMAGE" | "STORIES"; titulo: string; pilar: Pilar | null; capa: string | null; status: "pending" | "publishing" | "failed"; erro: string | null }
   | { tipo: "publicado"; publicacaoId: number; fonte: Fonte; publicadoEm: number; midia: "IMAGE" | "STORIES"; titulo: string; pilar: Pilar | null; capa: string | null; link: string | null }
-  | { tipo: "data"; dia: Dia; nome: string };          // datas do calendário editorial (scheduler/calendar.ts), só leitura
+  | { tipo: "data"; dia: Dia; id: number | null; mmdd: string; ano: number | null; nome: string; teste: "setor" | "regiao" | "empresa"; porque: string };
 ```
 
 `titulo` de post é o headline, ou "Post sem headline (id)" na peça de foto real; de arte é a primeira camada de texto, que é o título impresso nela, ou o pedido quando não há texto. `pilar` vem null em arte e em post sem pilar. A capa de uma arte agendada é o JPEG fixado na fila. `publicaEm` e `publicadoEm` são epoch ms. `conversaId` da pauta só vem para quem é dono da conversa, e só enquanto ela não foi apagada.
@@ -27,7 +27,8 @@ type ItemCalendario =
 - Arrastar um agendado muda o horário na fila, só enquanto está `pending` e só para um horário no futuro. Publicando, publicado ou falho não se arrasta. Um falho pode ser dispensado, e o Desfazer devolve ele a falho sem tentar de novo;
 - Agendar direto do calendário é uma ação humana na tela e vale como aprovação, mas sempre passa por uma confirmação com data, hora, mídia e a legenda do feed antes de gravar. Post usa a mesma função do `agendar_publicacao` do Chefe (`agendarPost` em `src/agent/fila.ts`): peça escolhida, peça da mídia pedida, horário no futuro e nenhum outro agendamento ativo nem publicação do mesmo post na mesma mídia. Arte do estúdio vai para a mídia do formato (feed é IMAGE, story é STORIES), com a mesma regra de duplicado, e é renderizada em JPEG na hora de agendar: sai o que estava na tela, mesmo que a arte mude depois. A linha da fila guarda o caminho do JPEG e a legenda;
 - Cancelar um agendado só vale para `pending`. Restaurar volta para `pending` enquanto o horário não passou, com as mesmas regras de agendar;
-- Publicado e datas do calendário editorial são só leitura;
+- Data do calendário editorial vem de duas fontes, somadas em `domain/scheduler/calendar.ts`: as fixas do código (`id` null, só leitura) e as que a equipe cadastra na tela em "Feriado ou data" (tabela `datas_comemorativas`, rotas `/api/datas`, apagar e restaurar como a pauta). `ano` null repete todo ano; com ano, a data vale só nele. O dia vem do clique e não muda depois. Os bots leem as duas no `proximas_datas` e no `status_do_mes`;
+- Publicado e as datas fixas do código são só leitura;
 - Toda mudança feita pelo calendário mostra o aviso de Desfazer da pilha única do app.
 
 ## API
