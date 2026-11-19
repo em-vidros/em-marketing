@@ -64,7 +64,7 @@ export function ChaveDaIa() {
             <h2 className="text-base font-semibold">O app usa a chave do servidor</h2>
             <p className="text-sm text-tinta-2">Termina em {openai.final}. Só quem tem acesso à Vercel troca essa chave.</p>
           </div>
-          <button type="button" onClick={() => setGuiando(true)} className="pressiona h-10 self-start rounded-item bg-tinta px-4 text-sm font-medium text-sobre-tinta">
+          <button type="button" onClick={() => setGuiando(true)} className="pressiona h-10 self-start rounded-full bg-tinta px-4 text-sm font-medium text-sobre-tinta">
             Conectar a chave da equipe
           </button>
         </section>
@@ -148,7 +148,7 @@ function Passos({ conectar, podeCancelar, cancelar }: { conectar: (c: string) =>
   }
 
   return (
-    <section className="flex flex-col gap-5 rounded-cartao bg-painel p-4 sm:p-6">
+    <section className="flex flex-col gap-5 rounded-cartao bg-painel p-4 sm:p-5">
       <div className="flex flex-col gap-1">
         <h2 className="text-base font-semibold">Conecte uma chave da OpenAI</h2>
         <p className="text-sm text-tinta-2">O uso passa a ser cobrado na conta dona da chave.</p>
@@ -189,11 +189,11 @@ function Passos({ conectar, podeCancelar, cancelar }: { conectar: (c: string) =>
               {recusa ?? (valor && !ok ? "A chave começa com sk-." : null)}
             </p>
             <div className="flex gap-2">
-              <button type="submit" disabled={!ok || enviando} className="pressiona h-10 rounded-item bg-tinta px-4 text-sm font-medium text-sobre-tinta disabled:opacity-40">
+              <button type="submit" disabled={!ok || enviando} className="pressiona h-10 rounded-full bg-tinta px-4 text-sm font-medium text-sobre-tinta disabled:opacity-40">
                 {enviando ? "Testando na OpenAI…" : "Testar e conectar"}
               </button>
               {podeCancelar && (
-                <button type="button" onClick={cancelar} className="pressiona h-10 rounded-item px-3 text-sm text-tinta-2 hover:bg-hover hover:text-tinta">
+                <button type="button" onClick={cancelar} className="pressiona h-10 rounded-full px-3 text-sm text-tinta-2 hover:bg-hover hover:text-tinta">
                   Cancelar
                 </button>
               )}
@@ -207,7 +207,7 @@ function Passos({ conectar, podeCancelar, cancelar }: { conectar: (c: string) =>
 
 function Recibo({ chave, recemConectada, trocar, desconectar }: { chave: Extract<EstadoDaChave, { origem: "equipe" }>; recemConectada: boolean; trocar: () => void; desconectar: () => void }) {
   return (
-    <section className="flex flex-col gap-4 rounded-cartao bg-painel p-4 sm:p-6">
+    <section className="flex flex-col gap-4 rounded-cartao bg-painel p-4 sm:p-5">
       <div className="flex items-start gap-3">
         <span
           aria-hidden
