@@ -137,7 +137,14 @@ const Excluida = z.object({
     botId: idDeBot,
     titulo: z.string().max(200).nullable(),
     postId: z.number().int().nullable(),
-    mensagens: z.string(),
+    // Uma string que não é lista JSON deixaria a conversa dando erro 500 para sempre ao abrir.
+    mensagens: z.string().refine((t) => {
+      try {
+        return Array.isArray(JSON.parse(t));
+      } catch {
+        return false;
+      }
+    }, "As mensagens da conversa vieram corrompidas."),
     criadaEm: z.string(),
     atualizadaEm: z.string(),
     arquivadaEm: z.number().nullable(),

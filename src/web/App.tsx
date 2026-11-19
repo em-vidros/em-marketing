@@ -136,9 +136,10 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
   const usada = conhecida(novoId) || (rota.tela === "conversa" && rota.id === novoId);
   const usadaRef = useRef(usada);
   usadaRef.current = usada;
+  // Sair dela para outra conversa também: voltar a /c/:id depois precisa ler o histórico do servidor, não abrir vazia.
   useEffect(() => {
-    if (rota.tela === "nova" && usadaRef.current) setNova(conversaNova("chefe"));
-  }, [rota.tela]);
+    if (usadaRef.current && (rota.tela === "nova" || conversaId !== novoId)) setNova(conversaNova("chefe"));
+  }, [rota.tela, conversaId, novoId]);
 
   /** Abre "/" com `bot` respondendo. A conversa de "/" ainda sem mensagem só troca de bot. */
   const novoPedido = useCallback((bot: BotId = "chefe") => {
@@ -156,8 +157,21 @@ function Shell({ rota, email }: { rota: Exclude<Rota, { tela: "entrar" }>; email
     relerAtividade();
   }, [conversas, relerAtividade]);
 
-  // A primeira mensagem de uma conversa nova cria a linha no servidor: a lista relê para mostrá-la.
+  // A primeira mensagem de uma conversa nova entra na barra na hora; a releitura troca pela linha do servidor.
   const primeira = vivo.mensagens.length > 0 && conversaId !== null && !conhecida(conversaId);
+  const ultimaDoUsuario = vivo.mensagens.findLast((m) => m.role === "user");
+  // A última mensagem do usuário que a barra já viu. Abrir uma conversa antiga só registra; uma mensagem nova sobe a linha.
+  const vista = useRef<{ conversa: string | null; mensagem: string | undefined }>({ conversa: null, mensagem: undefined });
+  useEffect(() => {
+    const antes = vista.current;
+    vista.current = { conversa: conversaId, mensagem: ultimaDoUsuario?.id };
+    if (conversaId === null || !ultimaDoUsuario) return;
+    if (conversaId === novoId && !conversas.achar(conversaId)) {
+      conversas.antecipar(conversaId, vivo.bot, ultimaDoUsuario.parts.flatMap((p) => (p.type === "text" ? [p.text] : [])).join(" "));
+    } else if (antes.conversa === conversaId && antes.mensagem !== ultimaDoUsuario.id) {
+      conversas.tocar(conversaId);
+    }
+  }, [conversaId, ultimaDoUsuario, novoId, vivo.bot, conversas]);
   // O pedido pode chegar antes de o servidor gravar a linha; relê até ela aparecer, para a barra mostrar o trabalho ao vivo.
   useEffect(() => {
     if (!(primeira && respondendo)) return;

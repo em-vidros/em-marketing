@@ -111,3 +111,14 @@ test("⌘Z segue a ordem do app inteiro: desfaz a config do bot por cima e depoi
   expect(ids(s.ler().ativas)).toEqual(["a", "b"]);
   expect(pilha.vazia()).toBe(true);
 });
+
+test("a conversa nova aparece na hora e uma releitura antes de o servidor gravar não a tira da lista", async () => {
+  const { api } = servidor();
+  const s = criarConversas(api, () => {}, criarPilhaDeDesfazer());
+  await s.carregar();
+  s.antecipar("nova", "chefe", "Post para o Dia do Vidraceiro");
+  expect(ids(s.ler().ativas)[0]).toBe("nova");
+  expect(s.achar("nova")?.titulo).toBe("Post para o Dia do Vidraceiro");
+  await s.carregar();
+  expect(ids(s.ler().ativas)).toEqual(["nova", "a", "b"]);
+});

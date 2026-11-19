@@ -23,6 +23,12 @@ export type Aviso = { tipo: "desfazivel"; chave: number; texto: string; nome?: s
 /** atualizadaEm é texto "AAAA-MM-DD HH:MM:SS" em UTC; a ordem lexical é a ordem do tempo. */
 const maisNovaPrimeiro = (a: Conversa, b: Conversa) => b.atualizadaEm.localeCompare(a.atualizadaEm);
 
+/** O mesmo formato de atualizadaEm do servidor (db/index.ts, utcDe). */
+const utcAgora = () => new Date().toISOString().replace("T", " ").slice(0, 19);
+
+/** Quanto uma linha criada pela tela espera o servidor gravar a dela antes de sumir numa releitura. */
+const ESPERA_DA_ANTECIPADA = 60_000;
+
 const sem = (lista: readonly Conversa[], id: string) => lista.filter((c) => c.id !== id);
 const com = (lista: readonly Conversa[], c: Conversa) => [...sem(lista, c.id), c].sort(maisNovaPrimeiro);
 
@@ -36,6 +42,8 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void, pi
   const ouvintes = new Set<() => void>();
   /** Excluídas esperando o servidor: uma releitura no meio não pode trazê-las de volta. */
   const apagando = new Set<string>();
+  /** Conversas que a tela mostrou antes de o servidor gravar a linha, com a hora em que entraram. */
+  const antecipadas = new Map<string, { c: Conversa; em: number }>();
 
   const mudar = (novo: Partial<Lista>) => {
     estado = { ...estado, ...novo };
@@ -80,7 +88,11 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void, pi
       try {
         const [ativas, arquivadas] = await Promise.all([api.listar(false), api.listar(true)]);
         const vivas = (l: Conversa[]) => l.filter((c) => !apagando.has(c.id));
-        mudar({ ativas: vivas(ativas), arquivadas: vivas(arquivadas), pronta: true });
+        const doServidor = new Set([...ativas, ...arquivadas].map((c) => c.id));
+        const agora = Date.now();
+        for (const [id, { em }] of antecipadas) if (doServidor.has(id) || agora - em > ESPERA_DA_ANTECIPADA) antecipadas.delete(id);
+        const esperando = [...antecipadas.values()].map((a) => a.c).filter((c) => !apagando.has(c.id));
+        mudar({ ativas: [...esperando, ...vivas(ativas)].sort(maisNovaPrimeiro), arquivadas: vivas(arquivadas), pronta: true });
       } catch {
         if (!estado.pronta) mudar({ pronta: true });
       }
@@ -100,6 +112,24 @@ export function criarConversas(api: ApiConversas, avisar: (a: Aviso) => void, pi
     },
 
     arquivar,
+
+    /**
+     * Mostra na barra, na hora, a conversa cuja primeira mensagem acabou de sair. O servidor grava a
+     * linha quando o pedido chega; até lá, uma releitura não tira esta da lista.
+     */
+    antecipar(id: string, botId: Conversa["botId"], titulo: string) {
+      if (achar(id)) return;
+      const agora = utcAgora();
+      const c: Conversa = { id, botId, titulo: titulo.trim().slice(0, 80) || "Conversa nova", postId: null, criadaEm: agora, atualizadaEm: agora, arquivadaEm: null };
+      antecipadas.set(id, { c, em: Date.now() });
+      recolocar(c);
+    },
+
+    /** Uma mensagem nova sobe a conversa para o topo, sem esperar a releitura. */
+    tocar(id: string) {
+      const c = achar(id);
+      if (c && c.arquivadaEm === null) recolocar({ ...c, atualizadaEm: utcAgora() });
+    },
 
     async excluir(id: string, aoDesfazer?: () => void) {
       const antes = achar(id);

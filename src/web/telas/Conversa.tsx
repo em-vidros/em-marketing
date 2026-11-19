@@ -204,21 +204,27 @@ function BalaoDoUsuario({ texto }: { texto: string }) {
   );
 }
 
-/** Mantém a lista no fim enquanto o usuário já está no fim; se ele subiu para ler, não puxa. */
+/**
+ * Mantém a lista no fim enquanto o usuário já está no fim; se ele subiu para ler, não puxa.
+ * O fim só existe depois da primeira mensagem, então o observador liga quando o elemento aparece.
+ * `forcar` desce na próxima mudança mesmo com o usuário lá em cima, para a mensagem que ele mandou aparecer.
+ */
 function useGrudaNoFim(deps: readonly unknown[]) {
-  const fim = useRef<HTMLDivElement>(null);
+  const [fim, setFim] = useState<HTMLDivElement | null>(null);
   const noFim = useRef(true);
+  const forcado = useRef(false);
   useEffect(() => {
-    const alvo = fim.current;
-    if (!alvo) return;
+    if (!fim) return;
     const obs = new IntersectionObserver(([e]) => (noFim.current = e?.isIntersecting ?? true), { rootMargin: "0px 0px 160px 0px" });
-    obs.observe(alvo);
+    obs.observe(fim);
     return () => obs.disconnect();
-  }, []);
+  }, [fim]);
   useLayoutEffect(() => {
-    if (noFim.current) fim.current?.scrollIntoView({ block: "end" });
-  }, deps);
-  return fim;
+    if (!noFim.current && !forcado.current) return;
+    forcado.current = false;
+    fim?.scrollIntoView({ block: "end" });
+  }, [fim, ...deps]);
+  return { ref: setFim, forcar: () => void (forcado.current = true) };
 }
 
 function Chat({
@@ -310,6 +316,7 @@ function Chat({
 
   function enviar(t: string) {
     if (!travada && chat.messages.length === 0) navegar(`/c/${id}`, { substituir: true });
+    fim.forcar();
     chat.sendMessage({ text: t });
   }
 
@@ -445,7 +452,7 @@ function Chat({
 
   return (
     <div className="flex min-h-0 min-w-0 flex-1">
-      <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 scroll-pt-16 scroll-pb-36 flex-col overflow-y-auto">
+      <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
         <Cabecalho abrirMenu={abrirMenu} bot={bot} estado={estados[bot]} titulo={titulo} />
         {chat.messages.length === 0 ? (
           <Sugestoes bot={bot} enviar={enviar} />
@@ -529,7 +536,7 @@ function Chat({
                 </button>
               </div>
             )}
-            <div ref={fim} />
+            <div ref={fim.ref} />
           </div>
         )}
         <Composer

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { ConversaExcluida } from "../agent/conversas";
 import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, NovaPauta } from "../agent/calendario";
 import type { ConfigBot } from "../agent/config";
@@ -106,11 +106,14 @@ export function useApi<T>(caminho: string | null, intervalo?: number) {
   const [carga, setCarga] = useState<Carga<T>>({ estado: "carregando" });
   const [versao, setVersao] = useState(0);
   const recarregar = useCallback(() => setVersao((v) => v + 1), []);
+  const caminhoLido = useRef(caminho);
 
   useEffect(() => {
     if (!caminho) return;
-    // Tentar de novo depois de um erro mostra o carregando outra vez.
-    setCarga((c) => (c.estado === "erro" ? { estado: "carregando" } : c));
+    // Tentar de novo depois de um erro mostra o carregando outra vez. Outro caminho também: os dados do anterior não valem para ele.
+    const outro = caminhoLido.current !== caminho;
+    caminhoLido.current = caminho;
+    setCarga((c) => (outro || c.estado === "erro" ? { estado: "carregando" } : c));
     const ctl = new AbortController();
     let timer: ReturnType<typeof setTimeout> | undefined;
     const buscar = () =>

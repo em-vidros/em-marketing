@@ -115,7 +115,7 @@ export function BlocoDaMensagem(p: PropsDoBloco) {
         transition: reduzir ? { opacity: SAIDA, height: { duration: 0, delay: SAIDA.duration }, marginBottom: { duration: 0, delay: SAIDA.duration } } : SAIDA,
       }}
       onAnimationComplete={() => setAbrindo(false)}
-      className={`mensagem relative flex scroll-my-6 flex-col gap-4 outline-offset-6 ${p.papel === "user" ? "ml-auto max-w-[80%] items-end rounded-[30px]" : "rounded-cartao"} ${
+      className={`mensagem relative flex scroll-mt-22 scroll-mb-42 flex-col gap-4 outline-offset-6 ${p.papel === "user" ? "ml-auto max-w-[80%] items-end rounded-[30px]" : "rounded-cartao"} ${
         !presente || abrindo ? "pointer-events-none overflow-hidden" : ""
       }`}
     >
