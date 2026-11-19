@@ -34,13 +34,18 @@ type Arraste = { tipo: "parado" } | { tipo: "arrastando"; id: string | null; ori
 /** As guias de uma arte ficam neste navegador, por arte. Sem localStorage, valem só enquanto a página está aberta. */
 export function useGuias(arteId: string) {
   const chave = `em-marketing:guias:${arteId}`;
-  const [guias, setGuias] = useState<Guia[]>(() => lerGuias(chave));
+  const [lidas, setLidas] = useState(() => ({ chave, guias: lerGuias(chave) }));
   const [visiveis, setVisiveis] = useState(() => lerArmazenado("em-marketing:reguas") !== "0");
+  // Ao trocar de arte com a tela montada, lê as guias da arte nova antes de qualquer gravação.
+  if (lidas.chave !== chave) setLidas({ chave, guias: lerGuias(chave) });
 
-  useEffect(() => gravarArmazenado(chave, JSON.stringify(guias)), [chave, guias]);
   useEffect(() => gravarArmazenado("em-marketing:reguas", visiveis ? "1" : "0"), [visiveis]);
 
-  return { guias, setGuias, visiveis, alternar: () => setVisiveis((v) => !v) };
+  const setGuias = (guias: Guia[]) => {
+    gravarArmazenado(chave, JSON.stringify(guias));
+    setLidas({ chave, guias });
+  };
+  return { guias: lidas.guias, setGuias, visiveis, alternar: () => setVisiveis((v) => !v) };
 }
 
 /**
