@@ -1,8 +1,10 @@
 import { toFile } from "openai";
+import { zodTextFormat } from "openai/helpers/zod";
 import sharp from "sharp";
+import { z } from "zod";
 import { lerArquivo } from "../../armazem";
 import { tokens } from "../brand";
-import { MODELO_DE_IMAGEM, openai } from "../../openai";
+import { MODELO_DE_IMAGEM, MODELO_DE_TEXTO, openai } from "../../openai";
 
 export type Formato = "feed" | "stories";
 
@@ -52,4 +54,26 @@ export async function generateArt(opts: {
 
   if (jpeg.byteLength > tokens.output.maxBytes) throw new Error(`JPEG acima de 8 MB: ${jpeg.byteLength}`);
   return jpeg;
+}
+
+const TextoLido = z.object({ textos: z.array(z.string()).max(24) });
+
+const INSTRUCOES_DA_LEITURA = `
+Você recebe uma arte de Instagram e copia todo texto que foi desenhado nela, um bloco por item, na ordem de leitura.
+- Copie letra por letra, com acento, maiúscula e pontuação como estão na imagem. Não corrija nada: se a imagem diz "Vidor", escreva "Vidor".
+- Não conte letras que fazem parte de uma foto ou ilustração, como placas e embalagens.
+- Sem texto na arte, devolva a lista vazia.
+`.trim();
+
+/** Lê o texto pintado numa arte com o modelo de visão. O uso entra na conta pelo mesmo cliente de `openai()`. */
+export async function lerTextoDaArte(jpeg: Uint8Array): Promise<string[]> {
+  const resposta = await (await openai()).responses.parse({
+    model: MODELO_DE_TEXTO,
+    reasoning: { effort: "low" },
+    instructions: INSTRUCOES_DA_LEITURA,
+    input: [{ role: "user", content: [{ type: "input_image", detail: "high", image_url: `data:image/jpeg;base64,${Buffer.from(jpeg).toString("base64")}` }] }],
+    text: { format: zodTextFormat(TextoLido, "texto_lido") },
+  });
+  if (!resposta.output_parsed) throw new Error("O modelo não devolveu o texto da arte.");
+  return resposta.output_parsed.textos;
 }

@@ -2,7 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import sharp from "sharp";
 import type { generateArt } from "./generate";
-import { buildPrompt, deriveStory, generate3Arts, type ArtVariant, type Brief, type Visual } from "./pipeline";
+import { REGRA_DO_TEXTO } from "./conferencia";
+import { buildPrompt, deriveStory, generate3Arts, type ArtVariant, type Brief, type IaDaArte, type Visual } from "./pipeline";
 
 const brief: Brief = { pilar: "AUTORIDADE", tema: "espessura certa por aplicação", angulo: "box e guarda-corpo", precisaFotoReal: false };
 const daCasa: Visual = { tipo: "casa" };
@@ -59,7 +60,7 @@ describe("generate3Arts", () => {
     const cena = await sharp({ create: { width: 1080, height: 1350, channels: 3, background: cor } }).jpeg().toBuffer();
     const gerar = async (pedido: Pedido) => (pedidos.push(pedido), cena);
 
-    const artes: ArtVariant[] = await generate3Arts({ postId: 990_001, brief, formato: "feed", headline: "Vidro certo", ...opts }, gerar);
+    const artes: ArtVariant[] = await generate3Arts({ postId: 990_001, brief, formato: "feed", headline: "Vidro certo", ...opts }, { gerar, lerTexto: async () => ["Vidro certo"] });
     for (const a of artes) rmSync(a.path, { force: true });
 
     return { artes, pedidos };
@@ -100,11 +101,80 @@ describe("generate3Arts", () => {
 
     const story = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: vermelho } }).jpeg().toBuffer();
     const derivar = async (chosen: ArtVariant) => {
-      const derivada = await deriveStory({ postId: 990_002, brief, headline: "Vidro certo", chosen }, async () => story);
+      const derivada = await deriveStory({ postId: 990_002, brief, headline: "Vidro certo", chosen }, { gerar: async () => story, lerTexto: async () => ["Vidro certo"] });
       rmSync(derivada.path, { force: true });
       return derivada;
     };
     expect(temPaleta(await derivar(daReferencia.artes[0]!))).toBe(false);
     expect(temPaleta(await derivar(daCasa.artes[0]!))).toBe(true);
+  });
+});
+
+describe("conferência do texto da arte", () => {
+  type Pedido = Parameters<IaDaArte["gerar"]>[0];
+  const CORES = { primeira: "#D02020", segunda: "#F0EFEA" } as const;
+
+  /** A IA falsa: a primeira tentativa de cada variação sai vermelha, a refação sai off-white, e cada uma tem a leitura dada. */
+  async function gerarComLeituras(leituras: { primeira: string[]; segunda: string[] }) {
+    const pedidos: Pedido[] = [];
+    const lidas = new Map<Uint8Array, string[]>();
+    const cenas = {
+      primeira: await sharp({ create: { width: 1080, height: 1350, channels: 3, background: CORES.primeira } }).jpeg().toBuffer(),
+      segunda: await sharp({ create: { width: 1080, height: 1350, channels: 3, background: CORES.segunda } }).jpeg().toBuffer(),
+    };
+    const ia: IaDaArte = {
+      gerar: async (pedido) => {
+        pedidos.push(pedido);
+        const vez = pedido.prompt.includes("SPELLING CHECK") ? "segunda" : "primeira";
+        const cena = Buffer.from(cenas[vez]);
+        lidas.set(cena, leituras[vez]);
+        return cena;
+      },
+      lerTexto: async (jpeg) => lidas.get(jpeg) ?? [],
+    };
+    const artes = await generate3Arts({ postId: 990_003, brief, formato: "feed", headline: "Vidro certo", apoio: "Sem erro de grafia", referencias: [], anexos: [] }, ia);
+    const vermelhas = await Promise.all(artes.map(async (a) => (await sharp(a.path).stats()).channels[0]!.mean > 150 && (await sharp(a.path).stats()).channels[1]!.mean < 150));
+    for (const a of artes) rmSync(a.path, { force: true });
+    const doTexto = artes.map((a) => a.problemas.filter((p) => p.regra === REGRA_DO_TEXTO).map((p) => p.detalhe));
+    return { pedidos, doTexto, vermelhas };
+  }
+
+  test("o texto certo na primeira não refaz a arte", async () => {
+    const { pedidos, doTexto } = await gerarComLeituras({ primeira: ["VIDRO CERTO", "Sem erro de grafia."], segunda: [] });
+    expect(pedidos).toHaveLength(3);
+    expect(doTexto).toEqual([[], [], []]);
+  });
+
+  test("o texto errado refaz a arte uma vez, com o erro no prompt, e a refação certa fica sem aviso", async () => {
+    const { pedidos, doTexto, vermelhas } = await gerarComLeituras({ primeira: ["Vidor certo", "Sem erro de grafia"], segunda: ["Vidro certo", "Sem erro de grafia"] });
+    expect(pedidos).toHaveLength(6);
+    expect(pedidos.filter((p) => p.prompt.includes('wrote "Vidor" instead of "Vidro"'))).toHaveLength(3);
+    expect(doTexto).toEqual([[], [], []]);
+    expect(vermelhas).toEqual([false, false, false]);
+  });
+
+  test("o texto errado duas vezes refaz uma vez só, fica a arte que errou menos e a variação leva o aviso com a palavra", async () => {
+    const { pedidos, doTexto, vermelhas } = await gerarComLeituras({
+      primeira: ["Vidor certo", "Sem erro de grafia"],
+      segunda: ["Vidor serto", "Sem erro de grafia", "Promoção"],
+    });
+    expect(pedidos).toHaveLength(6);
+    expect(vermelhas).toEqual([true, true, true]);
+    expect(doTexto).toEqual(Array(3).fill(['Na arte, saiu "Vidor" no lugar de "Vidro".']));
+  });
+
+  test("sem a leitura, a arte segue sem refação e com o aviso de que o texto não foi conferido", async () => {
+    const cena = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: "#F0EFEA" } }).jpeg().toBuffer();
+    let geradas = 0;
+    const chosen: ArtVariant = { variant: 1, ancora: null, path: "base.jpg", problemas: [] };
+    const story = await deriveStory({ postId: 990_004, brief, headline: "Vidro certo", chosen }, {
+      gerar: async () => (geradas++, cena),
+      lerTexto: async () => {
+        throw new Error("visão fora do ar");
+      },
+    });
+    rmSync(story.path, { force: true });
+    expect(geradas).toBe(1);
+    expect(story.problemas.filter((p) => p.regra === REGRA_DO_TEXTO).map((p) => p.severidade)).toEqual(["aviso"]);
   });
 });

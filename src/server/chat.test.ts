@@ -37,8 +37,10 @@ const chefeQueAgenda = () => {
   });
 };
 
+const HEADLINE = "O temperado quebra em grãos.";
+
 const PRONTO_PARA_AGENDAR: Evento[] = [
-  { tipo: "headline", headline: { headline: "O temperado quebra em grãos.", apoio: "" } },
+  { tipo: "headline", headline: { headline: HEADLINE, apoio: "" } },
   { tipo: "artes", artes: [{ variant: 1, ancora: null, path: "v1.jpg", problemas: [] }] },
   { tipo: "escolha", variante: 1 },
   { tipo: "legenda", legenda: "Legenda." },
@@ -244,6 +246,14 @@ describe("parar", () => {
   });
 });
 
+/** A resposta da OpenAI à leitura do texto de uma arte, no formato da Responses API. */
+const lidoNaArte = (texto: string) => ({
+  id: "resp_teste",
+  object: "response",
+  status: "completed",
+  output: [{ id: "msg_teste", type: "message", role: "assistant", status: "completed", content: [{ type: "output_text", text: JSON.stringify({ textos: [texto] }), annotations: [] }] }],
+});
+
 describe("referências do pedido", () => {
   const chamar = (toolName: string, input: object = {}) =>
     turnoDoModelo([{ type: "tool-call", toolCallId: `${toolName}-${crypto.randomUUID()}`, toolName, input: JSON.stringify(input) }], "tool-calls");
@@ -261,6 +271,9 @@ describe("referências do pedido", () => {
       const url = new URL(entrada instanceof Request ? entrada.url : entrada);
       if (url.hostname !== "api.openai.com") return original(entrada, init);
       if (url.pathname.startsWith("/v1/images/")) return Response.json({ data: [{ b64_json: cena }] });
+      // A conferência do texto da arte lê a headline certa, então nenhuma arte é refeita.
+      if (url.pathname === "/v1/responses" && String(init?.body).includes("texto_lido"))
+        return Response.json(lidoNaArte(HEADLINE));
       throw new Error(`O teste tentou chamar a OpenAI de verdade: ${url.pathname}`);
     }) as typeof fetch);
     return {
