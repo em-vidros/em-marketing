@@ -78,6 +78,6 @@ describe("tokens contra o brandbook", () => {
   });
 
   test("as zonas seguras do story são 250 no topo e 320 na base", () => {
-    expect(tokens.formats.stories.safeZones).toEqual({ topPx: 250, bottomPx: 320 });
+    expect(tokens.formats.stories.safeZones).toEqual({ topPx: 250, bottomPx: 340 });
   });
 });

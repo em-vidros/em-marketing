@@ -157,47 +157,53 @@ export function iaDaOpenAI(chave: () => Promise<string | undefined>): Ia {
       return sharp(Buffer.from(base64, "base64")).resize(largura, altura, { fit: "cover" }).jpeg({ quality: 90 }).toBuffer();
     },
 
-    async lerElementos(imagem, formato) {
-      const { largura, altura } = FORMATOS[formato];
-      const jpeg = await sharp(imagem).resize(largura, altura, { fit: "fill" }).jpeg({ quality: 90 }).toBuffer();
-      const resposta = await (await cliente()).responses.parse({
-        model: MODELO_DE_TEXTO,
-        reasoning: { effort: "medium" },
-        instructions: INSTRUCOES_DOS_ELEMENTOS(largura, altura),
-        input: [{ role: "user", content: [{ type: "input_image", detail: "high", image_url: `data:image/jpeg;base64,${jpeg.toString("base64")}` }] }],
-        text: { format: zodTextFormat(Elementos, "elementos") },
-      });
-      if (!resposta.output_parsed) throw new Error("O modelo não devolveu os elementos da imagem.");
-      return resposta.output_parsed;
-    },
+    lerElementos: async (imagem, formato) => lerElementosCom(await cliente(), imagem, formato),
 
-    async apagarAreas(imagem, formato, areas) {
-      const [w, h] = TAMANHO_DA_GERACAO[formato].split("x").map(Number) as [number, number];
-      const { largura, altura } = FORMATOS[formato];
-      const [ex, ey] = [w / largura, h / altura];
-      // Na máscara, o transparente é o que o modelo refaz; o resto fica opaco.
-      const alfa = Buffer.alloc(w * h, 255);
-      for (const a of areas) {
-        const x0 = Math.floor(a.x * ex);
-        const x1 = Math.min(w, Math.ceil((a.x + a.largura) * ex));
-        for (let y = Math.floor(a.y * ey); y < Math.min(h, Math.ceil((a.y + a.altura) * ey)); y++) alfa.fill(0, y * w + x0, y * w + x1);
-      }
-      const mascara = await sharp({ create: { width: w, height: h, channels: 3, background: "#000" } })
-        .joinChannel(alfa, { raw: { width: w, height: h, channels: 1 } })
-        .png()
-        .toBuffer();
-      // Com qualidade alta e output_format png, o modelo devolveu as áreas transparentes em vez de preenchidas.
-      const resposta = await (await cliente()).images.edit({
-        model: MODELO_DE_IMAGEM,
-        image: await toFile(await sharp(imagem).resize(w, h, { fit: "fill" }).png().toBuffer(), "arte.png", { type: "image/png" }),
-        mask: await toFile(mascara, "mascara.png", { type: "image/png" }),
-        prompt: PROMPT_DE_APAGAR,
-        size: TAMANHO_DA_GERACAO[formato],
-        quality: "medium",
-      });
-      const base64 = resposta.data?.[0]?.b64_json;
-      if (!base64) throw new Error("O modelo de imagem não devolveu a imagem sem os textos.");
-      return Buffer.from(base64, "base64");
-    },
+    apagarAreas: async (imagem, formato, areas) => editarComMascara(await cliente(), imagem, formato, areas, PROMPT_DE_APAGAR),
   };
+}
+
+/** Acha os textos e o logo de uma imagem pronta, em px do tamanho final do formato. */
+export async function lerElementosCom(cliente: OpenAI, imagem: Uint8Array, formato: Formato): Promise<Elementos> {
+  const { largura, altura } = FORMATOS[formato];
+  const jpeg = await sharp(imagem).resize(largura, altura, { fit: "fill" }).jpeg({ quality: 90 }).toBuffer();
+  const resposta = await cliente.responses.parse({
+    model: MODELO_DE_TEXTO,
+    reasoning: { effort: "medium" },
+    instructions: INSTRUCOES_DOS_ELEMENTOS(largura, altura),
+    input: [{ role: "user", content: [{ type: "input_image", detail: "high", image_url: `data:image/jpeg;base64,${jpeg.toString("base64")}` }] }],
+    text: { format: zodTextFormat(Elementos, "elementos") },
+  });
+  if (!resposta.output_parsed) throw new Error("O modelo não devolveu os elementos da imagem.");
+  return resposta.output_parsed;
+}
+
+/** Refaz só as áreas, com máscara, seguindo o prompt. Devolve a imagem inteira redesenhada, no tamanho do modelo. */
+export async function editarComMascara(cliente: OpenAI, imagem: Uint8Array, formato: Formato, areas: Area[], prompt: string): Promise<Uint8Array> {
+  const [w, h] = TAMANHO_DA_GERACAO[formato].split("x").map(Number) as [number, number];
+  const { largura, altura } = FORMATOS[formato];
+  const [ex, ey] = [w / largura, h / altura];
+  // Na máscara, o transparente é o que o modelo refaz; o resto fica opaco.
+  const alfa = Buffer.alloc(w * h, 255);
+  for (const a of areas) {
+    const x0 = Math.floor(a.x * ex);
+    const x1 = Math.min(w, Math.ceil((a.x + a.largura) * ex));
+    for (let y = Math.floor(a.y * ey); y < Math.min(h, Math.ceil((a.y + a.altura) * ey)); y++) alfa.fill(0, y * w + x0, y * w + x1);
+  }
+  const mascara = await sharp({ create: { width: w, height: h, channels: 3, background: "#000" } })
+    .joinChannel(alfa, { raw: { width: w, height: h, channels: 1 } })
+    .png()
+    .toBuffer();
+  // Com qualidade alta e output_format png, o modelo devolveu as áreas transparentes em vez de preenchidas.
+  const resposta = await cliente.images.edit({
+    model: MODELO_DE_IMAGEM,
+    image: await toFile(await sharp(imagem).resize(w, h, { fit: "fill" }).png().toBuffer(), "arte.png", { type: "image/png" }),
+    mask: await toFile(mascara, "mascara.png", { type: "image/png" }),
+    prompt,
+    size: TAMANHO_DA_GERACAO[formato],
+    quality: "medium",
+  });
+  const base64 = resposta.data?.[0]?.b64_json;
+  if (!base64) throw new Error("O modelo de imagem não devolveu a imagem editada.");
+  return Buffer.from(base64, "base64");
 }

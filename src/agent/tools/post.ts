@@ -22,6 +22,7 @@ import {
   type EtapaPost,
   type FotoReal,
 } from "../post";
+import { ajustarArteDoPost, voltarArteDoPost } from "../ajuste";
 import { agendarPecaPronta, agendarPost, pecaProntaParaPublicar } from "../fila";
 import { banco, q } from "../../v2/banco";
 import { fotoPublica } from "./fotos";
@@ -229,11 +230,36 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
           postId: p.postId,
           brief: p.brief,
           headline: p.peca.headline.headline,
+          apoio: p.peca.headline.apoio || undefined,
           chosen: p.peca.arte,
         });
         const estado = await aplicar(conversaId, { tipo: "story", path });
-        return { ...estado, url: await urlDaMidia(path), problemas };
+        return { ...estado, postId: p.postId, url: await urlDaMidia(path), imagemId: await idDaImagem(path), problemas };
       },
+    }),
+
+    ajustar_arte: tool({
+      description:
+        "Muda uma coisa pontual na arte escolhida, como trocar um texto ou tirar um objeto, e mantém o resto da arte igual. A versão de antes fica guardada. Só chame quando a pessoa pedir a mudança nesta conversa. Nunca chame por conta própria, nem para corrigir um aviso da conferência do texto: sugira e espere o pedido. Um pedido por chamada.",
+      inputSchema: z.object({
+        tipo: z.enum(["texto", "objeto"]).describe("texto: trocar um texto pintado na arte. objeto: mudar ou tirar um elemento da cena."),
+        texto_atual: z.string().max(400).optional().describe("Só em tipo texto: o texto que está na arte hoje, como aparece nela."),
+        texto_novo: z.string().min(1).max(400).optional().describe("Só em tipo texto: o texto que entra no lugar, exatamente como a pessoa quer."),
+        objeto: z.string().max(300).optional().describe("Só em tipo objeto: o elemento e onde fica, em inglês, como 'the vase in the bottom left corner'."),
+        mudanca: z.string().max(500).optional().describe("Só em tipo objeto: o que fazer com ele, em inglês, como 'remove it'."),
+      }),
+      execute: async ({ tipo, texto_atual, texto_novo, objeto, mudanca }) => {
+        if (tipo === "texto" && !(texto_atual && texto_novo)) return { ok: false as const, motivo: "Num ajuste de texto, mande texto_atual e texto_novo." };
+        if (tipo === "objeto" && !(objeto && mudanca)) return { ok: false as const, motivo: "Num ajuste de objeto, mande objeto e mudanca." };
+        const pedido = tipo === "texto" ? { tipo, atual: texto_atual!, novo: texto_novo! } : { tipo, objeto: objeto!, mudanca: mudanca! };
+        return ajustarArteDoPost(await atual(), pedido);
+      },
+    }),
+
+    voltar_arte: tool({
+      description: "Desfaz o último ajuste da arte escolhida: ela volta a ser como estava antes dele. Chame quando a pessoa pedir para voltar como estava.",
+      inputSchema: z.object({}),
+      execute: async () => voltarArteDoPost(await atual()),
     }),
 
     escrever_legenda: tool({

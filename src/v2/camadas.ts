@@ -4,7 +4,7 @@ import { NOME_DE_FAMILIA, PESOS } from "./fontes";
 /** Tamanho final de publicação e a área segura de cada formato (tokens.json, `formats`). */
 export const FORMATOS = {
   feed: { largura: 1080, altura: 1350, topo: 80, base: 80 },
-  story: { largura: 1080, altura: 1920, topo: 250, base: 320 },
+  story: { largura: 1080, altura: 1920, topo: 250, base: 340 },
 } as const;
 
 export type Formato = keyof typeof FORMATOS;

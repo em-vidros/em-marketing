@@ -10,6 +10,7 @@ import { antesDeAprovar, aprovacoesPendentes, CartaoAprovacao } from "../compone
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
 import { Pensando } from "../componentes/ia/Pensando";
+import { ArteDaConversa, ehArteDaConversa } from "../componentes/ArteDaConversa";
 import { EscolhaDeArtes, ehMostrarArtes } from "../componentes/EscolhaDeArtes";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
@@ -564,6 +565,7 @@ function Chat({
                           parte={t.parte}
                           noAr={respondendo && m === ultima}
                           escolher={!respondendo && m === ultima ? (n) => enviar(`Quero a variação ${n}.`, { comEscolha: false }) : null}
+                          versao={`${chat.messages.length}-${respondendo}`}
                           painel={painel}
                           abrir={abrir}
                           responder={responder}
@@ -633,8 +635,11 @@ function ParteDoChefe({
   responder,
   respondidas,
   escolher,
+  versao,
 }: {
   parte: Parte;
+  /** Muda a cada mensagem e a cada fim de resposta: o cartão do ajuste relê o estado do post nessa hora. */
+  versao: string;
   /** Manda a variação escolhida; null quando a conversa já passou das artes desta parte. */
   escolher: ((variante: number) => void) | null;
   /** A mensagem desta parte ainda está chegando. */
@@ -650,6 +655,7 @@ function ParteDoChefe({
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
   if (ehMostrarArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
+  if (ehArteDaConversa(parte)) return <ArteDaConversa parte={parte} versao={versao} />;
   if (ehDelegacao(parte)) {
     const quem = botDaDelegacao(parte as ParteDelegacao);
     return quem && <CartaoTarefa parte={parte as ParteDelegacao} bot={quem} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
@@ -660,7 +666,10 @@ function ParteDoChefe({
 }
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
-const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p);
+const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p) && !(ehArteDaConversa(p) && temArte(p));
+
+/** O ajuste e a story viram cartão só quando trazem a imagem; enquanto rodam ou se falham, ficam na lista de passos. */
+const temArte = (p: Parte) => "state" in p && p.state === "output-available" && typeof p.output === "object" && p.output !== null && "url" in p.output && !!p.output.url;
 
 /** As chaves das imagens coladas que vieram com a mensagem. */
 const coladasDa = (m: Mensagem) => m.parts.flatMap((p) => (p.type === "data-referencias" ? p.data.coladas : []));

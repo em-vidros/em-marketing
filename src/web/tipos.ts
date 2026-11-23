@@ -62,6 +62,8 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
   redigir_legenda: { fazendo: "Escrevendo a legenda", feito: "Legenda escrita" },
   validar_texto: { fazendo: "Conferindo o texto", feito: "Texto conferido" },
   derivar_story: { fazendo: "Gerando o story", feito: "Story gerado" },
+  ajustar_arte: { fazendo: "Ajustando a arte", feito: "Arte ajustada" },
+  voltar_arte: { fazendo: "Voltando a arte", feito: "Arte voltou como estava" },
   listar_agenda: { fazendo: "Lendo a agenda", feito: "Agenda lida" },
   listar_pecas_prontas: { fazendo: "Procurando a peça pronta", feito: "Peças prontas lidas" },
   legenda_da_peca_pronta: { fazendo: "Escrevendo a legenda da peça", feito: "Legenda da peça escrita" },

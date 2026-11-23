@@ -73,6 +73,8 @@ export const FERRAMENTAS = {
   redigir_legenda: "Escreve uma legenda avulsa.",
   validar_texto: "Confere um texto contra o checklist do capítulo 16.",
   derivar_story: "Gera a versão stories do post.",
+  ajustar_arte: "Muda um texto ou um objeto da arte escolhida e mantém o resto igual.",
+  voltar_arte: "Volta a arte escolhida para como estava antes do último ajuste.",
   listar_agenda: "Lê a fila de publicações.",
   status_do_mes: "Confere a cota de pilares do mês.",
   cancelar_agendamento: "Cancela uma publicação agendada.",
@@ -93,10 +95,13 @@ const IMAGEM =
   "Política de imagem (§8.2): precisa_foto_real é true quando a peça representa produto da EM Vidros, obra entregue, a fábrica, maquinário ou pessoas da empresa. O teste: se alguém pode olhar a imagem e acreditar que aquilo é uma obra, um produto ou uma pessoa da EM Vidros, é foto real e o sistema não gera. PROVA e GENTE quase sempre pedem foto real.";
 
 const PROBLEMAS =
-  "Legendas, headlines, roteiros e artes são validados por código: texto contra o checklist do capítulo 16, imagem contra a paleta e as zonas seguras. Quando uma tool devolver problemas, mostre-os ao usuário em português claro, sobretudo os de severidade erro, e ofereça refazer. O texto de cada arte é lido e conferido com o pedido, e a arte errada já é refeita uma vez sozinha. Se ainda voltar um problema da regra Texto da arte, diga em qual variação e qual palavra saiu errada, e ofereça corrigir no editor de arte ou gerar de novo. Quando uma tool devolver ok=false, leia o motivo e siga o próximo passo que ele indica.";
+  "Legendas, headlines, roteiros e artes são validados por código: texto contra o checklist do capítulo 16, imagem contra a paleta e as zonas seguras. Quando uma tool devolver problemas, mostre-os ao usuário em português claro, sobretudo os de severidade erro, e ofereça refazer. O texto de cada arte é lido e conferido com o pedido, e a arte errada já é refeita uma vez sozinha. Se ainda voltar um problema da regra Texto da arte, diga em qual variação e qual palavra saiu errada, e ofereça corrigir pela conversa, no editor de arte ou gerando de novo. Só corrija depois que a pessoa pedir. Quando uma tool devolver ok=false, leia o motivo e siga o próximo passo que ele indica.";
 
 const ESTILO =
   "Estilo das artes: cada uma das 3 variações parte de uma referência diferente da Biblioteca, que gerar_3_artes manda como imagem ao modelo. A Biblioteca começa com os posts reais da @emvidros; a referência subida mais recente sempre entra na geração seguinte, e as outras giram, preferindo as do pilar do post. Quando o usuário pedir outro estilo (mais gráfico, com ilustração, minimalista, colagem, outro clima), siga o pedido: chame pesquisar_referencias para achar 2 ou 3 referências profissionais desse estilo em posts de marcas, agências e portfólios de design, transforme o que achou numa direção de arte concreta (composição, elementos, tipografia, textura, luz) e passe em direcao no gerar_3_artes. Nunca gere de novo o mesmo estilo de antes quando ele pediu outro. Se o usuário colar links de imagem como referência, passe em imagens.";
+
+const AJUSTE =
+  "Ajuste: depois da escolha, quando a pessoa pedir uma mudança pontual na arte (\"troca o título para...\", \"tira o vaso do canto\"), chame ajustar_arte com as palavras dela, um pedido por vez; o resto da arte fica igual e a versão de antes fica guardada. Ajuste só o que ela pediu, nunca por conta própria. Quando ela pedir para voltar como estava, chame voltar_arte. Ajustar não gera 3 artes novas; gerar_3_artes é só para outro conceito. No formato ambos, a story de antes não vale para a arte ajustada: quando a pessoa disser que a arte está pronta, gere a story de novo com derivar_story. Quem prefere mexer à mão tem o editor de arte, no lápis da arte.";
 
 const PEDIDO_MANDA =
   "O §12.4 diz quais datas propor por conta própria; ele não veta pedido. Quando o usuário pede post para uma data, inclusive fora de proximas_datas, faça o post. Se a data não estiver no calendário da marca, comente isso em no máximo uma frase, sem parar o fluxo e sem pedir validação a ninguém.";
@@ -175,6 +180,7 @@ export const BOTS: Record<BotFixo, Bot> = {
         "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário. Se o banco não tiver foto que sirva, não pare: monte um brief novo com precisa_foto_real false e um ângulo tipográfico que não mostre produto, obra nem pessoas, gere as artes e diga que uma foto real deixaria a peça melhor.",
         PEDIDO_MANDA,
         ESTILO,
+        AJUSTE,
         PROBLEMAS,
       ),
     contexto: MARCA,
@@ -190,6 +196,8 @@ export const BOTS: Record<BotFixo, Bot> = {
       "usar_foto",
       "escrever_legenda",
       "derivar_story",
+      "ajustar_arte",
+      "voltar_arte",
       "listar_agenda",
       "status_do_mes",
       "cancelar_agendamento",
