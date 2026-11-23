@@ -144,9 +144,12 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     return editada ? c.json(editada) : c.json(erro("Não encontrado."), 404);
   });
 
-  api.delete("/pecas-prontas/:id", async (c) =>
-    (await removerPecaPronta(banco, c.req.param("id"))) ? c.body(null, 204) : c.json(erro("Não encontrado."), 404),
-  );
+  api.delete("/pecas-prontas/:id", async (c) => {
+    const r = await removerPecaPronta(banco, c.req.param("id"));
+    if (r === "removida") return c.body(null, 204);
+    if (r === "nao-existe") return c.json(erro("Não encontrado."), 404);
+    return c.json(erro(`A peça está agendada para ${r.agendadaPara}. Cancele o agendamento no calendário antes de remover.`), 409);
+  });
 
   api.post("/pecas-prontas/:id/restaurar", async (c) => {
     const restaurada = await restaurarPecaPronta(banco, c.req.param("id"));
