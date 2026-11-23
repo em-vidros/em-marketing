@@ -77,7 +77,7 @@ export function EscolhaDeArtes({ parte, escolher }: { parte: ParteMostrarArtes; 
               <a href={a.url} target="_blank" rel="noreferrer" className="block">
                 <img
                   src={a.url}
-                  alt={`Variação ${a.variante}, estilo ${a.estilo}. Abre em outra aba`}
+                  alt={`Variação ${a.variante}. Abre em outra aba`}
                   loading="lazy"
                   className={`${proporcao} w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10`}
                 />

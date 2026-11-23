@@ -35,7 +35,7 @@ const chefeQueAgenda = () => {
 
 const PRONTO_PARA_AGENDAR: Evento[] = [
   { tipo: "headline", headline: { headline: "O temperado quebra em grãos.", apoio: "" } },
-  { tipo: "artes", artes: [{ variant: 1, style: "tecnico-poppins", path: "v1.jpg", problemas: [] }] },
+  { tipo: "artes", artes: [{ variant: 1, referencia: null, path: "v1.jpg", problemas: [] }] },
   { tipo: "escolha", variante: 1 },
   { tipo: "legenda", legenda: "Legenda." },
 ];
@@ -215,11 +215,11 @@ describe("parar", () => {
     });
     // As artes não saem nunca: só o sinal de parar encerra o turno.
     const gerando = Promise.withResolvers<void>();
-    const inspiracoes = () => {
+    const carregarReferencias = () => {
       gerando.resolve();
       return new Promise<never>(() => {});
     };
-    const rota = rotaDeChat({ resolverModelo: () => modelo, inspiracoes });
+    const rota = rotaDeChat({ resolverModelo: () => modelo, carregarReferencias });
     const id = await conversaComPost("post", PRONTO_PARA_AGENDAR.slice(0, 1));
     const emCurso = await pedir(rota, id, doUsuario("u1", "Gere as artes."), "post");
     await gerando.promise;

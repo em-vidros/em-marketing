@@ -1,7 +1,19 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import type { Pilar } from "../domain/art/pipeline";
-import type { Banco } from "./banco";
+import sharp from "sharp";
+import { z } from "zod";
+import type { Pilar, ReferenciaParaGerar } from "../domain/art/pipeline";
+import type { Arquivos } from "./arquivos";
+import { q, type Banco } from "./banco";
 import { referencias, type Referencia } from "./schema";
+
+/** Lê as referências de uma geração de post. A tool gerar_3_artes recebe isto de fora, e os testes trocam. */
+export type CarregarReferencias = (o: { pilar: Pilar; marcadas?: readonly string[] }) => Promise<ReferenciaParaGerar[]>;
+
+/** Quantas gerações de post a rotação olha para não repetir referência. */
+const GERACOES_QUE_A_ROTACAO_OLHA = 5;
+
+/** O que importa de posts.arts para a rotação. Linhas de antes das referências não têm `referencia`. */
+const UsadasNaGeracao = z.array(z.object({ referencia: z.string().nullish() }));
 
 export const listarReferencias = (banco: Banco) =>
   banco.select().from(referencias).where(isNull(referencias.removidaEm)).orderBy(desc(referencias.criadaEm));
@@ -35,12 +47,36 @@ export async function restaurarReferencia(banco: Banco, id: string): Promise<Ref
 
 type Ativa = { id: string; pilares: readonly Pilar[]; criadaEm: Date };
 
-/** As leituras de até `n` referências, para o gerador do Chefe seguir os princípios delas. */
-export async function leiturasParaInspirar(banco: Banco, n = 3): Promise<string[]> {
+/** As referências de uma geração de post, na ordem da escolha, com a imagem em JPEG de até 1024 px. */
+export async function referenciasParaGerar(
+  { banco, arquivos }: { banco: Banco; arquivos: Arquivos },
+  o: { pilar: Pilar; marcadas?: readonly string[]; n?: number },
+): Promise<ReferenciaParaGerar[]> {
   const ativas = await listarReferencias(banco);
-  const escolhidas = escolherReferencias({ ativas, recentes: [], n });
-  return ativas.filter((r) => escolhidas.includes(r.id)).map((r) => r.leitura);
+  const recentes = await referenciasDasUltimasGeracoes();
+  const escolhidas = escolherReferencias({ ativas, recentes, marcadas: o.marcadas, pilar: o.pilar, n: o.n ?? 3 });
+
+  const carregadas = await Promise.all(
+    escolhidas
+      .flatMap((id) => ativas.filter((r) => r.id === id))
+      .map(async (r) => {
+        const bytes = await arquivos.ler(r.arquivo);
+        return bytes ? [{ id: r.id, leitura: r.leitura, imagem: await comoJpeg(bytes) }] : [];
+      }),
+  );
+
+  return carregadas.flat();
 }
+
+async function referenciasDasUltimasGeracoes(): Promise<string[][]> {
+  const linhas = await q<{ arts: string }>`SELECT arts FROM posts WHERE arts IS NOT NULL ORDER BY id DESC LIMIT ${GERACOES_QUE_A_ROTACAO_OLHA}`;
+  return linhas.map((l) => {
+    const lidas = UsadasNaGeracao.safeParse(JSON.parse(l.arts));
+    return lidas.success ? lidas.data.flatMap((a) => a.referencia ?? []) : [];
+  });
+}
+
+const comoJpeg = (bytes: Uint8Array) => sharp(bytes).rotate().resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
 
 /**
  * Escolhe `n` referências para uma geração nova, nesta ordem: as marcadas pela pessoa; sem marcadas, a mais nova;

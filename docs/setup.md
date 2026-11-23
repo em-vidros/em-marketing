@@ -2,7 +2,6 @@
 
 ## 1. OpenAI (bloqueia a Fase 1)
 - Criar uma chave em platform.openai.com com acesso a `gpt-6-luna` e `gpt-image-2.6-sunburst` e definir teto de gasto mensal.
-- Validar: `OPENAI_API_KEY=... bun scripts/spike-arte.ts` → 6 JPEGs em `out/spike/`; conferir critérios da §3.4 do PRD.
 
 ## 2. Meta / Instagram (Facebook Login — Standard Access basta)
 1. developers.facebook.com → criar app tipo Business.

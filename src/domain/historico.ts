@@ -68,17 +68,3 @@ export function comoExemplos(posts: readonly PostDaMarca[]): string {
     ...posts.map(linha),
   ].join("\n");
 }
-
-/**
- * As últimas variações que a equipe escolheu, como nota para o gerador de arte: o estilo que ganhou
- * das outras duas naquele pilar. Vai junto das leituras da Biblioteca em gerar_3_artes.
- */
-export async function escolhasDeArte(): Promise<string[]> {
-  const linhas = await q<{ pilar: string | null; arts: string | null; chosen: number; headline: string | null }>`SELECT pilar, arts, chosen, headline FROM posts
-    WHERE chosen IS NOT NULL AND arts IS NOT NULL ORDER BY id DESC LIMIT ${POR_FONTE}`;
-  return linhas.flatMap((l) => {
-    const estilo = (JSON.parse(l.arts!) as { variant: number; style: string }[]).find((a) => a.variant === l.chosen)?.style;
-    if (!estilo || estilo === "foto-real") return [];
-    return [`An EM Vidros team member recently picked the "${estilo}" variant over the other two for a ${l.pilar ?? "brand"} post${l.headline ? ` headlined "${l.headline}"` : ""}. Treat it as evidence of what the team approves and push that direction further.`];
-  });
-}

@@ -4,7 +4,6 @@ COPY package.json bun.lock bunfig.toml ./
 RUN bun install --frozen-lockfile --production
 COPY src ./src
 COPY brand ./brand
-COPY styles ./styles
 ENV NODE_ENV=production
 EXPOSE 3000
 CMD ["bun", "src/server/index.ts"]

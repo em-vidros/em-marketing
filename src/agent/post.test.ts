@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import type { Brief } from "../domain/art/pipeline";
+import type { ArtVariant, Brief } from "../domain/art/pipeline";
+import { q } from "../v2/banco";
 import {
   abrirConversa,
   criarPost,
@@ -8,14 +9,15 @@ import {
   midiaParaPublicar,
   postDaConversa,
   transicionar,
-  type Arte,
+  type FotoReal,
   type EtapaPost,
   type Evento,
   type Formato,
 } from "./post";
 
 const brief: Brief = { pilar: "AUTORIDADE", tema: "temperado x comum", precisaFotoReal: false };
-const arte = (variant: number, style = "tecnico-poppins"): Arte => ({ variant, style, path: `v${variant}.jpg`, problemas: [] });
+const arte = (variant: number): ArtVariant => ({ variant, referencia: `ref-${variant}`, path: `v${variant}.jpg`, problemas: [] });
+const foto: FotoReal = { variant: 1, foto: true, path: "foto.jpg", problemas: [] };
 const headline = { headline: "O temperado quebra em grãos.", apoio: "" };
 
 /** Aplica os eventos em ordem e falha o teste na primeira recusa. */
@@ -76,7 +78,7 @@ describe("invariante 4: foto real (§8.2)", () => {
   });
 
   test("usar_foto leva à escolhida sem headline, e o 9:16 sai da foto, não de derivar_story", () => {
-    const p = rodar(real, { tipo: "foto", arte: arte(1, "foto-real"), storyPath: "story.jpg" });
+    const p = rodar(real, { tipo: "foto", arte: foto, storyPath: "story.jpg" });
     expect(p).toMatchObject({ etapa: "escolhida", peca: { origem: "foto" }, storyPath: "story.jpg" });
     expect(exigir(p, "story").ok).toBe(false);
   });
@@ -138,6 +140,21 @@ describe("persistência por conversa", () => {
       await gravarPost(p);
       expect(await postDaConversa("t-persist")).toEqual(p);
     }
+  });
+
+  test("um post gravado antes das referências, com style, volta no formato novo e a foto real continua foto", async () => {
+    await abrirConversa("t-antigo", "post");
+    const { postId } = await criarPost("t-antigo", brief, "feed");
+    const antigas = [
+      { variant: 1, style: "teal-chamada", path: "v1.jpg", problemas: [] },
+      { variant: 2, style: "foto-real", path: "f.jpg", problemas: [] },
+    ];
+    await q`UPDATE posts SET headline = ${JSON.stringify(headline)}, arts = ${JSON.stringify(antigas)}, chosen = 2 WHERE id = ${postId}`;
+    expect(await postDaConversa("t-antigo")).toMatchObject({
+      etapa: "escolhida",
+      peca: { origem: "foto", arte: { variant: 2, foto: true } },
+      opcoes: [{ variant: 1, referencia: null }, { variant: 2, foto: true }],
+    });
   });
 
   test("conversas diferentes têm posts diferentes", async () => {

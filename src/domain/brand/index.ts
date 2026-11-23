@@ -10,7 +10,7 @@ export { tokens };
  *   - cérebro  → conversa e conteúdo (1, 9, 10, 11, 12, 13, 16)
  *   - legenda  → voz e sistema de legenda (1, 9, 10, 11)
  *   - arte     → identidade visual (3, 4, 5, 6, 7, 8)
- * Os capítulos visuais viram prompt de imagem em styles/, não texto de conversa.
+ * Os capítulos visuais viram o prompt comum de imagem em art/pipeline.ts, não texto de conversa.
  */
 
 let _raw: string | null = null;

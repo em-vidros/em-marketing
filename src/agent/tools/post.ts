@@ -4,7 +4,7 @@ import { z } from "zod";
 import { emOrdem, idDaImagem, urlDaMidia } from "../../db";
 import { q } from "../../v2/banco";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
-import { deriveStory, generate3Arts, PILARES, type Brief } from "../../domain/art/pipeline";
+import { deriveStory, generate3Arts, PILARES, type Brief, type Pilar, type ReferenciaParaGerar } from "../../domain/art/pipeline";
 import { temErro } from "../../domain/brand/validate";
 import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
@@ -17,19 +17,21 @@ import {
   postDaConversa,
   proximoPasso,
   transicionar,
+  type Arte,
   type Evento,
   type EtapaPost,
+  type FotoReal,
 } from "../post";
 import { agendarPost } from "../fila";
 import { fotoPublica } from "./fotos";
-import { escolhasDeArte } from "../../domain/historico";
+import type { CarregarReferencias } from "../../v2/referencias";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
 
-const TETO_DA_REFERENCIA = 10 * 1024 * 1024;
+const TETO_DA_IMAGEM = 10 * 1024 * 1024;
 
-/** Baixa as imagens de referência que o usuário mandou e devolve em JPEG. Link que não é imagem vira aviso, não erro. */
-async function baixarReferencias(urls: string[]): Promise<{ imagens: Uint8Array[]; recusadas: string[] }> {
+/** Baixa as imagens que o usuário colou na conversa e devolve em JPEG. Link que não é imagem vira aviso, não erro. */
+async function baixarImagens(urls: string[]): Promise<{ imagens: Uint8Array[]; recusadas: string[] }> {
   const imagens: Uint8Array[] = [];
   const recusadas: string[] = [];
   for (const url of urls) {
@@ -38,7 +40,7 @@ async function baixarReferencias(urls: string[]): Promise<{ imagens: Uint8Array[
       const tipo = res.headers.get("content-type") ?? "";
       if (!res.ok || !tipo.startsWith("image/")) throw new Error(tipo || String(res.status));
       const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.byteLength > TETO_DA_REFERENCIA) throw new Error("acima de 10 MB");
+      if (bytes.byteLength > TETO_DA_IMAGEM) throw new Error("acima de 10 MB");
       imagens.push(await sharp(bytes).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer());
     } catch {
       recusadas.push(url);
@@ -46,6 +48,16 @@ async function baixarReferencias(urls: string[]): Promise<{ imagens: Uint8Array[
   }
   return { imagens, recusadas };
 }
+
+/** Sem a Biblioteca, as artes saem no visual padrão da casa em vez de falhar. */
+async function referenciasOuNenhuma(carregar: CarregarReferencias | undefined, pilar: Pilar): Promise<ReferenciaParaGerar[]> {
+  if (!carregar) return [];
+  return carregar({ pilar }).catch((erro: unknown) => {
+    console.error("gerar_3_artes: as artes saem sem referência porque a Biblioteca não respondeu", erro);
+    return [];
+  });
+}
+
 const mediaType = z.enum(["IMAGE", "STORIES"]);
 
 /** Grava o evento e devolve o estado novo, ou a recusa da máquina de estados. */
@@ -56,19 +68,16 @@ async function aplicar(conversaId: string, evento: Evento) {
   return { ok: true as const, etapa: r.post.etapa, proximoPasso: proximoPasso(r.post) };
 }
 
-const artePublica = async (a: { variant: number; style: string; path: string; problemas: unknown[] }) => ({
+const artePublica = async (a: Arte) => ({
   variante: a.variant,
-  estilo: a.style,
+  referencia: "foto" in a ? null : a.referencia,
   url: await urlDaMidia(a.path),
   /** A chave de POST /api/imagens/:id/editar. gravarPost registra a imagem antes de a tool responder. */
   imagemId: await idDaImagem(a.path),
   problemas: a.problemas,
 });
 
-/** Lê as leituras das referências da Biblioteca na hora de gerar. */
-export type Inspiracoes = () => Promise<string[]>;
-
-export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
+export function toolsDePost(conversaId: string, carregarReferencias?: CarregarReferencias) {
   const atual = (): Promise<EtapaPost | null> => postDaConversa(conversaId);
 
   return {
@@ -112,7 +121,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
 
     gerar_3_artes: tool({
       description:
-        "Gera as 3 variações de arte no formato escolhido, no estilo dos posts reais da EM Vidros. Refazer as artes é chamar de novo. Quando o usuário pedir outro estilo, passe direcao com o que ele pediu, detalhado com o que você achou em pesquisar_referencias.",
+        "Gera as 3 variações de arte no formato escolhido. Cada variação parte de uma referência diferente da Biblioteca, que vai como imagem ao modelo: a subida mais recente sempre entra e as outras giram, preferindo as do pilar do post. Refazer as artes é chamar de novo. Quando o usuário pedir outro estilo, passe direcao com o que ele pediu, detalhado com o que você achou em pesquisar_referencias.",
       inputSchema: z.object({
         direcao: z
           .string()
@@ -121,29 +130,31 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
           .describe(
             "Direção de arte pedida pelo usuário, em inglês ou português: estilo, elementos, composição, tipografia, clima. Concreta, como um diretor de arte escreveria. Omita para o estilo padrão da casa.",
           ),
-        referencias: z
+        imagens: z
           .array(z.string().url())
           .max(3)
           .optional()
-          .describe("Links diretos de imagens de referência que o usuário mandou na conversa (terminam em .jpg, .png ou .webp, ou são de CDN de imagem)."),
+          .describe("Links diretos de imagens que o usuário colou na conversa como referência (terminam em .jpg, .png ou .webp, ou são de CDN de imagem)."),
       }),
-      execute: async ({ direcao, referencias }) => {
+      execute: async ({ direcao, imagens }) => {
         const r = exigir(await atual(), "artes");
         if (!r.ok) return r;
         const p = r.post;
         const headline = headlineParaGerar(p);
         if (!headline) return { ok: false as const, motivo: "Sem headline para gerar." };
+
         // "ambos": feed primeiro, o stories sai depois por derivar_story (PRD US-2).
         const alvo = p.formato === "ambos" ? "feed" : p.formato;
-        // Referência é conveniência: sem elas, ou com o banco fora, a arte sai do estilo puro.
-        const lidas = [...((await inspiracoes?.().catch(() => [])) ?? []), ...(await escolhasDeArte().catch(() => []))];
-        const baixadas = referencias?.length ? await baixarReferencias(referencias) : { imagens: [], recusadas: [] };
-        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, inspiracoes: lidas, direcao, referenciasDoUsuario: baixadas.imagens });
+        const referencias = await referenciasOuNenhuma(carregarReferencias, p.brief.pilar);
+        const baixadas = imagens?.length ? await baixarImagens(imagens) : { imagens: [], recusadas: [] };
+
+        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, direcao, referencias, anexos: baixadas.imagens });
         const estado = await aplicar(conversaId, { tipo: "artes", artes });
+
         return {
           ...estado,
           artes: await emOrdem(artes, artePublica),
-          ...(baixadas.recusadas.length ? { referenciasRecusadas: baixadas.recusadas, aviso: "Estes links não eram imagens e ficaram de fora. Peça ao usuário o link direto da imagem ou que suba na Biblioteca." } : {}),
+          ...(baixadas.recusadas.length ? { imagensRecusadas: baixadas.recusadas, aviso: "Estes links não eram imagens e ficaram de fora. Peça ao usuário o link direto da imagem ou que suba na Biblioteca." } : {}),
         };
       },
     }),
@@ -184,7 +195,7 @@ export function toolsDePost(conversaId: string, inspiracoes?: Inspiracoes) {
         const principal = formato === "ambos" ? "feed" : formato;
         const path = await prepararFoto({ fotoId: foto.id, postId, formato: principal });
         const storyPath = formato === "ambos" ? await prepararFoto({ fotoId: foto.id, postId, formato: "stories" }) : null;
-        const arte = { variant: 1, style: "foto-real", path, problemas: [] };
+        const arte: FotoReal = { variant: 1, foto: true, path, problemas: [] };
         const estado = await aplicar(conversaId, { tipo: "foto", arte, storyPath });
         return {
           ...estado,

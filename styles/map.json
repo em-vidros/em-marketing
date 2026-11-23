@@ -1,9 +1,0 @@
-{
-  "_comment": "Pilar (§12.1) → trio de variações. Os estilos vêm dos posts reais da @emvidros; cada um tem referências em brand/referencias-posts/<estilo>/, que vão como imagem para o modelo.",
-  "_foraDoMapa": "foto-real exige foto e nunca é gerado — ver §8.2 e styles/foto-real.md. Os estilos antigos (editorial-serifado, faixa-teal, tecnico-poppins, cartela-rotulo, dado-numero) ficam para quem pedir por nome.",
-
-  "PROVA": ["faixa-foto", "teal-chamada", "vidro-3d"],
-  "AUTORIDADE": ["teal-chamada", "faixa-foto", "vidro-3d"],
-  "GENTE": ["teal-chamada", "teal-parabens", "faixa-foto"],
-  "MARCA": ["vidro-3d", "teal-parabens", "teal-chamada"]
-}

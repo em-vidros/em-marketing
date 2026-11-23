@@ -20,7 +20,7 @@ export async function criarTabelas(): Promise<void> {
       formato text CHECK (formato IN ('feed','stories','ambos')),
       headline text,
       legenda text,
-      arts text,                      -- JSON [{variant, style, path, problemas}]
+      arts text,                      -- JSON [{variant, referencia, path, problemas}]; a foto real tem foto: true; linhas antigas têm style
       chosen integer,                 -- 1..3
       story_path text,
       status text DEFAULT 'draft',    -- draft|generated|chosen|scheduled|published|failed
@@ -380,15 +380,14 @@ export interface ImagemNova {
   path: string;
   tipo: TipoImagem;
   variante: number | null;
-  estilo: string | null;
   formato: "feed" | "stories";
 }
 
 /** Registra as imagens de um post na Biblioteca. Um caminho já registrado fica como está, com a data de quando apareceu. */
 export async function guardarImagens(postId: number, imagens: readonly ImagemNova[], agora = Date.now()): Promise<void> {
   for (const i of imagens)
-    await q`INSERT INTO imagens_geradas (post_id, path, tipo, variante, estilo, formato, criada_em)
-      VALUES (${postId}, ${i.path}, ${i.tipo}, ${i.variante}, ${i.estilo}, ${i.formato}, ${agora}) ON CONFLICT (path) DO NOTHING`;
+    await q`INSERT INTO imagens_geradas (post_id, path, tipo, variante, formato, criada_em)
+      VALUES (${postId}, ${i.path}, ${i.tipo}, ${i.variante}, ${i.formato}, ${agora}) ON CONFLICT (path) DO NOTHING`;
 }
 
 export const idDaImagem = async (path: string): Promise<number | null> =>

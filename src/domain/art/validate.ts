@@ -153,7 +153,7 @@ export async function validarArte(jpeg: Buffer, formato: Formato, { paleta = tru
   const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
   // Os posts reais da @emvidros são teal do começo ao fim; a regra 70/20/10 do brandbook antigo não vale mais.
-  // Estilos com foto ou com a direção do usuário trazem as cores do mundo e pulam a checagem de paleta.
+  // A arte com a direção do usuário traz as cores que ele pediu e pula a checagem de paleta.
   if (paleta && c.fora >= LIMIARES.foraDaPaletaAviso)
     p.push({
       regra: "§4.1 paleta",
