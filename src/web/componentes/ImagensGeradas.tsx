@@ -8,6 +8,7 @@ import { useAbrirNoEditor } from "./EscolhaDeArtes";
 import { Falha } from "./Falha";
 import { Segmentado } from "./Segmentado";
 import { dia } from "./peca";
+import { BotaoReferencia } from "./referencias/BotaoReferencia";
 
 const POR_VEZ = 24;
 
@@ -89,7 +90,7 @@ export function ImagensGeradas({ busca }: { busca: string }) {
               const editar = i.origem === "post" ? `/api/imagens/${i.id}/editar` : null;
               return (
                 <li key={`${i.origem}-${i.id}`} className="flex min-w-0 flex-col gap-2">
-                  <div className="editavel relative overflow-hidden rounded-cartao">
+                  <div className="editavel group/imagem relative overflow-hidden rounded-cartao">
                     <img
                       src={i.url}
                       alt={`${detalheDa(i)}: ${titulo}`}
@@ -97,6 +98,7 @@ export function ImagensGeradas({ busca }: { busca: string }) {
                       decoding="async"
                       className={`w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10 ${PROPORCAO[i.formato]}`}
                     />
+                    <BotaoReferencia tamanho="cheio" imagem={{ url: i.url, nome: `${i.origem}-${i.id}.${i.origem === "estudio" ? "png" : "jpg"}` }} />
                     <div className="editar absolute top-2 right-2 z-10 flex gap-1.5">
                       {editar ? (
                         <button

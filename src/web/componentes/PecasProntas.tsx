@@ -5,6 +5,7 @@ import { enviarAoAbrir } from "./calendario/enviarAoAbrir";
 import { Falha } from "./Falha";
 import { mostrarAviso } from "./menu/Avisos";
 import { pilhaDeDesfazer } from "./menu/desfazer";
+import { BotaoReferencia } from "./referencias/BotaoReferencia";
 import { imagensDe } from "./referencias/soltas";
 
 /** Os mesmos limites do POST /api/pecas-prontas, checados antes para o erro sair na hora. */
@@ -170,6 +171,7 @@ export function PecasProntas({
                     {FORMATO_DA_PECA[p.formato]} · {p.pilar}
                   </span>
                 </button>
+                <BotaoReferencia imagem={{ url: p.url, nome: `peca-${p.id}.png` }} />
                 <button
                   type="button"
                   aria-label={`Remover a peça pronta ${p.tema}`}

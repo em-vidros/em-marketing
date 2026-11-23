@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { q } from "../v2/banco";
 import { registrarUso } from "./uso";
-import { informar, removerMovimento, saldo } from "./saldo";
+import { informar, lerDaOpenAI, removerMovimento, saldo } from "./saldo";
 
 // O relógio conta em ms: a espera tira o empate entre o movimento e a chamada.
 const gastar = async (saidaNoLuna: number) => {
@@ -34,4 +34,9 @@ test("o saldo é o último informado, mais os depósitos depois dele, menos o cu
   expect(await removerMovimento("nao-e-uuid", true)).toBe(false);
   await q`DELETE FROM movimentos_do_saldo`;
   expect(await saldo()).toMatchObject({ estado: "sem-saldo", movimentos: [] });
+});
+
+test("lido da OpenAI: o disponível e o usado vêm do painel, e o desde é o depósito mais antigo", () => {
+  const s = lerDaOpenAI({ total_available: 8.4, total_granted: 10, total_used: 1.6, grants: { data: [{ effective_at: 1_800_000_000 }, { effective_at: 1_700_000_000 }] } });
+  expect(s).toMatchObject({ estado: "ok", origem: "openai", disponivel: 8.4, total: 10, gasto: 1.6, desde: 1_700_000_000_000, movimentos: [] });
 });

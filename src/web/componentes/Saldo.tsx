@@ -63,7 +63,7 @@ export function SaldoCompacto() {
       </span>
       <Barra restante={s ? restanteDe(s) : 0} />
       <span className="tabular truncate text-tinta-3">
-        {s ? `Estimado desde ${dataCurta.format(s.desde)}` : carga.estado === "pronto" ? "Informe o saldo em Uso da API" : "Lendo o saldo…"}
+        {s ? (s.origem === "openai" ? "Lido da OpenAI" : `Estimado desde ${dataCurta.format(s.desde)}`) : carga.estado === "pronto" ? "Informe o saldo em Uso da API" : "Lendo o saldo…"}
       </span>
     </span>
   );
@@ -216,23 +216,25 @@ export function SaldoDetalhado() {
     <section className="flex flex-col gap-4 rounded-cartao bg-painel p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-x-8 gap-y-4">
         <div className="flex flex-col gap-1">
-          <span className="text-sm text-tinta-2">Crédito estimado</span>
+          <span className="text-sm text-tinta-2">{s.origem === "openai" ? "Crédito na OpenAI" : "Crédito estimado"}</span>
           <span className={`tabular text-4xl/none font-semibold tracking-[-0.03em] ${negativo ? "text-erro" : ""}`}>{dolar.format(s.disponivel)}</span>
         </div>
         <div className="flex flex-col gap-1 sm:items-end">
-          <span className="text-sm text-tinta-2">Gasto desde {quando(s.desde)}</span>
+          <span className="text-sm text-tinta-2">{s.origem === "openai" ? "Usado do que foi depositado" : `Gasto desde ${quando(s.desde)}`}</span>
           <span className="tabular text-xl/none font-semibold">{dolarFino(s.gasto)}</span>
         </div>
       </div>
       <div className="flex flex-col gap-1.5">
         <Barra restante={restanteDe(s)} alta />
         <p className={`text-xs ${negativo ? "text-erro" : "text-tinta-3"}`}>
-          {negativo
+          {s.origem === "openai"
+            ? "Lido direto do painel da OpenAI, atualizado a cada 5 minutos."
+            : negativo
             ? "O custo medido passou do saldo informado. Confira o painel da OpenAI e corrija o saldo."
             : "O app soma o custo de cada chamada pela tabela de preços. O painel da OpenAI pode diferir em centavos."}
         </p>
       </div>
-      {informando ? (
+      {s.origem === "openai" ? null : informando ? (
         <Informar key={informando} tipo={informando} aoTerminar={() => (setInformando(null), recarregar())} cancelar={() => setInformando(null)} />
       ) : (
         <div className="flex flex-wrap gap-2">
