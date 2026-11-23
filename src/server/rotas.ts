@@ -71,6 +71,7 @@ import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
 import { arteDaImagem, listarArtes, pedidoDaImagem, resumoDaArte, resumosDasArtes } from "../v2/artes";
 import { imagensDaBiblioteca } from "../domain/biblioteca";
 import { postPorId } from "../agent/post";
+import { ajustarArteDoPost, voltarArteDoPost } from "../agent/ajuste";
 import { q } from "../v2/banco";
 import { auth, usuarioDa, type Usuario } from "./auth";
 import { rotaDeChat, type OpcoesChat } from "./chat";
@@ -287,6 +288,19 @@ const FonteDoAgendamento = z.discriminatedUnion(
   ],
   { error: 'fonte precisa ser {tipo: "post", postId}, {tipo: "arte", arteId} ou {tipo: "peca", pecaId}.' },
 );
+
+/** POST /api/posts/:id/ajuste: o mesmo pedido que a tool ajustar_arte recebe. */
+const PedidoDeAjuste = z.discriminatedUnion(
+  "tipo",
+  [
+    z.object({ tipo: z.literal("texto"), atual: texto("O texto atual", 400), novo: texto("O texto novo", 400) }),
+    z.object({ tipo: z.literal("objeto"), objeto: texto("O objeto", 300), mudanca: texto("A mudança", 500) }),
+  ],
+  { error: "O ajuste é de texto (atual e novo) ou de objeto (objeto e mudanca)." },
+);
+
+/** A recusa do fluxo do post vira 409: o post existe, mas não está num ponto que aceita o pedido. */
+const doAjuste = (r: Awaited<ReturnType<typeof voltarArteDoPost>>) => (r.ok ? Response.json(r) : Response.json({ erro: r.motivo }, { status: 409 }));
 
 /** POST /api/fila. Sem legenda, o feed de um post leva a legenda do post; legenda vazia sai sem. */
 const NovoAgendamento = z
@@ -598,8 +612,33 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         const id = idDa(req.params.id);
         const post = id === null ? null : await postPorId(id);
         if (!post) return naoEncontrado();
-        const path = "peca" in post ? post.peca.arte.path : null;
-        return Response.json({ imagemId: path && (await idDaImagem(path)), url: path && (await urlDaMidia(path)) });
+        const arte = "peca" in post ? post.peca.arte : null;
+        const path = arte?.path ?? null;
+        const anteriores = arte && "anteriores" in arte ? (arte.anteriores ?? []) : [];
+        return Response.json({
+          imagemId: path && (await idDaImagem(path)),
+          url: path && (await urlDaMidia(path)),
+          versoesAnteriores: anteriores.length,
+          // A escolhida e as versões dela antes dos ajustes: a escolha que a conversa desenhou continua marcada depois de um ajuste.
+          daEscolhida: await Promise.all([...anteriores.map((a) => a.path), ...(path ? [path] : [])].map(idDaImagem)),
+        });
+      }),
+    },
+    "/api/posts/:id/ajuste": {
+      POST: comSessao<"/api/posts/:id/ajuste">(async (req) => {
+        const id = idDa(req.params.id);
+        const post = id === null ? null : await postPorId(id);
+        if (!post) return naoEncontrado();
+        const corpo = await lerCorpo(req, PedidoDeAjuste);
+        return "resposta" in corpo ? corpo.resposta : doAjuste(await ajustarArteDoPost(post, corpo.dados));
+      }),
+    },
+    "/api/posts/:id/voltar": {
+      // O botão "Voltar como estava" do cartão do ajuste na conversa.
+      POST: comSessao<"/api/posts/:id/voltar">(async (req) => {
+        const id = idDa(req.params.id);
+        const post = id === null ? null : await postPorId(id);
+        return post ? doAjuste(await voltarArteDoPost(post)) : naoEncontrado();
       }),
     },
     "/api/prontos": { GET: comSessao(async () => Response.json(await prontos((await listarArtes(estudio.banco)).map(resumoDaArte), estudio.banco))) },

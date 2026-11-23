@@ -102,6 +102,29 @@ describe("formato ambos", () => {
   });
 });
 
+describe("ajuste da arte escolhida", () => {
+  const escolhida = () => rodar(comArtes("ambos"), { tipo: "escolha", variante: 2 }, { tipo: "story", path: "s.jpg" });
+  const problema = { regra: "Texto da arte", severidade: "aviso" as const, detalhe: "x" };
+
+  test("o ajuste troca só a arte escolhida, guarda a de antes e tira a story que era dela; voltar traz as duas de volta", () => {
+    const ajustada = rodar(escolhida(), { tipo: "ajuste", path: "v2-ajuste.jpg", problemas: [problema] });
+    expect(ajustada).toMatchObject({ peca: { arte: { path: "v2-ajuste.jpg", problemas: [problema] } }, storyPath: null });
+    expect("opcoes" in ajustada && ajustada.opcoes.map((a) => a.path)).toEqual(["v1.jpg", "v2-ajuste.jpg", "v3.jpg"]);
+
+    const duas = rodar(ajustada, { tipo: "ajuste", path: "v2-ajuste-2.jpg", problemas: [] });
+    const voltou = rodar(duas, { tipo: "voltar" });
+    expect(voltou).toMatchObject({ peca: { arte: { path: "v2-ajuste.jpg" } }, storyPath: null });
+    expect(rodar(voltou, { tipo: "voltar" })).toEqual(escolhida());
+  });
+
+  test("sem ajuste não há para onde voltar, e foto real não é ajustada", () => {
+    expect(exigir(escolhida(), "voltar")).toMatchObject({ ok: false, motivo: expect.stringContaining("não tem ajuste") });
+    const comFoto = rodar(novo("feed", { ...brief, precisaFotoReal: true }), { tipo: "foto", arte: foto, storyPath: null });
+    expect(exigir(comFoto, "ajuste")).toMatchObject({ ok: false, motivo: expect.stringContaining("foto real") });
+    expect(exigir(comArtes("feed"), "ajuste").ok).toBe(false);
+  });
+});
+
 describe("publicação", () => {
   const pronto = rodar(
     comArtes("ambos"),
@@ -139,6 +162,8 @@ describe("persistência por conversa", () => {
       { tipo: "escolha", variante: 2 },
       { tipo: "story", path: "s.jpg" },
       { tipo: "legenda", legenda: "Legenda." },
+      { tipo: "ajuste", path: "v2-ajuste.jpg", problemas: [] },
+      { tipo: "voltar" },
       { tipo: "escolha", variante: 3 },
     ];
     let p = inicio;

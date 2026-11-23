@@ -1,6 +1,6 @@
 import { guardarImagens, primeira, utcDe, type ImagemNova } from "../db";
 import { q } from "../v2/banco";
-import type { ArtVariant, Brief } from "../domain/art/pipeline";
+import type { ArtVariant, Brief, VersaoAnterior } from "../domain/art/pipeline";
 import type { Problema } from "../domain/brand/validate";
 
 /**
@@ -60,7 +60,11 @@ export type Evento =
   | { tipo: "escolha"; variante: number }
   | { tipo: "foto"; arte: FotoReal; storyPath: string | null }
   | { tipo: "story"; path: string }
-  | { tipo: "legenda"; legenda: string };
+  | { tipo: "legenda"; legenda: string }
+  /** A arte escolhida ganhou uma versão nova; a de antes fica em `anteriores`. */
+  | { tipo: "ajuste"; path: string; problemas: Problema[] }
+  /** Desfaz o último ajuste: a arte e a story voltam a ser as de antes dele. */
+  | { tipo: "voltar" };
 
 export type TipoEvento = Evento["tipo"];
 
@@ -73,6 +77,8 @@ const ORIGEM = {
   foto: ["formato", "headline", "artes", "escolhida"],
   story: ["escolhida", "legenda"],
   legenda: ["escolhida", "legenda"],
+  ajuste: ["escolhida", "legenda"],
+  voltar: ["escolhida", "legenda"],
 } as const satisfies Record<TipoEvento, readonly Etapa[]>;
 
 export type Origem<T extends TipoEvento> = Extract<EtapaPost, { etapa: (typeof ORIGEM)[T][number] }>;
@@ -140,6 +146,12 @@ export function exigir<T extends TipoEvento>(post: EtapaPost | null, tipo: T): P
       if (formato !== "ambos") return nao("derivar_story só existe no formato ambos.");
       if ("peca" in post && post.peca.origem === "foto")
         return nao("§8.2: a arte escolhida é uma foto real e não pode ser regenerada em 9:16. A versão vertical já saiu da própria foto.");
+      break;
+    case "ajuste":
+    case "voltar":
+      if ("peca" in post && post.peca.origem === "foto") return nao("§8.2: a arte escolhida é uma foto real, e a IA não mexe em foto real.");
+      if (tipo === "voltar" && "peca" in post && !("anteriores" in post.peca.arte && post.peca.arte.anteriores?.length))
+        return nao("Esta arte não tem ajuste para desfazer. Ela já está como foi gerada.");
       break;
   }
 
@@ -210,7 +222,29 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
       if (!r.ok) return r;
       return ok({ ...r.post, etapa: "legenda", legenda: evento.legenda });
     }
+    case "ajuste":
+    case "voltar": {
+      const r = exigir(post, evento.tipo);
+      if (!r.ok) return r;
+      const p = r.post;
+      if (p.peca.origem !== "gerada") return { ok: false, motivo: "§8.2: a arte escolhida é uma foto real, e a IA não mexe em foto real." };
+      const { anteriores = [], ...arte } = p.peca.arte;
+      // A story saiu da versão de antes do ajuste e não vale para a nova; voltar traz a story daquela versão.
+      const [nova, storyPath]: [ArtVariant, string | null] =
+        evento.tipo === "ajuste"
+          ? [{ ...arte, path: evento.path, problemas: evento.problemas, anteriores: [...anteriores, { path: arte.path, problemas: arte.problemas, storyPath: p.storyPath }] }, null]
+          : voltarUma(arte, anteriores);
+      const opcoes = p.opcoes.map((a) => (a.variant === arte.variant ? nova : a));
+      return ok({ ...p, peca: { ...p.peca, arte: nova }, opcoes, storyPath });
+    }
   }
+}
+
+/** A versão de antes do último ajuste, com a story dela. A arte sem ajuste nenhum volta sem `anteriores`, como foi gerada. */
+function voltarUma(arte: Omit<ArtVariant, "anteriores">, anteriores: VersaoAnterior[]): [ArtVariant, string | null] {
+  const { path, problemas, storyPath } = anteriores.at(-1)!;
+  const resto = anteriores.slice(0, -1);
+  return [{ ...arte, path, problemas, ...(resto.length ? { anteriores: resto } : {}) }, storyPath];
 }
 
 /** O JPEG e a legenda de uma publicação. Sai post com a peça escolhida, no formato que ele tem. */
