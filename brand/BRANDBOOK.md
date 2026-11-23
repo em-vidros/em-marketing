@@ -559,6 +559,16 @@ Usar o nome certo do produto é a forma mais barata de demonstrar competência.
 
 Nunca dois CTAs no mesmo post. Nunca CTA em post institucional ou de data comemorativa.
 
+**O CTA segue o público (§1.2).** A EM Vidros vende para vidraçarias. Arquiteto e consumidor final não compram dela, e o CTA deles leva à vidraçaria parceira.
+
+| Público | CTA | Nunca |
+|---|---|---|
+| Vidraceiro | Direto à EM Vidros: `Fale com a unidade mais próxima.` · `Peça o orçamento pelo 0800 150 0103.` | |
+| Arquiteto | `Procure uma vidraçaria parceira EM Vidros.` | "compre com a gente", "fale com a EM", "fale com a unidade", "peça o orçamento pelo 0800" |
+| Consumidor final | `Procure uma vidraçaria parceira EM Vidros.` | o mesmo |
+
+O público padrão, quando o pedido não diz, é o vidraceiro. O pilar MARCA não leva CTA para nenhum público, e o GENTE leva só a vaga.
+
 ## 10.4 Banco de legendas — por pilar
 
 ### PROVA

@@ -11,6 +11,8 @@
  * positivo e serve para o humano olhar, não para bloquear.
  */
 
+import { levaAVidracariaParceira, CTA_DA_VIDRACARIA_PARCEIRA, type Publico } from "../publico";
+
 export type Severidade = "erro" | "aviso";
 export interface Problema {
   regra: string;
@@ -73,10 +75,42 @@ const CTA_PATTERNS = [
   /estamos\s+contratando/i,
   /salve\s+para\s+consultar/i,
   /link\s+na\s+bio/i,
+  /procure\s+(uma\s+)?vidra[çc]aria\s+parceira/i,
   /chame\s+no\s+whats/i,
   /clique\s+(aqui|no\s+link)/i,
   /entre\s+em\s+contato/i,
 ];
+
+/** A chamada que manda a pessoa falar ou comprar direto da EM Vidros. */
+const CTA_DIRETO_NA_EM = [
+  /compre\s+(com\s+a\s+gente|direto|na\s+EM)/i,
+  /fale\s+com\s+(a\s+gente|a\s+EM\b|a\s+unidade)/i,
+  /pe[çc]a\s+(o\s+)?or[çc]amento/i,
+  /chame\s+(a\s+EM\b|a\s+gente|no\s+whats)/i,
+  /visite\s+(a\s+nossa|uma\s+de\s+nossas)\s+(loja|unidade)/i,
+];
+const RE_VIDRACARIA_PARCEIRA = /vidra[çc]aria\s+parceira/i;
+
+/**
+ * §10.3 por público: arquiteto e consumidor não compram da EM Vidros, então a chamada deles
+ * não pode levar à EM. A linha que cita a vidraçaria parceira passa, como "peça o orçamento a
+ * uma vidraçaria parceira EM Vidros".
+ */
+function ctaDiretoParaQuemNaoCompra(texto: string, publico: Publico): Problema[] {
+  if (!levaAVidracariaParceira(publico)) return [];
+  const out: Problema[] = [];
+  for (const linha of texto.split("\n")) {
+    if (RE_VIDRACARIA_PARCEIRA.test(linha)) continue;
+    const m = CTA_DIRETO_NA_EM.map((re) => linha.match(re)).find(Boolean);
+    if (m)
+      out.push({
+        regra: "§10.3 CTA por público",
+        severidade: "erro",
+        detalhe: `"${m[0]}" leva ${publico === "arquiteto" ? "o arquiteto" : "o consumidor"} direto à EM Vidros, que não atende esse público. Escreva "${CTA_DA_VIDRACARIA_PARCEIRA}"`,
+      });
+  }
+  return out;
+}
 
 // --- §5.6 unidades e números ---
 
@@ -132,7 +166,7 @@ function problemasDeCaixaAlta(texto: string): Problema[] {
 }
 
 /** Bloco "Texto" do checklist do capítulo 16, aplicado a uma legenda de publicação. */
-export function validarLegenda(legenda: string, opts: { pilar?: string } = {}): Problema[] {
+export function validarLegenda(legenda: string, opts: { pilar?: string; publico?: Publico } = {}): Problema[] {
   const out: Problema[] = [];
   const linhas = legenda.split("\n");
   const naoVazias = linhas.filter((l) => l.trim());
@@ -197,6 +231,17 @@ export function validarLegenda(legenda: string, opts: { pilar?: string } = {}): 
   if (ctas.length > 0 && pilar === "MARCA")
     out.push({ regra: "§10.3 CTA", severidade: "erro", detalhe: "post do pilar MARCA (institucional / data comemorativa) não leva CTA." });
 
+  // §10.3 a chamada segue o público. MARCA e GENTE não têm chamada de venda.
+  if (opts.publico) {
+    out.push(...ctaDiretoParaQuemNaoCompra(legenda, opts.publico));
+    if (levaAVidracariaParceira(opts.publico) && pilar !== "MARCA" && pilar !== "GENTE" && !RE_VIDRACARIA_PARCEIRA.test(legenda))
+      out.push({
+        regra: "§10.3 CTA por público",
+        severidade: "erro",
+        detalhe: `falta a chamada para a vidraçaria parceira. ${opts.publico === "arquiteto" ? "Arquiteto" : "Consumidor"} não compra da EM Vidros: termine com "${CTA_DA_VIDRACARIA_PARCEIRA}"`,
+      });
+  }
+
   // §10.5 regras de escrita
   const exclamacoes = (legenda.match(/!/g) ?? []).length;
   if (exclamacoes > 1)
@@ -220,7 +265,7 @@ export function validarLegenda(legenda: string, opts: { pilar?: string } = {}): 
 }
 
 /** Texto que vai DENTRO da arte: §11.2.1 (emoji nunca na arte) + grafia + unidades. */
-export function validarTextoDaArte(headline: string, apoio = ""): Problema[] {
+export function validarTextoDaArte(headline: string, apoio = "", opts: { publico?: Publico } = {}): Problema[] {
   const out: Problema[] = [];
   const todo = `${headline}\n${apoio}`;
 
@@ -239,6 +284,7 @@ export function validarTextoDaArte(headline: string, apoio = ""): Problema[] {
     const m = todo.match(re);
     if (m) out.push({ regra: "§5.6 unidades", severidade: "erro", detalhe: `"${m[0]}" — ${certo}.` });
   }
+  if (opts.publico) out.push(...ctaDiretoParaQuemNaoCompra(todo, opts.publico));
   out.push(...problemasDeCaixaAlta(todo));
   out.push(...problemasDeGrafia(todo));
   return out;
