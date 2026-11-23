@@ -13,6 +13,7 @@ import {
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
 import { chegouAoModelo, escolhaDoCliente, escolhaPendente, marcarUsada, notaDaEscolha, reabrirEscolhas, type ReferenciasDoTurno } from "../agent/pedido";
+import type { Estudio } from "../v2/artes";
 import type { CarregarReferencias } from "../v2/referencias";
 import { configDoBot, situacaoDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
@@ -30,6 +31,8 @@ export interface OpcoesChat {
   resolverModelo?: ResolverModelo;
   segredoAprovacao?: string;
   carregarReferencias?: CarregarReferencias;
+  /** O estúdio de artes dos bots: criar convite e aniversário. */
+  estudioDeArtes?: Estudio;
 }
 
 /** O corpo do DefaultChatTransport do useChat, mais o botId que o front manda em `body`. */
@@ -113,7 +116,7 @@ function fecharToolsParadas(m: UIMessage): UIMessage {
   return { ...m, parts };
 }
 
-export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferencias }: OpcoesChat) {
+export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferencias, estudioDeArtes }: OpcoesChat) {
   return async (req: Request, usuario: Usuario): Promise<Response> => {
     const corpo = Corpo.safeParse(await req.json().catch(() => null));
     if (!corpo.success) return erro(400, z.prettifyError(corpo.error));
@@ -146,6 +149,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferenci
       const escolhidas = pendente ? pendente.escolha.marcadas.length + pendente.escolha.coladas.length : 0;
       let usada = false;
       const referencias: ReferenciasDoTurno | undefined = carregarReferencias && {
+        coladas: pendente?.escolha.coladas ?? [],
         carregar: (pilar) => carregarReferencias({ pilar, escolha: pendente?.escolha, n: Math.max(3, escolhidas) }),
         usar: (carregadas) => void (usada ||= !!pendente && chegouAoModelo(pendente.escolha, carregadas)),
       };
@@ -153,6 +157,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferenci
         resolverModelo,
         segredoAprovacao,
         referencias,
+        estudio: estudioDeArtes,
         abortSignal: turno.sinal,
         autor: usuario.email,
       });

@@ -6,6 +6,8 @@ import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
 import type { EstadoDaChave, Provedor } from "../domain/chaves";
 import type { Movimento } from "../domain/saldo";
 import type { Edicao } from "../v2/artes";
+import type { Formato } from "../v2/camadas";
+import type { PedidoDeArte } from "../v2/campos";
 import type { Arte, PecaPronta, Referencia } from "../v2/schema";
 import type { ApiConversas } from "./componentes/menu/conversas";
 import { navegar } from "./rota";
@@ -88,7 +90,15 @@ export const apiChaves = {
 export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: string; atualizadaEm: string; separavel?: boolean };
 
 /** As rotas de artes do backend novo (src/v2/api.ts). */
+/** Um convite ou uma arte de aniversário: os campos como a pessoa escreveu, mais o formato. */
+export type NovaArteComCampos = { tipo: PedidoDeArte["tipo"]; formato: Formato; campos: Record<string, string | undefined> };
+
 export const apiArtes = {
+  /** Cria a arte com os campos de um tipo. Leva uns 30 segundos: o modelo de imagem gera a cena. */
+  criar: (pedido: NovaArteComCampos) => comCorpo<ArteDaApi>("/api/artes", "POST", pedido),
+  /** Devolve a arte inteira; `restaurar` aceita esse mesmo corpo de volta. */
+  apagar: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}`, "DELETE"),
+  restaurar: (arte: ArteDaApi) => comCorpo<ArteDaApi>(`/api/artes/${arte.id}/restaurar`, "POST", arte),
   /** `base` é o atualizadaEm da versão editada; se outra pessoa gravou depois, o servidor recusa com 409. */
   gravar: async (id: string, edicao: Edicao, base: string) =>
     (await pedir(`/api/artes/${id}`, { method: "PUT", body: JSON.stringify(edicao), headers: { "if-match": base } })).json() as Promise<ArteDaApi>,
