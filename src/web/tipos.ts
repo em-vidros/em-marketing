@@ -115,6 +115,8 @@ export function rotuloDa(tipo: string, fase: Fase): string {
 /** Um passo de tool numa mensagem de especialista, já com o rótulo em português. */
 export interface Passo {
   id: string;
+  /** O nome da tool, sem o prefixo `tool-`. */
+  ferramenta: string;
   rotulo: string;
   estado: Fase;
   /** Um valor curto da entrada, para o chip ao lado do rótulo. */
@@ -137,6 +139,7 @@ export function passosDe(m: UIMessage | null | undefined): Passo[] {
     return [
       {
         id: p.toolCallId,
+        ferramenta: p.type.slice("tool-".length),
         rotulo: rotuloDa(p.type, estado),
         estado,
         detalhe: "input" in p ? detalheDe(p.input) : null,

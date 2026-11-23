@@ -19,7 +19,7 @@ import { mostrarAviso } from "../componentes/menu/Avisos";
 import { pilhaDeDesfazer } from "../componentes/menu/desfazer";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
-import { Passos, trechosDe } from "../componentes/Passos";
+import { ArtesDoPasso, Passos, trechosDe } from "../componentes/Passos";
 import { BarraDaEscolha, SoltarAqui } from "../componentes/referencias/Barra";
 import { dadosDa, useEscolha } from "../componentes/referencias/escolha";
 import { Fila } from "../componentes/referencias/Fila";
@@ -32,7 +32,7 @@ import { estadoDe, type EstadoBot, type EstadosDaEquipe } from "../equipe";
 import { criarEscolhaDoBot, criarTransporte, type EscolhaDoBot } from "../escolhaDoBot";
 import { navegar } from "../rota";
 import { ehCampo, executar, useAtalho } from "../teclado/motor";
-import { type BotId, botDaDelegacao, ehAprovacao, ehDelegacao, mudaAEquipe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao, type Pessoa } from "../tipos";
+import { type BotId, botDaDelegacao, ehAprovacao, ehDelegacao, mudaAEquipe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao, type Passo, type Pessoa } from "../tipos";
 
 export interface Vivo {
   mensagens: readonly Mensagem[];
@@ -552,7 +552,7 @@ function Chat({
                   ) : (
                     trechosDe(m.parts, ehPassoSolto).map((t) =>
                       t.tipo === "passos" ? (
-                        <Passos key={t.chave} passos={t.passos} className="text-sm" />
+                        <Passos key={t.chave} passos={t.passos} className="text-sm" extra={imagemDoPasso} />
                       ) : (
                         <ParteDoChefe
                           key={t.chave}
@@ -653,6 +653,10 @@ function ParteDoChefe({
     return <CartaoAprovacao parte={parte} respondida={parte.state === "approval-requested" && respondidas.has(parte.approval.id)} responder={responder} />;
   return null;
 }
+
+/** A story e a foto real que o Chefe chama direto aparecem no passo; as variações têm o cartão de escolha. */
+const imagemDoPasso = (p: Passo) =>
+  p.ferramenta === "derivar_story" ? <ArtesDoPasso passo={p} proporcao="aspect-[9/16]" /> : p.ferramenta === "usar_foto" ? <ArtesDoPasso passo={p} /> : null;
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
 const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehParteComArtes(p);

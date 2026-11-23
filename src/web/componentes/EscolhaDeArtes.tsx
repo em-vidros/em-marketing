@@ -24,6 +24,8 @@ interface Artes {
   artes: Variacao[];
   /** As variações ainda gerando, que aparecem como vagas. */
   faltam: number[];
+  /** A legenda que produzir_post escreveu enquanto as artes renderizavam. */
+  legenda: string | null;
 }
 
 function artesDa(parte: ParteComArtes): Artes | null {
@@ -31,12 +33,12 @@ function artesDa(parte: ParteComArtes): Artes | null {
   if (parte.type === "tool-mostrar_artes") {
     const o = parte.output;
     if (!o.ok) return null;
-    return { postId: o.postId, formato: o.formato, escolhida: o.escolhida, artes: o.artes, faltam: [] };
+    return { postId: o.postId, formato: o.formato, escolhida: o.escolhida, artes: o.artes, faltam: [], legenda: null };
   }
   const o = parte.output;
   const prontas = new Set(o.artes.map((a) => a.variante));
   const faltam = o.fase === "pronto" ? [] : [1, 2, 3].filter((v) => !prontas.has(v));
-  return { postId: o.postId, formato: o.formato === "stories" ? "stories" : "feed", escolhida: null, artes: o.artes, faltam };
+  return { postId: o.postId, formato: o.formato === "stories" ? "stories" : "feed", escolhida: null, artes: o.artes, faltam, legenda: o.legenda?.texto ?? null };
 }
 
 type Abrindo = { tipo: "parado" } | { tipo: "abrindo"; caminho: string } | { tipo: "erro"; mensagem: string };
@@ -160,6 +162,12 @@ export function EscolhaDeArtes({ parte, escolher }: { parte: ParteComArtes; esco
             ),
           )}
       </ul>
+      {saida.legenda && (
+        <div className="flex max-w-2xl flex-col gap-1">
+          <span className="text-xs text-tinta-3">Legenda</span>
+          <p className="text-sm/relaxed whitespace-pre-line text-tinta-2 [overflow-wrap:anywhere]">{saida.legenda}</p>
+        </div>
+      )}
       <p role="status" className={abrindo.tipo === "abrindo" ? "text-sm text-tinta-3" : "sr-only"}>
         {abrindo.tipo === "abrindo" ? "Abrindo o editor…" : ""}
       </p>

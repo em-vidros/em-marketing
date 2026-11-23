@@ -41,7 +41,7 @@ export function Passos({ passos, className = "", extra }: { passos: readonly Pas
 }
 
 /** As artes que uma tool devolveu, em miniatura; cada uma abre em outra aba. */
-export function ArtesDoPasso({ passo }: { passo: Passo }) {
+export function ArtesDoPasso({ passo, proporcao = "aspect-[4/5]" }: { passo: Passo; proporcao?: string }) {
   const imagens = passo.estado === "feito" ? imagensEm(passo.saida) : [];
   if (imagens.length === 0) return null;
   return (
@@ -52,7 +52,7 @@ export function ArtesDoPasso({ passo }: { passo: Passo }) {
             src={src}
             alt={`Arte ${n + 1}, abre em outra aba`}
             loading="lazy"
-            className="aspect-[4/5] w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10"
+            className={`${proporcao} w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10`}
           />
         </a>
       ))}
