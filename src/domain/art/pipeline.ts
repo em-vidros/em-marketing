@@ -36,6 +36,8 @@ export interface ArtVariant {
    * Ausente nas artes gravadas antes das referências no chat, que não guardavam a imagem.
    */
   ancora?: Ancora | null;
+  /** Só nas artes gravadas antes das referências no chat: o id da referência que guiou, sem a imagem. */
+  referencia?: string;
   path: string;
   /** Gate visual (§4, §6) — medido no JPEG final, ver art/validate.ts. */
   problemas: Problema[];
@@ -194,7 +196,7 @@ export async function deriveStory(
   const jpeg = await aplicarLogo(gerada, "stories");
   const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived-${Math.floor(Date.now() / 1000)}.jpg`, jpeg, "image/jpeg");
 
-  return { path, problemas: await validarArte(jpeg, "stories", { paleta: !opts.chosen.ancora }) };
+  return { path, problemas: await validarArte(jpeg, "stories", { paleta: !opts.chosen.ancora && !opts.chosen.referencia }) };
 }
 
 const semImagem = (r: ReferenciaParaGerar): Ancora =>

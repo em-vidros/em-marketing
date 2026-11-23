@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import type { ArtVariant, Brief } from "../domain/art/pipeline";
+import { rmSync } from "node:fs";
+import sharp from "sharp";
+import { deriveStory, type ArtVariant, type Brief } from "../domain/art/pipeline";
 import { q } from "../v2/banco";
 import {
   abrirConversa,
@@ -9,6 +11,7 @@ import {
   midiaParaPublicar,
   postDaConversa,
   transicionar,
+  type Arte,
   type FotoReal,
   type EtapaPost,
   type Evento,
@@ -147,7 +150,7 @@ describe("persistência por conversa", () => {
     }
   });
 
-  test("um post gravado antes das referências no chat volta sem âncora, para a linha de referências usadas não aparecer, e a foto real continua foto", async () => {
+  test("um post gravado antes das referências no chat volta sem âncora, para a linha de referências usadas não aparecer, a foto real continua foto e a story da arte de uma referência pula o gate de paleta", async () => {
     await abrirConversa("t-antigo", "post");
     const { postId } = await criarPost("t-antigo", brief, "feed");
     const antigas = [
@@ -162,7 +165,17 @@ describe("persistência por conversa", () => {
       peca: { origem: "foto", arte: { variant: 2, foto: true } },
       opcoes: [{ variant: 1, path: "v1.jpg" }, { variant: 2, foto: true }, { variant: 3, path: "v3.jpg" }],
     });
-    expect(post?.etapa === "escolhida" && post.opcoes.map((a) => Object.keys(a).filter((k) => k === "ancora" || k === "referencia"))).toEqual([[], [], []]);
+    const opcoes = post?.etapa === "escolhida" ? post.opcoes : [];
+    expect(opcoes.map((a) => "ancora" in a)).toEqual([false, false, false]);
+
+    const vermelha = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: "#D02020" } }).jpeg().toBuffer();
+    const paletaNaStory = async (chosen: Arte) => {
+      if ("foto" in chosen) throw new Error("a story deriva só de arte gerada");
+      const story = await deriveStory({ postId, brief, headline: headline.headline, chosen }, async () => vermelha);
+      rmSync(story.path, { force: true });
+      return story.problemas.some((p) => p.regra === "§4.1 paleta");
+    };
+    expect([await paletaNaStory(opcoes[0]!), await paletaNaStory(opcoes[2]!)]).toEqual([true, false]);
   });
 
   test("conversas diferentes têm posts diferentes", async () => {
