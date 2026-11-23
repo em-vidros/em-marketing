@@ -11,6 +11,7 @@ import { rmSync } from "node:fs";
 import sharp from "sharp";
 import { postDaConversa } from "../agent/post";
 import type { CarregarReferencias } from "../v2/referencias";
+import { openaiFalsa } from "../../test/openaiFalsa";
 import { rotaDeChat } from "./chat";
 
 type Chunk = Awaited<ReturnType<MockLanguageModelV4["doStream"]>>["stream"] extends ReadableStream<infer C> ? C : never;
@@ -285,17 +286,12 @@ describe("referências do pedido", () => {
     };
   }
 
-  test("a escolha do pedido chega à geração delegada pelo Chefe na ordem da pessoa, sobrevive a uma pergunta e não vale para a geração seguinte", async () => {
+  test("a escolha do pedido chega ao produzir_post do Chefe na ordem da pessoa, sobrevive a uma pergunta e não vale para a geração seguinte", async () => {
     const roteiro = [
       () => responde("Feed ou stories?"),
-      () => chamar("delegar_post", { pedido: "Gere as 3 artes no feed." }),
-      () => chamar("gerar_3_artes"),
-      () => responde("Gerei as 3."),
-      () => chamar("mostrar_artes"),
+      () => chamar("produzir_post", { pedido: "Post do Dia do Vidraceiro no feed." }),
       () => responde("Qual você quer?"),
-      () => chamar("delegar_post", { pedido: "Gere de novo." }),
-      () => chamar("gerar_3_artes"),
-      () => responde("Gerei de novo."),
+      () => chamar("produzir_post", { pedido: "Post do Dia do Vidraceiro no feed, de novo." }),
       () => responde("Pronto."),
     ];
     const modelo = new MockLanguageModelV4({ doStream: async () => roteiro.shift()!() });
@@ -311,7 +307,7 @@ describe("referências do pedido", () => {
     const rota = rotaDeChat({ resolverModelo: () => modelo, carregarReferencias });
     const id = await conversaComPost("chefe", PRONTO_PARA_AGENDAR.slice(0, 1));
     const [a, b, colada] = [crypto.randomUUID(), crypto.randomUUID(), `${crypto.randomUUID()}.png`];
-    const rede = await semOpenAI();
+    const rede = await openaiFalsa();
     const geradas: string[] = [];
     const guardar = (p: EtapaPost | null) => (p?.etapa === "artes" && geradas.push(...p.artes.map((x) => x.path)), p);
 
@@ -337,13 +333,14 @@ describe("referências do pedido", () => {
         { origem: "pedido", arquivo: colada },
       ]);
       expect(ancoras(segunda)).toEqual([null, null, null]);
-      const mostradas = (await mensagensDaConversa(id)).flatMap((m) => m.parts).find((p) => p.type === "tool-mostrar_artes");
-      expect(mostradas).toMatchObject({ output: { artes: ancoras(primeira)!.map((ancora) => ({ ancora })) } });
+      const mostradas = (await mensagensDaConversa(id)).flatMap((m) => m.parts).find((p) => p.type === "tool-produzir_post");
+      expect(mostradas).toMatchObject({ output: { fase: "pronto", artes: ancoras(primeira)!.map((ancora) => ({ ancora })) } });
     } finally {
       rede.restaurar();
       for (const path of geradas) rmSync(path, { force: true });
     }
-  });
+ 
+  }, 20_000);
 
   /**
    * Conversa direta com o Post e as escolhas que cada geração pediu. Ao pedido com a escolha, o Post pergunta o formato;

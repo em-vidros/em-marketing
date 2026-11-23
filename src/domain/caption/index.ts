@@ -10,11 +10,13 @@ const exemplos = async () => comoExemplos(await postsDaMarca().catch(() => []));
  * Gera, valida contra o checklist do capítulo 16 e devolve para reescrita quando
  * há erro. Duas tentativas: o modelo erra a norma com frequência suficiente para
  * compensar o retry, e raramente erra duas vezes a mesma regra depois de vê-la.
+ * O `prompt` começa pela parte fixa e termina no brief: a OpenAI reaproveita do cache o começo igual entre posts.
  */
 async function gerarValidando(
   system: string,
   prompt: string,
   validar: (saida: string) => Problema[],
+  cacheKey: string,
   tentativas = 2,
 ): Promise<{ texto: string; problemas: Problema[] }> {
   let previousId: string | undefined;
@@ -30,6 +32,7 @@ async function gerarValidando(
           ? prompt
           : `A versão anterior viola o brandbook:\n${formatarProblemas(problemas)}\n\nReescreva corrigindo TODOS os itens marcados como [erro]. Mesmo brief, mesma intenção. Responda só o texto final.`,
       previous_response_id: previousId,
+      prompt_cache_key: cacheKey,
       store: true,
     });
     previousId = r.id;
@@ -54,10 +57,11 @@ export async function definirHeadline(
 ): Promise<{ headline: string; apoio: string; problemas: Problema[] }> {
   const { texto, problemas } = await gerarValidando(
     SYSTEM_TEXTO(),
-    `Brief: ${JSON.stringify(brief)}. Formato: ${formato}.
-Gere o texto que vai DENTRO da arte, em JSON: {"headline": "...", "apoio": "..."}.
+    `Gere o texto que vai DENTRO da arte, em JSON: {"headline": "...", "apoio": "..."}.
 Headline curto e concreto, português impecável, no máximo 8 palavras. Apoio: 1 linha (em stories, vazio).
-Emoji é proibido na arte (§11.2). Unidades como "10 mm", "6, 8 e 10 mm". Responda SÓ o JSON.${await exemplos()}`,
+Emoji é proibido na arte (§11.2). Unidades como "10 mm", "6, 8 e 10 mm". Responda SÓ o JSON.${await exemplos()}
+
+Brief: ${JSON.stringify(brief)}. Formato: ${formato}.`,
     (saida) => {
       try {
         const { headline, apoio } = JSON.parse(saida.replace(/```json?|```/g, "").trim());
@@ -66,6 +70,7 @@ Emoji é proibido na arte (§11.2). Unidades como "10 mm", "6, 8 e 10 mm". Respo
         return [{ regra: "formato", severidade: "erro", detalhe: "resposta não é JSON válido." }];
       }
     },
+    "em-vidros-headline",
   );
 
   const { headline, apoio } = JSON.parse(texto.replace(/```json?|```/g, "").trim());
@@ -79,14 +84,16 @@ export async function escreverLegenda(
 ): Promise<{ legenda: string; problemas: Problema[] }> {
   const { texto, problemas } = await gerarValidando(
     SYSTEM_TEXTO(),
-    `Brief: ${JSON.stringify(brief)}. Headline da arte: "${headline}". Pilar: ${brief.pilar}.
-Escreva a legenda seguindo a estrutura fixa do §10.1:
+    `Escreva a legenda do post do brief abaixo seguindo a estrutura fixa do §10.1:
 gancho (1 linha, no máximo 8 palavras, sem emoji, sem pergunta genérica) → linha em branco →
 corpo (2 a 4 linhas, uma ideia por linha) → linha em branco →
-${brief.pilar === "MARCA" ? "SEM CTA (§10.3: post do pilar MARCA não leva CTA)" : "1 CTA, um único pedido"} → linha em branco →
+1 CTA, um único pedido (no pilar MARCA, SEM CTA: §10.3, post do pilar MARCA não leva CTA) → linha em branco →
 bloco de no máximo 5 hashtags, #EMVidros a primeira.
-Responda SÓ a legenda.${await exemplos()}`,
+Responda SÓ a legenda.${await exemplos()}
+
+Brief: ${JSON.stringify(brief)}. Headline da arte: "${headline}". Pilar: ${brief.pilar}${brief.pilar === "MARCA" ? ", sem CTA" : ""}.`,
     (saida) => validarLegenda(saida, { pilar: brief.pilar }),
+    "em-vidros-legenda",
   );
 
   return { legenda: texto, problemas };

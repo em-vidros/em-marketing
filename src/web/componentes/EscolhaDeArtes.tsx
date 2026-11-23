@@ -5,11 +5,39 @@ import { REGRA_DO_TEXTO } from "../../domain/art/conferencia";
 import { useApi } from "../api";
 import { navegar } from "../rota";
 import type { Parte } from "../tipos";
+import type { Ancora } from "../../domain/art/pipeline";
 import { ReferenciasUsadas } from "./referencias/Usadas";
 
-export type ParteMostrarArtes = Extract<Parte, { type: "tool-mostrar_artes" }>;
+/** As partes que desenham as 3 variações: mostrar_artes e produzir_post, que chega arte por arte. */
+export type ParteComArtes = Extract<Parte, { type: "tool-mostrar_artes" | "tool-produzir_post" }>;
 
-export const ehMostrarArtes = (p: Parte): p is ParteMostrarArtes => p.type === "tool-mostrar_artes";
+/** produzir_post vira cartão quando já tem a headline; antes disso, e se falhar, é uma linha de passo como as outras tools. */
+export const ehParteComArtes = (p: Parte): p is ParteComArtes =>
+  p.type === "tool-mostrar_artes" || (p.type === "tool-produzir_post" && p.state === "output-available" && p.output.fase !== "brief" && p.output.fase !== "foto");
+
+type Variacao = { variante: number; url: string; imagemId?: number | null; ancora?: Ancora | null; problemas: { regra: string; detalhe: string }[] };
+
+interface Artes {
+  postId: number | undefined;
+  formato: string;
+  escolhida: number | null;
+  artes: Variacao[];
+  /** As variações ainda gerando, que aparecem como vagas. */
+  faltam: number[];
+}
+
+function artesDa(parte: ParteComArtes): Artes | null {
+  if (parte.state !== "output-available") return null;
+  if (parte.type === "tool-mostrar_artes") {
+    const o = parte.output;
+    if (!o.ok) return null;
+    return { postId: o.postId, formato: o.formato, escolhida: o.escolhida, artes: o.artes, faltam: [] };
+  }
+  const o = parte.output;
+  const prontas = new Set(o.artes.map((a) => a.variante));
+  const faltam = o.fase === "pronto" ? [] : [1, 2, 3].filter((v) => !prontas.has(v));
+  return { postId: o.postId, formato: o.formato === "stories" ? "stories" : "feed", escolhida: null, artes: o.artes, faltam };
+}
 
 type Abrindo = { tipo: "parado" } | { tipo: "abrindo"; caminho: string } | { tipo: "erro"; mensagem: string };
 
@@ -52,15 +80,14 @@ function useEscolhida(postId: number | undefined) {
  * `escolher` é null quando a conversa já passou deste ponto ou o bot ainda está respondendo.
  * Toda variação tem o atalho para o editor de camadas.
  */
-export function EscolhaDeArtes({ parte, escolher }: { parte: ParteMostrarArtes; escolher: ((variante: number) => void) | null }) {
-  const saida = parte.state === "output-available" && parte.output.ok ? parte.output : null;
-  const postId = saida && "postId" in saida ? saida.postId : undefined;
+export function EscolhaDeArtes({ parte, escolher }: { parte: ParteComArtes; escolher: ((variante: number) => void) | null }) {
+  const saida = artesDa(parte);
+  const postId = saida?.postId;
   const [abrindo, abrirNoEditor] = useAbrirNoEditor();
   const { doServidor, local, marcar } = useEscolhida(postId);
   if (!saida) return null;
-  const { artes, formato } = saida;
-  type Variacao = (typeof artes)[number];
-  const naSaida = "escolhida" in saida ? saida.escolhida : null;
+  const { artes, formato, faltam } = saida;
+  const naSaida = saida.escolhida;
   const ehEscolhida = (a: Variacao) => {
     if (local !== null) return a.variante === local;
     if (!doServidor) return a.variante === naSaida;
@@ -70,56 +97,68 @@ export function EscolhaDeArtes({ parte, escolher }: { parte: ParteMostrarArtes; 
   const algumaEscolhida = artes.some(ehEscolhida);
   const editarEm = (a: Variacao) => (a.imagemId != null ? `/api/imagens/${a.imagemId}/editar` : `/api/posts/${postId}/variacoes/${a.variante}/editar`);
   const proporcao = formato === "stories" ? "aspect-[9/16]" : "aspect-[4/5]";
+  const celula = (a: Variacao) => (
+    <li key={a.variante} className="flex min-w-0 flex-col gap-2">
+      <div className={`relative overflow-hidden rounded-item ${postId !== undefined ? "editavel" : ""}`}>
+        <a href={a.url} target="_blank" rel="noreferrer" className="block">
+          <img
+            src={a.url}
+            alt={`Variação ${a.variante}. Abre em outra aba`}
+            loading="lazy"
+            className={`${proporcao} w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10`}
+          />
+        </a>
+        {postId !== undefined && (
+          <button
+            type="button"
+            onClick={() => void abrirNoEditor(editarEm(a))}
+            disabled={abrindo.tipo === "abrindo"}
+            aria-label={`Editar a variação ${a.variante} no editor de arte`}
+            title="Editar no editor de arte"
+            className="editar pressiona absolute top-2 right-2 z-10 grid size-9 cursor-pointer place-items-center rounded-full bg-superficie text-tinta shadow-[0_1px_2px_rgb(0_0_0/0.12),0_0_0_1px_rgb(0_0_0/0.06)] disabled:cursor-default"
+          >
+            <HugeiconsIcon icon={PencilEdit02Icon} size={18} strokeWidth={1.75} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+      {a.problemas
+        .filter((p) => p.regra === REGRA_DO_TEXTO)
+        .map((p) => (
+          <p key={p.detalhe} className="text-xs/snug text-pretty text-esperando-texto [overflow-wrap:anywhere]">
+            {p.detalhe}
+          </p>
+        ))}
+      {ehEscolhida(a) ? (
+        <span className="mt-auto grid h-9 place-items-center rounded-full bg-ativo text-[13px] font-medium">Escolhida</span>
+      ) : escolher ? (
+        <button
+          type="button"
+          onClick={() => (marcar(a.variante), escolher(a.variante))}
+          className="pressiona mt-auto h-9 cursor-pointer rounded-full border border-linha-forte text-[13px] font-medium hover:bg-hover"
+        >
+          {algumaEscolhida ? `Trocar pela ${a.variante}` : `Usar a ${a.variante}`}
+        </button>
+      ) : (
+        <span className="mt-auto text-center text-xs text-tinta-3">Variação {a.variante}</span>
+      )}
+    </li>
+  );
   return (
     <section aria-label="Escolha uma arte" className="flex flex-col gap-3">
       <ReferenciasUsadas artes={artes} />
       <ul className="grid max-w-2xl grid-cols-3 gap-2.5 sm:gap-3">
-        {artes.map((a) => (
-          <li key={a.variante} className="flex min-w-0 flex-col gap-2">
-            <div className={`relative overflow-hidden rounded-item ${postId !== undefined ? "editavel" : ""}`}>
-              <a href={a.url} target="_blank" rel="noreferrer" className="block">
-                <img
-                  src={a.url}
-                  alt={`Variação ${a.variante}. Abre em outra aba`}
-                  loading="lazy"
-                  className={`${proporcao} w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10`}
-                />
-              </a>
-              {postId !== undefined && (
-                <button
-                  type="button"
-                  onClick={() => void abrirNoEditor(editarEm(a))}
-                  disabled={abrindo.tipo === "abrindo"}
-                  aria-label={`Editar a variação ${a.variante} no editor de arte`}
-                  title="Editar no editor de arte"
-                  className="editar pressiona absolute top-2 right-2 z-10 grid size-9 cursor-pointer place-items-center rounded-full bg-superficie text-tinta shadow-[0_1px_2px_rgb(0_0_0/0.12),0_0_0_1px_rgb(0_0_0/0.06)] disabled:cursor-default"
-                >
-                  <HugeiconsIcon icon={PencilEdit02Icon} size={18} strokeWidth={1.75} aria-hidden="true" />
-                </button>
-              )}
-            </div>
-            {a.problemas
-              .filter((p) => p.regra === REGRA_DO_TEXTO)
-              .map((p) => (
-                <p key={p.detalhe} className="text-xs/snug text-pretty text-esperando-texto [overflow-wrap:anywhere]">
-                  {p.detalhe}
-                </p>
-              ))}
-            {ehEscolhida(a) ? (
-              <span className="mt-auto grid h-9 place-items-center rounded-full bg-ativo text-[13px] font-medium">Escolhida</span>
-            ) : escolher ? (
-              <button
-                type="button"
-                onClick={() => (marcar(a.variante), escolher(a.variante))}
-                className="pressiona mt-auto h-9 cursor-pointer rounded-full border border-linha-forte text-[13px] font-medium hover:bg-hover"
-              >
-                {algumaEscolhida ? `Trocar pela ${a.variante}` : `Usar a ${a.variante}`}
-              </button>
+        {[...artes.map((a) => ({ tipo: "arte" as const, a })), ...faltam.map((v) => ({ tipo: "vaga" as const, v }))]
+          .sort((x, y) => (x.tipo === "arte" ? x.a.variante : x.v) - (y.tipo === "arte" ? y.a.variante : y.v))
+          .map((item) =>
+            item.tipo === "vaga" ? (
+              <li key={item.v} className="flex min-w-0 flex-col gap-2">
+                <div role="img" aria-label={`Variação ${item.v} ainda gerando`} className={`${proporcao} w-full rounded-item bg-ativo`} />
+                <span className="mt-auto text-center text-xs text-tinta-3">Gerando a {item.v}</span>
+              </li>
             ) : (
-              <span className="mt-auto text-center text-xs text-tinta-3">Variação {a.variante}</span>
-            )}
-          </li>
-        ))}
+              celula(item.a)
+            ),
+          )}
       </ul>
       <p role="status" className={abrindo.tipo === "abrindo" ? "text-sm text-tinta-3" : "sr-only"}>
         {abrindo.tipo === "abrindo" ? "Abrindo o editor…" : ""}

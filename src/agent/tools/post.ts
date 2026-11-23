@@ -1,16 +1,15 @@
 import { tool } from "ai";
-import sharp from "sharp";
 import { z } from "zod";
-import { emOrdem, idDaImagem, urlDaMidia } from "../../db";
-import { PIXELS_MAXIMOS } from "../../v2/arquivos";
+import { emOrdem, urlDaMidia } from "../../db";
 import { q } from "../../v2/banco";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
-import { deriveStory, generate3Arts, PILARES, type Brief, type Pilar, type ReferenciaParaGerar } from "../../domain/art/pipeline";
+import { deriveStory, generate3Arts, PILARES, type Brief } from "../../domain/art/pipeline";
 import { temErro } from "../../domain/brand/validate";
 import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
 import {
   criarPost,
+  entrarNaFila,
   exigir,
   headlineParaGerar,
   gravarPost,
@@ -26,38 +25,9 @@ import {
 import { agendarPost } from "../fila";
 import { fotoPublica } from "./fotos";
 import type { ReferenciasDoTurno } from "../pedido";
+import { artePublica, AVISO_DE_LINKS, baixarImagens, produzirPost, referenciasOuNenhuma, type ProgressoDoPost } from "../produzir";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
-
-const TETO_DA_IMAGEM = 10 * 1024 * 1024;
-
-/** Baixa as imagens que o usuário colou na conversa e devolve em JPEG. Link que não é imagem vira aviso, não erro. */
-async function baixarImagens(urls: string[]): Promise<{ imagens: Uint8Array[]; recusadas: string[] }> {
-  const imagens: Uint8Array[] = [];
-  const recusadas: string[] = [];
-  for (const url of urls) {
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(15_000), headers: { "user-agent": "Mozilla/5.0" } });
-      const tipo = res.headers.get("content-type") ?? "";
-      if (!res.ok || !tipo.startsWith("image/")) throw new Error(tipo || String(res.status));
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (bytes.byteLength > TETO_DA_IMAGEM) throw new Error("acima de 10 MB");
-      imagens.push(await sharp(bytes, { limitInputPixels: PIXELS_MAXIMOS }).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer());
-    } catch {
-      recusadas.push(url);
-    }
-  }
-  return { imagens, recusadas };
-}
-
-/** Sem a Biblioteca, as artes saem no visual padrão da casa em vez de falhar. */
-async function referenciasOuNenhuma(referencias: ReferenciasDoTurno | undefined, pilar: Pilar): Promise<ReferenciaParaGerar[]> {
-  if (!referencias) return [];
-  return referencias.carregar(pilar).catch((erro: unknown) => {
-    console.error("gerar_3_artes: as artes saem sem referência porque a Biblioteca não respondeu", erro);
-    return [];
-  });
-}
 
 const mediaType = z.enum(["IMAGE", "STORIES"]);
 
@@ -69,20 +39,37 @@ async function aplicar(conversaId: string, evento: Evento) {
   return { ok: true as const, etapa: r.post.etapa, proximoPasso: proximoPasso(r.post) };
 }
 
-const artePublica = async (a: Arte) => ({
-  variante: a.variant,
-  /** A imagem que guiou a variação, para a linha de referências usadas. Ausente na foto real e nas artes antigas. */
-  ancora: "foto" in a ? undefined : a.ancora,
-  url: await urlDaMidia(a.path),
-  /** A chave de POST /api/imagens/:id/editar. gravarPost registra a imagem antes de a tool responder. */
-  imagemId: await idDaImagem(a.path),
-  problemas: a.problemas,
-});
-
 export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno) {
   const atual = (): Promise<EtapaPost | null> => postDaConversa(conversaId);
 
   return {
+    produzir_post: tool({
+      description:
+        "Produz um post do pedido às 3 artes de uma vez: monta o brief, escreve a headline, gera as 3 variações e escreve a legenda enquanto elas renderizam. Não para para confirmar o brief. Cada arte aparece na conversa, com o botão de escolha, assim que fica pronta. As referências que a pessoa marcou ou colou no pedido guiam as variações sozinhas, sem você repassar. Gerar de novo, inclusive em outro estilo, é chamar de novo.",
+      inputSchema: z.object({
+        pedido: z.string().describe("O pedido completo, com as palavras da pessoa: tema, data, formato, público e estilo que ela disse, e o que já foi decidido na conversa."),
+        direcao: z
+          .string()
+          .max(1500)
+          .optional()
+          .describe("Direção de arte concreta quando a pessoa pediu outro estilo, escrita a partir de pesquisar_referencias: composição, elementos, tipografia, textura e luz. Omita no estilo da casa."),
+        imagens: z
+          .array(z.string().url())
+          .max(3)
+          .optional()
+          .describe("Links diretos de imagens que a pessoa colou na conversa como referência (terminam em .jpg, .png ou .webp, ou são de CDN de imagem)."),
+        sem_foto_real: z.boolean().optional().describe("true quando o banco não tem foto real que sirva: a peça sai tipográfica, sem mostrar produto, obra nem pessoas."),
+      }),
+      execute: async function* ({ pedido, direcao, imagens, sem_foto_real }): AsyncGenerator<ProgressoDoPost> {
+        const sair = await entrarNaFila(conversaId);
+        try {
+          yield* produzirPost(conversaId, { pedido, direcao, imagens, semFotoReal: sem_foto_real }, referencias);
+        } finally {
+          sair();
+        }
+      },
+    }),
+
     montar_brief: tool({
       description: "Registra o brief estruturado de um post novo e o devolve para o usuário confirmar.",
       inputSchema: z.object({
@@ -159,7 +146,7 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
         return {
           ...estado,
           artes: await emOrdem(artes, artePublica),
-          ...(baixadas.recusadas.length ? { imagensRecusadas: baixadas.recusadas, aviso: "Estes links não eram imagens e ficaram de fora. Peça ao usuário o link direto da imagem ou que suba na Biblioteca." } : {}),
+          ...(baixadas.recusadas.length ? { imagensRecusadas: baixadas.recusadas, aviso: AVISO_DE_LINKS } : {}),
         };
       },
     }),
@@ -238,7 +225,7 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
         const r = exigir(await atual(), "legenda");
         if (!r.ok) return r;
         const p = r.post;
-        const headline = p.peca.origem === "gerada" ? p.peca.headline.headline : "";
+        const headline = !("peca" in p) ? p.headline.headline : p.peca.origem === "gerada" ? p.peca.headline.headline : "";
         const { legenda, problemas } = await escreverLegenda(p.brief, headline);
         const estado = await aplicar(conversaId, { tipo: "legenda", legenda });
         return { ...estado, legenda, problemas, bloqueia: temErro(problemas) };

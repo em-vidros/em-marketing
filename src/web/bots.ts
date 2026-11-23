@@ -102,7 +102,7 @@ export interface Equipe {
 
 const SETOR_PADRAO = "Marketing";
 
-const GERAM_ARTES: readonly ToolName[] = ["gerar_3_artes", "delegar_post"];
+const GERAM_ARTES: readonly ToolName[] = ["produzir_post", "gerar_3_artes", "delegar_post"];
 
 const doFixo = (id: BotFixo): BotDaEquipe => ({
   id,

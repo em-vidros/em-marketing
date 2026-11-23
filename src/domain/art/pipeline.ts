@@ -19,6 +19,8 @@ export interface Brief {
    * EM Vidros? Se sim, ela exige foto real e não pode ser gerada.
    */
   precisaFotoReal?: boolean;
+  /** §1.2: B2B (vidraceiro, serralheiro, construtora, arquiteto) ou B2C (consumidor final). Os briefs antigos não têm. */
+  publico?: "B2B" | "B2C";
 }
 
 /**
@@ -182,6 +184,8 @@ export async function generate3Arts(
     referencias: readonly ReferenciaParaGerar[];
     /** Imagens extras do pedido (links colados, escolhas além da terceira). Vão nas 3 variações, depois da âncora. */
     anexos: readonly Uint8Array[];
+    /** Chamada a cada variação pronta, na ordem em que terminam, para a conversa mostrar a arte sem esperar as 3. */
+    aoFicarPronta?: (arte: ArtVariant) => void;
   },
   ia: IaDaArte = IA_DA_OPENAI,
 ): Promise<ArtVariant[]> {
@@ -211,7 +215,9 @@ export async function generate3Arts(
       // A paleta só se mede no visual da casa: a referência e a direção do usuário trazem as cores delas, muitas vezes de foto.
       const problemas = [...doTexto, ...(await validarArte(jpeg, formato, { paleta: !ancora && !direcao }))];
 
-      return { variant, ancora: ancora ? semImagem(ancora) : null, path, problemas };
+      const arte: ArtVariant = { variant, ancora: ancora ? semImagem(ancora) : null, path, problemas };
+      opts.aoFicarPronta?.(arte);
+      return arte;
     }),
   );
 }

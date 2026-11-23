@@ -40,6 +40,7 @@ export interface ConversaComMensagens {
 
 /** O que cada tool está fazendo e o que fez, para o passo atual e a lista de passos de uma tarefa. */
 export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
+  produzir_post: { fazendo: "Produzindo o post", feito: "Post produzido" },
   montar_brief: { fazendo: "Montando o brief", feito: "Brief montado" },
   definir_formato: { fazendo: "Definindo o formato", feito: "Formato definido" },
   definir_headline: { fazendo: "Escrevendo a headline", feito: "Headline escrita" },
