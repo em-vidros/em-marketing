@@ -7,7 +7,7 @@ import { buildPrompt, deriveStory, generate3Arts, type ArtVariant, type Brief, t
 
 const brief: Brief = { pilar: "AUTORIDADE", tema: "espessura certa por aplicação", angulo: "box e guarda-corpo", precisaFotoReal: false };
 const daCasa: Visual = { tipo: "casa" };
-const VISUAIS: Visual[] = [{ tipo: "referencia", leitura: "Faixa teal sob foto de arquitetura." }, daCasa, { tipo: "adaptacao" }];
+const VISUAIS: Visual[] = [{ tipo: "referencia", leitura: "Faixa teal sob foto de arquitetura." }, daCasa, { tipo: "pedido" }];
 
 describe("buildPrompt", () => {
   test("não sobra marca do molde em nenhum visual e formato", () => {
@@ -23,7 +23,7 @@ describe("buildPrompt", () => {
   test("story declara as zonas seguras corretas do §6.2", () => {
     const prompt = buildPrompt({ formato: "stories", brief, headline: "H", visual: daCasa });
     expect(prompt).toContain("top 250px");
-    expect(prompt).toContain("bottom 320px");
+    expect(prompt).toContain("bottom 340px");
     expect(prompt).toContain("80px side margins");
   });
 
@@ -176,5 +176,44 @@ describe("conferência do texto da arte", () => {
     rmSync(story.path, { force: true });
     expect(geradas).toBe(1);
     expect(story.problemas.filter((p) => p.regra === REGRA_DO_TEXTO).map((p) => p.severidade)).toEqual(["aviso"]);
+  });
+});
+
+describe("story derivada", () => {
+  type Pedido = Parameters<IaDaArte["gerar"]>[0];
+  const chosen: ArtVariant = { variant: 2, ancora: null, path: "data/arts/escolhida.jpg", problemas: [] };
+
+  async function derivar(lidos: string[][]) {
+    const pedidos: Pedido[] = [];
+    const story = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: "#F0EFEA" } }).jpeg().toBuffer();
+    const r = await deriveStory(
+      { postId: 990_003, brief, headline: "Vidro certo", apoio: "Espessura por aplicação", chosen },
+      { gerar: async (p) => (pedidos.push(p), story), lerTexto: async () => lidos.shift() ?? [] },
+    );
+    rmSync(r.path, { force: true });
+    return { ...r, pedidos };
+  }
+
+  test("pede uma geração só, em 9:16, a partir da arte escolhida, com as áreas seguras e o mesmo texto do feed", async () => {
+    const { pedidos, problemas } = await derivar([["Vidro certo", "Espessura por aplicação"]]);
+
+    expect(pedidos).toHaveLength(1);
+    const [pedido] = pedidos;
+    expect(pedido).toMatchObject({ formato: "stories", base: chosen.path });
+    expect(pedido!.prompt).toContain("9:16");
+    expect(pedido!.prompt).toContain("top 250px and the bottom 340px");
+    expect(pedido!.prompt).toContain("between y=250 and y=1580");
+    expect(pedido!.prompt).toContain("Do NOT paste the feed image inside the story");
+    expect(pedido!.prompt).toContain('Headline: "Vidro certo"');
+    expect(pedido!.prompt).toContain('Support line: "Espessura por aplicação"');
+    expect(problemas.filter((p) => p.regra === REGRA_DO_TEXTO)).toEqual([]);
+  });
+
+  test("passa pela conferência do texto: a linha de apoio errada faz refazer uma vez", async () => {
+    const { pedidos, problemas } = await derivar([["Vidro certo", "Espesura por aplicação"], ["Vidro certo", "Espesura por aplicação"]]);
+
+    expect(pedidos).toHaveLength(2);
+    expect(pedidos[1]!.prompt).toContain('wrote "Espesura" instead of "Espessura"');
+    expect(problemas.map((p) => p.regra)).toContain(REGRA_DO_TEXTO);
   });
 });

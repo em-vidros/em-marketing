@@ -28,7 +28,7 @@ const PROPORCAO = 1888 / 2272;
 
 export type Canto = "inferior-direito" | "inferior-esquerdo" | "inferior-centro";
 
-/** Largura da logo e margem, por formato. No story, a base de 320 px fica livre para a interface do Instagram (§6.2). */
+/** Largura da logo e margem, por formato. No story, a base de 340 px fica livre para a interface do Instagram (§6.2). */
 const MEDIDAS = {
   feed: { largura: 190, margem: 64, base: 64 },
   stories: { largura: 210, margem: 80, base: 360 },

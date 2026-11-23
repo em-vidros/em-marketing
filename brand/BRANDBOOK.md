@@ -347,7 +347,7 @@ Poppins tem altura de x alta, o que cansa em blocos longos. Duas compensações 
 
 **Feed 1080 × 1350** — margem de **80 px** em todos os lados. Nada de conteúdo fora dessa caixa.
 
-**Story 1080 × 1920** — margem lateral de 80 px; **superior de 250 px** e **inferior de 320 px** (zonas cobertas pela interface do Instagram).
+**Story 1080 × 1920** — margem lateral de 80 px; **superior de 250 px** e **inferior de 340 px** (zonas cobertas pela interface do Instagram).
 
 ## 6.3 Grade
 
@@ -837,7 +837,7 @@ Still parado vira apresentação de slides — still recebe aproximação sutil.
 
 Condicional e econômico. Cartela dura 2,25 – 3,2 s e entra **alguns quadros depois do corte**, nunca junto — a imagem respira primeiro. Fade curto de opacidade na entrada e na saída; sem subida, sem deslize.
 
-Tipografia segue o capítulo 5. Nenhuma cartela fora da zona segura (250 px no topo, 320 px na base).
+Tipografia segue o capítulo 5. Nenhuma cartela fora da zona segura (250 px no topo, 340 px na base).
 
 Vídeo de processo para produto normalmente dispensa legenda inteira.
 
