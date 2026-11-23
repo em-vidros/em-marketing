@@ -246,8 +246,9 @@ export function instrucoesDe(
     bot.criado ? papelDoCriado(bot) : "",
     bot.regras.trim(),
     bot.marca ? bot.contexto : "",
-    contextoDeData(turno.agora),
     turno.delegada ? DELEGADA : "",
+    // Daqui para baixo muda a cada turno (a hora, a memória, o post): o que vem antes é o prefixo que a OpenAI reaproveita do cache.
+    contextoDeData(turno.agora),
     memoria && `--- MEMÓRIA ---\n${memoria}`,
     listaDaEquipe(turno.equipe ?? []),
     `--- ESTADO DO POST DESTA CONVERSA ---\n${turno.estadoDoPost}`,

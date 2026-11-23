@@ -5,7 +5,7 @@ Fábrica de conteúdo da EM Vidros: a equipe pede uma peça em linguagem natural
 ## Bots
 
 **Chefe**:
-O bot que recebe todo pedido, divide em partes, entrega cada parte a um especialista ou a um bot criado e junta o resultado. Também cria, edita e remove bots criados quando alguém pede. Não cria posts nem escreve legenda, mas cria convite e arte de aniversário direto, porque o texto entra por código.
+O bot que recebe todo pedido, divide em partes, entrega cada parte a um especialista ou a um bot criado e junta o resultado. Também cria, edita e remove bots criados quando alguém pede. Pedido de post ele mesmo produz, com uma ferramenta que monta o brief, a headline, as 3 artes e a legenda em código, sem delegar ao Post (ADR 0002). Convite e arte de aniversário ele cria direto, porque o texto entra por código.
 _Evite_: orquestrador, agente principal
 
 **Especialista**:

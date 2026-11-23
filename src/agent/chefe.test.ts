@@ -1,9 +1,11 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
 import { APICallError, simulateReadableStream, type LanguageModel } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
 import { executar } from ".";
 import { PARADO_PELO_USUARIO } from "./conversas";
+import { criarBot, NovoBot } from "./equipe";
 import { pegarTarefa, tarefasDaConversa } from "./tarefas";
+import { q } from "../v2/banco";
 
 type Chunk = Awaited<ReturnType<MockLanguageModelV4["doStream"]>>["stream"] extends ReadableStream<infer C> ? C : never;
 
@@ -102,38 +104,58 @@ describe("delegação do Chefe", () => {
     expect(tarefa).toMatchObject({ status: "falhou", erro: PARADO_PELO_USUARIO });
   });
 
-  test("duas delegar_post no mesmo passo rodam uma depois da outra", async () => {
-    const chamada = (id: string) => ({ type: "tool-call" as const, toolCallId: id, toolName: "delegar_post", input: JSON.stringify({ pedido: id }) });
+  /** Um bot criado tem as tools de post entre as livres: ele mexe no post da conversa como o Post mexia. */
+  const criados: string[] = [];
+  const botComPost = async () => {
+    const bot = await criarBot(
+      await NovoBot.parseAsync({ nome: "Peças", descricao: "Monta peças.", setor: "Marketing", forma: "circulo", cor: "#30A46C", prompt: "Você monta peças.", modelo: "openai:gpt-6-luna" }),
+      "ana@emvidros.com.br",
+    );
+    criados.push(bot.id);
+    return bot;
+  };
+  // O banco é de todos os arquivos de teste: um bot que sobra muda a lista da equipe dos outros.
+  afterAll(async () => {
+    for (const id of criados.splice(0)) {
+      await q`DELETE FROM versoes_bot WHERE bot_id = ${id}`;
+      await q`DELETE FROM bots WHERE id = ${id}`;
+    }
+  });
+
+  test("duas delegações a um bot que mexe no post, no mesmo passo, rodam uma depois da outra", async () => {
+    const { id } = await botComPost();
+    const chamada = (c: string) => ({ type: "tool-call" as const, toolCallId: c, toolName: "delegar_bot", input: JSON.stringify({ botId: id, pedido: c }) });
     const chefe = new MockLanguageModelV4({ doStream: [turno([chamada("p1"), chamada("p2")], "tool-calls"), texto("Pronto.")] });
     const ordem: string[] = [];
     let n = 0;
-    const post = new MockLanguageModelV4({
+    const bot = new MockLanguageModelV4({
       doStream: async () => {
         const eu = ++n;
         ordem.push(`inicio ${eu}`);
         await Bun.sleep(20);
         ordem.push(`fim ${eu}`);
-        return texto(`post ${eu}`);
+        return texto(`bot ${eu}`);
       },
     });
 
-    await conversar(chefe, post);
+    await conversar(chefe, bot);
 
     expect(ordem).toEqual(["inicio 1", "fim 1", "inicio 2", "fim 2"]);
   });
 
-  test("o Post delegado não recebe escolher_arte: a variação só é escolhida num turno com o usuário", async () => {
+  test("o bot delegado não recebe escolher_arte nem mostrar_artes: a variação só é escolhida num turno com o usuário", async () => {
+    const { id } = await botComPost();
     const chefe = new MockLanguageModelV4({
-      doStream: [turno([{ type: "tool-call", toolCallId: "c1", toolName: "delegar_post", input: JSON.stringify({ pedido: "Gere as artes." }) }], "tool-calls"), texto("Pronto.")],
+      doStream: [turno([{ type: "tool-call", toolCallId: "c1", toolName: "delegar_bot", input: JSON.stringify({ botId: id, pedido: "Gere as artes." }) }], "tool-calls"), texto("Pronto.")],
     });
-    const post = new MockLanguageModelV4({ doStream: texto("Artes geradas, esperando a escolha.") });
+    const bot = new MockLanguageModelV4({ doStream: texto("Artes geradas, esperando a escolha.") });
 
-    await conversar(chefe, post);
+    await conversar(chefe, bot);
     const ferramentas = (m: MockLanguageModelV4) => (m.doStreamCalls[0]?.tools ?? []).map((t) => t.name);
 
-    expect(ferramentas(post)).toContain("gerar_3_artes");
-    expect(ferramentas(post)).not.toContain("escolher_arte");
-    expect(ferramentas(post)).not.toContain("mostrar_artes");
+    expect(ferramentas(bot)).toContain("gerar_3_artes");
+    expect(ferramentas(bot)).not.toContain("escolher_arte");
+    expect(ferramentas(bot)).not.toContain("mostrar_artes");
     expect(ferramentas(chefe)).toEqual(expect.arrayContaining(["mostrar_artes", "escolher_arte"]));
   });
 

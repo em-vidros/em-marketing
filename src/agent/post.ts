@@ -47,7 +47,8 @@ export type EtapaPost =
   | (Base & { etapa: "brief" })
   | (Base & { etapa: "formato"; formato: Formato })
   | (Base & { etapa: "headline"; formato: Formato; headline: Headline })
-  | (Base & { etapa: "artes"; formato: Formato; headline: Headline; artes: Arte[] })
+  /** `legenda` vem pronta quando produzir_post a escreveu enquanto as artes renderizavam. Ela é do brief e vale para qualquer variação. */
+  | (Base & { etapa: "artes"; formato: Formato; headline: Headline; artes: Arte[]; legenda?: string })
   | (ComPeca & { etapa: "escolhida" })
   | (ComPeca & { etapa: "legenda"; legenda: string });
 
@@ -76,7 +77,7 @@ const ORIGEM = {
   escolha: ["artes", "escolhida", "legenda"],
   foto: ["formato", "headline", "artes", "escolhida"],
   story: ["escolhida", "legenda"],
-  legenda: ["escolhida", "legenda"],
+  legenda: ["artes", "escolhida", "legenda"],
   ajuste: ["escolhida", "legenda"],
   voltar: ["escolhida", "legenda"],
 } as const satisfies Record<TipoEvento, readonly Etapa[]>;
@@ -187,7 +188,8 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
       const p = r.post;
       const headline = headlineParaGerar(p);
       if (!headline) return { ok: false, motivo: "Sem headline para gerar." };
-      return ok({ etapa: "artes", postId: p.postId, brief: p.brief, formato: p.formato, headline, artes: evento.artes });
+      const legenda = p.etapa === "legenda" ? p.legenda : p.etapa === "artes" ? p.legenda : undefined;
+      return ok({ etapa: "artes", postId: p.postId, brief: p.brief, formato: p.formato, headline, artes: evento.artes, ...(legenda && { legenda }) });
     }
     case "escolha": {
       const r = exigir(post, "escolha");
@@ -203,7 +205,8 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
       const peca: Peca = { origem: "gerada", headline, arte };
       // A legenda é do brief e vale para qualquer variação; a versão 9:16 sai do conceito, então só fica se a arte for a mesma.
       const storyPath = mesma ? p.storyPath : null;
-      if (p.etapa === "legenda") return ok({ etapa: "legenda", postId, brief, formato, peca, opcoes, storyPath, legenda: p.legenda });
+      const legenda = p.etapa === "legenda" || p.etapa === "artes" ? p.legenda : undefined;
+      if (legenda) return ok({ etapa: "legenda", postId, brief, formato, peca, opcoes, storyPath, legenda });
       return ok({ etapa: "escolhida", postId, brief, formato, peca, opcoes, storyPath });
     }
     case "foto": {
@@ -220,6 +223,7 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
     case "legenda": {
       const r = exigir(post, "legenda");
       if (!r.ok) return r;
+      if (r.post.etapa === "artes") return ok({ ...r.post, legenda: evento.legenda });
       return ok({ ...r.post, etapa: "legenda", legenda: evento.legenda });
     }
     case "ajuste":
@@ -277,6 +281,25 @@ export function resumoDoPost(post: EtapaPost | null): string {
   ].join(" ");
 }
 
+/**
+ * Uma fila por conversa para o que mexe no post: delegações e produzir_post. O Chefe pode chamar
+ * duas no mesmo passo; a segunda espera a primeira terminar e começa do post que ela deixou.
+ */
+const filas = new Map<string, Promise<void>>();
+
+export async function entrarNaFila(conversaId: string): Promise<() => void> {
+  const anterior = filas.get(conversaId) ?? Promise.resolve();
+  let sair!: () => void;
+  const vez = new Promise<void>((r) => (sair = r));
+  const cauda = anterior.then(() => vez);
+  filas.set(conversaId, cauda);
+  await anterior;
+  return () => {
+    sair();
+    if (filas.get(conversaId) === cauda) filas.delete(conversaId);
+  };
+}
+
 // --- persistência: a linha de posts continua sendo a fonte que o scheduler e a cota leem ---
 
 interface PostRow {
@@ -304,7 +327,7 @@ function lerLinha(row: PostRow): EtapaPost {
     if (row.legenda) return { ...comPeca, etapa: "legenda", legenda: row.legenda };
     return { ...comPeca, etapa: "escolhida" };
   }
-  if (headline && artes.length) return { ...base, etapa: "artes", formato, headline, artes };
+  if (headline && artes.length) return { ...base, etapa: "artes", formato, headline, artes, ...(row.legenda && { legenda: row.legenda }) };
   if (headline) return { ...base, etapa: "headline", formato, headline };
   return { ...base, etapa: "formato", formato };
 }
@@ -376,6 +399,7 @@ export async function gravarPost(post: EtapaPost): Promise<void> {
     case "artes":
       headline = post.headline;
       artes = post.artes;
+      legenda = post.legenda ?? null;
       break;
     case "escolhida":
     case "legenda":

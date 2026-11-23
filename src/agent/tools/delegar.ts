@@ -5,6 +5,7 @@ import { configDoBot, situacaoDoBot, type ConfigBot } from "../config";
 import { PARADO_PELO_USUARIO } from "../conversas";
 import { explicarErro } from "../erros";
 import { avancarTarefa, criarTarefa, type Tarefa } from "../tarefas";
+import { entrarNaFila } from "../post";
 import { toolsDePost } from "./post";
 
 /** Roda um especialista, ou um bot criado, sobre o pedido do Chefe, na conversa do Chefe. */
@@ -33,26 +34,6 @@ const TOOLS_DE_POST: ReadonlySet<string> = new Set(Object.keys(toolsDePost("")))
  * Um bot criado tem as tools de post entre as livres, então também entra na fila.
  */
 const mexeNoPost = (bot: ConfigBot) => bot.tools.some((t) => TOOLS_DE_POST.has(t));
-
-/**
- * Uma fila por conversa para as delegações que mexem no post. O Chefe pode chamar
- * delegar_post duas vezes no mesmo passo; a segunda espera a primeira terminar e
- * começa do post que ela deixou.
- */
-const filas = new Map<string, Promise<void>>();
-
-async function entrarNaFila(conversaId: string): Promise<() => void> {
-  const anterior = filas.get(conversaId) ?? Promise.resolve();
-  let sair!: () => void;
-  const vez = new Promise<void>((r) => (sair = r));
-  const cauda = anterior.then(() => vez);
-  filas.set(conversaId, cauda);
-  await anterior;
-  return () => {
-    sair();
-    if (filas.get(conversaId) === cauda) filas.delete(conversaId);
-  };
-}
 
 /**
  * O estado de cada parte, sem o que muda a cada token (texto em streaming, entrada de

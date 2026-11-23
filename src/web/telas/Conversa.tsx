@@ -12,7 +12,7 @@ import { Composer } from "../componentes/Composer";
 import { Pensando } from "../componentes/ia/Pensando";
 import { ArteDaConversa, ehArteDaConversa } from "../componentes/ArteDaConversa";
 import { ArteCriada, ehArteCriada } from "../componentes/ArteCriada";
-import { EscolhaDeArtes, ehMostrarArtes } from "../componentes/EscolhaDeArtes";
+import { EscolhaDeArtes, ehParteComArtes } from "../componentes/EscolhaDeArtes";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
 import { apiMensagens, criarApagarMensagem, type Historico, textoDaMensagem, tirarTurno } from "../componentes/mensagem/apagar";
@@ -21,7 +21,7 @@ import { mostrarAviso } from "../componentes/menu/Avisos";
 import { pilhaDeDesfazer } from "../componentes/menu/desfazer";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
-import { Passos, trechosDe } from "../componentes/Passos";
+import { ArtesDoPasso, Passos, trechosDe } from "../componentes/Passos";
 import { BarraDaEscolha, SoltarAqui } from "../componentes/referencias/Barra";
 import { dadosDa, useEscolha } from "../componentes/referencias/escolha";
 import { Fila } from "../componentes/referencias/Fila";
@@ -34,7 +34,7 @@ import { estadoDe, type EstadoBot, type EstadosDaEquipe } from "../equipe";
 import { criarEscolhaDoBot, criarTransporte, type EscolhaDoBot } from "../escolhaDoBot";
 import { navegar } from "../rota";
 import { ehCampo, executar, useAtalho } from "../teclado/motor";
-import { type BotId, botDaDelegacao, ehAprovacao, ehDelegacao, mudaAEquipe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao, type Pessoa } from "../tipos";
+import { type BotId, botDaDelegacao, ehAprovacao, ehDelegacao, mudaAEquipe, type ConversaComMensagens, type Mensagem, type Parte, type ParteDelegacao, type Passo, type Pessoa } from "../tipos";
 
 export interface Vivo {
   mensagens: readonly Mensagem[];
@@ -559,7 +559,7 @@ function Chat({
                   ) : (
                     trechosDe(m.parts, ehPassoSolto).map((t) =>
                       t.tipo === "passos" ? (
-                        <Passos key={t.chave} passos={t.passos} className="text-sm" />
+                        <Passos key={t.chave} passos={t.passos} className="text-sm" extra={imagemDoPasso} />
                       ) : (
                         <ParteDoChefe
                           key={t.chave}
@@ -655,7 +655,7 @@ function ParteDoChefe({
     const digitando = noAr && parte.state === "streaming";
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
-  if (ehMostrarArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
+  if (ehParteComArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
   if (ehArteDaConversa(parte)) return <ArteDaConversa parte={parte} versao={versao} />;
   if (ehArteCriada(parte)) return <ArteCriada parte={parte} />;
   if (ehDelegacao(parte)) {
@@ -667,8 +667,11 @@ function ParteDoChefe({
   return null;
 }
 
+/** A foto real que o Chefe usa direto aparece no passo. A story tem o cartão de ArteDaConversa. */
+const imagemDoPasso = (p: Passo) => (p.ferramenta === "usar_foto" ? <ArtesDoPasso passo={p} /> : null);
+
 /** As tools do Chefe que não têm cartão próprio viram passos. */
-const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p) && !(ehArteDaConversa(p) && temArte(p)) && !ehArteCriada(p);
+const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehParteComArtes(p) && !(ehArteDaConversa(p) && temArte(p)) && !ehArteCriada(p);
 
 /** O ajuste e a story viram cartão só quando trazem a imagem; enquanto rodam ou se falham, ficam na lista de passos. */
 const temArte = (p: Parte) => "state" in p && p.state === "output-available" && typeof p.output === "object" && p.output !== null && "url" in p.output && !!p.output.url;

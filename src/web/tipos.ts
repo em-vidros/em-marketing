@@ -40,6 +40,7 @@ export interface ConversaComMensagens {
 
 /** O que cada tool está fazendo e o que fez, para o passo atual e a lista de passos de uma tarefa. */
 export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
+  produzir_post: { fazendo: "Produzindo o post", feito: "Post produzido" },
   montar_brief: { fazendo: "Montando o brief", feito: "Brief montado" },
   definir_formato: { fazendo: "Definindo o formato", feito: "Formato definido" },
   definir_headline: { fazendo: "Escrevendo a headline", feito: "Headline escrita" },
@@ -120,6 +121,8 @@ export function rotuloDa(tipo: string, fase: Fase): string {
 /** Um passo de tool numa mensagem de especialista, já com o rótulo em português. */
 export interface Passo {
   id: string;
+  /** O nome da tool, sem o prefixo `tool-`. */
+  ferramenta: string;
   rotulo: string;
   estado: Fase;
   /** Um valor curto da entrada, para o chip ao lado do rótulo. */
@@ -146,6 +149,7 @@ export function passosDe(m: UIMessage | null | undefined): Passo[] {
     return [
       {
         id: p.toolCallId,
+        ferramenta: p.type.slice("tool-".length),
         rotulo: rotuloDa(p.type, estado),
         estado,
         detalhe: "input" in p ? detalheDe(p.input) : null,
