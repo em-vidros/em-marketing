@@ -6,7 +6,7 @@ import { urlDaMidia } from "../db";
 import { escreverLegenda } from "../domain/caption";
 import type { Problema } from "../domain/brand/validate";
 import { PIXELS_MAXIMOS } from "./arquivos";
-import type { Banco } from "./banco";
+import { q, type Banco } from "./banco";
 import type { Formato } from "./camadas";
 import type { Ia } from "./ia";
 import { pecasProntas, type PecaPronta } from "./schema";
@@ -78,12 +78,19 @@ export async function pegarPecaPronta(banco: Banco, id: string): Promise<PecaPro
   return p ? comImagem(p) : null;
 }
 
-/** Remover só marca a data, para o desfazer trazer de volta. Remover de novo não muda a data. */
-export async function removerPecaPronta(banco: Banco, id: string): Promise<boolean> {
+const horaDaFila = new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" });
+
+/**
+ * Remover só marca a data, para o desfazer trazer de volta. Remover de novo não muda a data.
+ * Uma peça na fila não sai: ela sumiria da Biblioteca e ainda seria publicada na hora marcada.
+ */
+export async function removerPecaPronta(banco: Banco, id: string): Promise<"removida" | "nao-existe" | { agendadaPara: string }> {
   const [existe] = await banco.select({ removidaEm: pecasProntas.removidaEm }).from(pecasProntas).where(eq(pecasProntas.id, id));
-  if (!existe) return false;
+  if (!existe) return "nao-existe";
+  const [naFila] = await q<{ publish_at: string }>`SELECT publish_at FROM queue WHERE peca_id = ${id} AND status IN ('pending', 'publishing') ORDER BY publish_at LIMIT 1`;
+  if (naFila) return { agendadaPara: horaDaFila.format(new Date(`${naFila.publish_at.replace(" ", "T")}Z`)).replace(".", "") };
   if (!existe.removidaEm) await banco.update(pecasProntas).set({ removidaEm: new Date() }).where(eq(pecasProntas.id, id));
-  return true;
+  return "removida";
 }
 
 export async function restaurarPecaPronta(banco: Banco, id: string): Promise<PecaProntaComImagem | null> {

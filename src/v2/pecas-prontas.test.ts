@@ -80,6 +80,20 @@ describe("catálogo da peça pronta", () => {
     expect((await pedir(`/api/pecas-prontas/${id}/restaurar`, { method: "POST" })).status).toBe(200);
     expect((await (await pedir("/api/pecas-prontas")).json()).map((p: { id: string }) => p.id)).toEqual([id]);
   });
+
+  // Pega a peça que some da Biblioteca e ainda sai no Instagram na hora marcada.
+  test("a peça agendada não sai da Biblioteca até o agendamento ser cancelado", async () => {
+    const { agendarPecaPronta } = await import("../agent/fila");
+    const { id } = await (await subir("/api/pecas-prontas", await imagem(1080, 1350))).json();
+    expect(await agendarPecaPronta(banco(), id, "IMAGE", Date.now() + 86_400_000)).toMatchObject({ ok: true });
+
+    const recusada = await pedir(`/api/pecas-prontas/${id}`, { method: "DELETE" });
+    expect(recusada.status).toBe(409);
+    expect((await recusada.json()).erro).toContain("Cancele o agendamento");
+
+    await q`UPDATE queue SET status = 'cancelled' WHERE peca_id = ${id}`;
+    expect((await pedir(`/api/pecas-prontas/${id}`, { method: "DELETE" })).status).toBe(204);
+  });
 });
 
 describe("peça pronta e referência não se misturam", () => {
