@@ -2,7 +2,7 @@ import { afterAll, describe, expect, spyOn, test } from "bun:test";
 import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError, isToolUIPart, simulateReadableStream, type LanguageModel, type UIMessage } from "ai";
 import { MockLanguageModelV4 } from "ai/test";
-import { AINDA_RESPONDENDO, abrirConversaDoUsuario, apagarMensagem, conversaDoUsuario, mensagensDaConversa, pararTurno } from "../agent/conversas";
+import { AINDA_RESPONDENDO, abrirConversaDoUsuario, apagarMensagem, conversaDoUsuario, gravarMensagens, mensagensDaConversa, pararTurno } from "../agent/conversas";
 import type { BotId } from "../agent/bots";
 import { criarPost, gravarPost, transicionar, type EtapaPost, type Evento } from "../agent/post";
 import { primeira } from "../db";
@@ -340,6 +340,23 @@ describe("referências do pedido", () => {
       parts: [{ type: "text", text: "Oi" }, { type: "data-referencias", data: { marcadas: [], coladas: ["../../etc/passwd"] } }],
     });
     expect(res.status).toBe(400);
+  });
+
+  test("uma escolha fora do formato no histórico salvo, como a que o desfazer restaura, não derruba a conversa", async () => {
+    const rota = rotaDeChat({ resolverModelo: () => new MockLanguageModelV4({ doStream: async () => responde("Ok.") }) });
+    const id = `escolha-${crypto.randomUUID()}`;
+    await abrirConversaDoUsuario(usuario.id, id, "chefe", "Escolha quebrada");
+    await gravarMensagens(id, [{ id: "u1", role: "user", parts: [{ type: "text", text: "Oi" }, { type: "data-referencias", data: { marcadas: "a" } }] }]);
+
+    const res = await pedir(rota, id, doUsuario("u2", "E agora?"));
+    await res.text();
+
+    expect(res.status).toBe(200);
+    expect(await textos(id)).toEqual([
+      ["user", "Oi"],
+      ["user", "E agora?"],
+      ["assistant", "Ok."],
+    ]);
   });
 });
 

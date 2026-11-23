@@ -20,7 +20,12 @@ export type ParteDaEscolha = { type: "data-referencias"; data: DadosDaEscolha };
 
 const ehParteDaEscolha = (p: UIMessage["parts"][number]): p is ParteDaEscolha => p.type === "data-referencias";
 
-export const escolhaDa = (m: UIMessage): DadosDaEscolha | null => (m.parts.find(ehParteDaEscolha)?.data as DadosDaEscolha | undefined) ?? null;
+/** A escolha gravada numa mensagem. Uma parte fora do formato, como uma restaurada pelo desfazer, conta como nenhuma escolha. */
+export function escolhaDa(m: UIMessage): DadosDaEscolha | null {
+  const parte = m.parts.find(ehParteDaEscolha);
+  const lida = parte && DadosDaEscolha.safeParse(parte.data);
+  return lida?.success ? lida.data : null;
+}
 
 /**
  * A escolha como chega do cliente. Formato errado vira erro de pedido, não referência perdida no meio da geração.
@@ -64,8 +69,9 @@ export const marcarUsada = (mensagens: UIMessage[], mensagemId: string): UIMessa
 
 /** O modelo não vê as imagens; vê que a pessoa escolheu, para não pedir link nem dizer que não recebeu. */
 export function notaDaEscolha(p: { type: `data-${string}`; data: unknown }) {
-  if (p.type !== "data-referencias") return undefined;
-  const { marcadas, coladas, usada } = p.data as DadosDaEscolha;
+  const lida = p.type === "data-referencias" ? DadosDaEscolha.safeParse(p.data) : null;
+  if (!lida?.success) return undefined;
+  const { marcadas, coladas, usada } = lida.data;
   const partes = [marcadas.length && `${marcadas.length} referência(s) marcada(s) da Biblioteca`, coladas.length && `${coladas.length} imagem(ns) colada(s)`].filter(Boolean);
   if (!partes.length) return undefined;
   const destino = usada ? "Uma geração de artes já usou essas imagens." : "A próxima geração de artes usa essas imagens sozinha; não peça links.";
