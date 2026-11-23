@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import sharp from "sharp";
 import type { generateArt } from "./generate";
-import { buildPrompt, generate3Arts, type ArtVariant, type Brief, type Visual } from "./pipeline";
+import { buildPrompt, deriveStory, generate3Arts, type ArtVariant, type Brief, type Visual } from "./pipeline";
 
 const brief: Brief = { pilar: "AUTORIDADE", tema: "espessura certa por aplicação", angulo: "box e guarda-corpo", precisaFotoReal: false };
 const daCasa: Visual = { tipo: "casa" };
@@ -54,9 +54,9 @@ describe("buildPrompt", () => {
 describe("generate3Arts", () => {
   type Pedido = Parameters<typeof generateArt>[0];
 
-  async function gerarComFalso(opts: Pick<Parameters<typeof generate3Arts>[0], "referencias" | "anexos">) {
+  async function gerarComFalso(opts: Pick<Parameters<typeof generate3Arts>[0], "referencias" | "anexos">, cor = "#F0EFEA") {
     const pedidos: Pedido[] = [];
-    const cena = await sharp({ create: { width: 1080, height: 1350, channels: 3, background: "#F0EFEA" } }).jpeg().toBuffer();
+    const cena = await sharp({ create: { width: 1080, height: 1350, channels: 3, background: cor } }).jpeg().toBuffer();
     const gerar = async (pedido: Pedido) => (pedidos.push(pedido), cena);
 
     const artes: ArtVariant[] = await generate3Arts({ postId: 990_001, brief, formato: "feed", headline: "Vidro certo", ...opts }, gerar);
@@ -86,5 +86,25 @@ describe("generate3Arts", () => {
       [[], true],
       [[], true],
     ]);
+  });
+
+  test("o gate de paleta só mede a arte no visual da casa: a variação de uma referência e a story derivada dela pulam a checagem", async () => {
+    const vermelho = "#D02020";
+    const temPaleta = (a: { problemas: { regra: string }[] }) => a.problemas.some((p) => p.regra === "§4.1 paleta");
+    const referencia = { id: "foto", leitura: "foto de obra", imagem: new Uint8Array([1]) };
+
+    const daReferencia = await gerarComFalso({ referencias: [referencia], anexos: [] }, vermelho);
+    const daCasa = await gerarComFalso({ referencias: [], anexos: [] }, vermelho);
+    expect(daReferencia.artes.map(temPaleta)).toEqual([false, false, false]);
+    expect(daCasa.artes.map(temPaleta)).toEqual([true, true, true]);
+
+    const story = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: vermelho } }).jpeg().toBuffer();
+    const derivar = async (chosen: ArtVariant) => {
+      const derivada = await deriveStory({ postId: 990_002, brief, headline: "Vidro certo", chosen }, async () => story);
+      rmSync(derivada.path, { force: true });
+      return derivada;
+    };
+    expect(temPaleta(await derivar(daReferencia.artes[0]!))).toBe(false);
+    expect(temPaleta(await derivar(daCasa.artes[0]!))).toBe(true);
   });
 });

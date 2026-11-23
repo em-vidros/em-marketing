@@ -160,21 +160,25 @@ export async function generate3Arts(
 
       const jpeg = await aplicarLogo(gerada, formato);
       const path = await gravarArquivo("arts", `post${postId}-${formato}-v${variant}-${semente}.jpg`, jpeg, "image/jpeg");
-      const problemas = await validarArte(jpeg, formato, { paleta: !direcao });
+      // A paleta só se mede no visual da casa: a referência e a direção do usuário trazem as cores delas, muitas vezes de foto.
+      const problemas = await validarArte(jpeg, formato, { paleta: !ancora && !direcao });
 
       return { variant, referencia: ancora?.id ?? null, path, problemas };
     }),
   );
 }
 
-/** Fluxo "Os dois": deriva a versão Stories do conceito escolhido, com a arte escolhida como base. */
-export async function deriveStory(opts: {
-  postId: number;
-  brief: Brief;
-  headline: string;
-  chosen: ArtVariant;
-}): Promise<{ path: string; problemas: Problema[] }> {
-  const gerada = await generateArt({
+/** Fluxo "Os dois": deriva a versão Stories do conceito escolhido, com a arte escolhida como base. `gerar` só muda nos testes. */
+export async function deriveStory(
+  opts: {
+    postId: number;
+    brief: Brief;
+    headline: string;
+    chosen: ArtVariant;
+  },
+  gerar = generateArt,
+): Promise<{ path: string; problemas: Problema[] }> {
+  const gerada = await gerar({
     prompt: buildPrompt({ formato: "stories", brief: opts.brief, headline: opts.headline, visual: { tipo: "adaptacao" } }),
     formato: "stories",
     base: opts.chosen.path,
@@ -182,5 +186,5 @@ export async function deriveStory(opts: {
   const jpeg = await aplicarLogo(gerada, "stories");
   const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived-${Math.floor(Date.now() / 1000)}.jpg`, jpeg, "image/jpeg");
 
-  return { path, problemas: await validarArte(jpeg, "stories") };
+  return { path, problemas: await validarArte(jpeg, "stories", { paleta: opts.chosen.referencia === null }) };
 }
