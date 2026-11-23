@@ -28,6 +28,7 @@ export function iaDeTeste(plano: Partial<Plano> = {}): Ia & { planos: string[]; 
     cenas,
     lerReferencia: nao,
     lerElementos: nao,
+    lerPecaPronta: nao,
     apagarAreas: nao,
     planejarArte: async (pedido) => {
       planos.push(pedido);
