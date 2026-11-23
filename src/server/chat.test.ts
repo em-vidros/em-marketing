@@ -248,14 +248,28 @@ describe("referências do pedido", () => {
   const chamar = (toolName: string, input: object = {}) =>
     turnoDoModelo([{ type: "tool-call", toolCallId: `${toolName}-${crypto.randomUUID()}`, toolName, input: JSON.stringify(input) }], "tool-calls");
 
-  /** O modelo de imagem responde pela rede falsa: a geração roda inteira sem chamar a OpenAI. */
+  /**
+   * O modelo de imagem responde pela rede falsa: a geração roda inteira sem chamar a OpenAI. O cliente da OpenAI recusa
+   * chave vazia antes de chamar o fetch, então a chave é falsa; qualquer outra chamada à OpenAI falha o teste.
+   */
   async function semOpenAI() {
     const cena = (await sharp({ create: { width: 1088, height: 1360, channels: 3, background: "#2F646A" } }).png().toBuffer()).toString("base64");
     const original = globalThis.fetch;
-    return spyOn(globalThis, "fetch").mockImplementation((async (entrada: RequestInfo | URL, init?: RequestInit) =>
-      String(entrada instanceof Request ? entrada.url : entrada).includes("/images/")
-        ? Response.json({ data: [{ b64_json: cena }] })
-        : original(entrada, init)) as typeof fetch);
+    const chave = process.env.OPENAI_API_KEY;
+    process.env.OPENAI_API_KEY = "sk-teste-nunca-chega-na-openai";
+    const rede = spyOn(globalThis, "fetch").mockImplementation((async (entrada: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(entrada instanceof Request ? entrada.url : entrada);
+      if (url.hostname !== "api.openai.com") return original(entrada, init);
+      if (url.pathname.startsWith("/v1/images/")) return Response.json({ data: [{ b64_json: cena }] });
+      throw new Error(`O teste tentou chamar a OpenAI de verdade: ${url.pathname}`);
+    }) as typeof fetch);
+    return {
+      restaurar() {
+        rede.mockRestore();
+        if (chave === undefined) delete process.env.OPENAI_API_KEY;
+        else process.env.OPENAI_API_KEY = chave;
+      },
+    };
   }
 
   test("a escolha do pedido chega à geração delegada pelo Chefe na ordem da pessoa, sobrevive a uma pergunta e não vale para a geração seguinte", async () => {
@@ -313,7 +327,7 @@ describe("referências do pedido", () => {
       const mostradas = (await mensagensDaConversa(id)).flatMap((m) => m.parts).find((p) => p.type === "tool-mostrar_artes");
       expect(mostradas).toMatchObject({ output: { artes: ancoras(primeira)!.map((ancora) => ({ ancora })) } });
     } finally {
-      rede.mockRestore();
+      rede.restaurar();
       for (const path of geradas) rmSync(path, { force: true });
     }
   });
