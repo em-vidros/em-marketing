@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { auth } from "../auth";
-import { ehBotFixo, porSetor, type Equipe } from "../bots";
+import { ehBotFixo, type Equipe } from "../bots";
 import { estadoDe, type AgoraDaConversa, type EstadosDaEquipe } from "../equipe";
 import { aoClicarLink } from "../rota";
 import { ariaDe, atalhoDoBot, ehMac } from "../teclado/atalhos";
 import type { Conversa } from "../tipos";
 import { Avatar } from "./Avatar";
 import { ConversasDaEquipe } from "./ConversasDaEquipe";
+import { MenuDoPerfil } from "./MenuDoPerfil";
 import { Expansivel } from "./Expansivel";
-import { SaldoCompacto } from "./Saldo";
 import { type AcoesConversa, BotaoAcoes, MenuDeContexto } from "./menu/MenuConversa";
 import { Dica, Teclas } from "./menu/Teclas";
 
@@ -119,9 +118,6 @@ function Grupo({ titulo, conversas, alvoTab, ...p }: PropsLista & { titulo: stri
   );
 }
 
-const linkDe = (atual: boolean) =>
-  `linha flex min-h-10 items-center gap-2.5 rounded-item px-3 ${atual ? "bg-ativo text-tinta" : "text-tinta-2"}`;
-
 export function Barra({
   estados,
   ativas,
@@ -209,48 +205,47 @@ export function Barra({
         </div>
       </div>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-2.5">
-        <section aria-label="Equipe" className="flex flex-col gap-4">
-          {porSetor(bots.lista).map(([setor, doSetor]) => (
-            <div key={setor} className="flex flex-col gap-px">
-              <h2 className="px-3 pb-1.5 text-xs font-normal text-tinta-3">{setor}</h2>
-              <ul className="flex flex-col gap-px">
-                {doSetor.map(({ id, nome }) => {
-                  const caminho = `/bots/${id}`;
-                  const atual = telaAtual === caminho || telaAtual.startsWith(`${caminho}/`);
-                  const estado = estadoDe(estados, id);
-                  return (
-                    <li key={id}>
-                      <Dica rotulo={`Abrir ${nome}`} atalho={ehBotFixo(id) ? atalhoDoBot(id) : undefined}>
-                        <a href={caminho} aria-current={atual ? "page" : undefined} onClick={(e) => (aoClicarLink(e), aoNavegar())} className={`${linkDe(atual)} py-1.5`}>
-                          <Avatar bot={id} tamanho={26} estado={estado.tipo} />
-                          <span className="flex min-w-0 flex-col">
-                            <span className="truncate leading-tight font-medium text-tinta">{nome}</span>
-                            <span className="truncate text-xs text-tinta-3">{estado.texto}</span>
-                          </span>
-                        </a>
-                      </Dica>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
-          <a
-            href="/bots/novo"
-            aria-current={telaAtual === "/bots/novo" ? "page" : undefined}
-            onClick={(e) => (aoClicarLink(e), aoNavegar())}
-            className={`${linkDe(telaAtual === "/bots/novo")} -mt-3 text-tinta-3 hover:text-tinta`}
-          >
-            <span aria-hidden="true" className="grid size-[26px] flex-none place-items-center rounded-full border border-dashed border-linha-forte">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
-                <path d="M6 2v8M2 6h8" />
-              </svg>
-            </span>
-            Novo bot
-          </a>
-        </section>
+      <section aria-label="Equipe" className="max-h-[40%] flex-none overflow-y-auto overscroll-contain px-2.5">
+        <ul className="grid grid-cols-3 gap-1">
+          {bots.lista.map(({ id, nome }) => {
+            const caminho = `/bots/${id}`;
+            const atual = telaAtual === caminho || telaAtual.startsWith(`${caminho}/`);
+            const estado = estadoDe(estados, id);
+            return (
+              <li key={id} className="min-w-0">
+                <Dica rotulo={estado.texto ? `${nome}: ${estado.texto}` : `Abrir ${nome}`} atalho={ehBotFixo(id) ? atalhoDoBot(id) : undefined}>
+                  <a
+                    href={caminho}
+                    aria-current={atual ? "page" : undefined}
+                    onClick={(e) => (aoClicarLink(e), aoNavegar())}
+                    className={`pressiona flex flex-col items-center gap-1.5 rounded-item px-1 pt-2.5 pb-2 text-center hover:bg-hover ${atual ? "bg-ativo" : ""}`}
+                  >
+                    <Avatar bot={id} tamanho={36} estado={estado.tipo} anel={atual ? "var(--color-ativo)" : "var(--color-painel)"} />
+                    <span className="w-full truncate text-xs leading-tight font-medium text-tinta">{nome}</span>
+                  </a>
+                </Dica>
+              </li>
+            );
+          })}
+          <li className="min-w-0">
+            <a
+              href="/bots/novo"
+              aria-current={telaAtual === "/bots/novo" ? "page" : undefined}
+              onClick={(e) => (aoClicarLink(e), aoNavegar())}
+              className={`pressiona flex flex-col items-center gap-1.5 rounded-item px-1 pt-2.5 pb-2 text-center text-tinta-3 hover:bg-hover hover:text-tinta ${telaAtual === "/bots/novo" ? "bg-ativo" : ""}`}
+            >
+              <span aria-hidden="true" className="grid size-9 place-items-center rounded-full border border-dashed border-linha-forte">
+                <svg width="14" height="14" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+                  <path d="M6 2v8M2 6h8" />
+                </svg>
+              </span>
+              <span className="w-full truncate text-xs leading-tight">Novo bot</span>
+            </a>
+          </li>
+        </ul>
+      </section>
 
+      <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto overscroll-contain px-2.5">
         <div data-lista-conversas className="flex flex-col gap-5">
           <Grupo titulo="Hoje" conversas={hoje} alvoTab={alvoTab} {...lista} />
           <Grupo titulo="Antes" conversas={antes} alvoTab={alvoTab} {...lista} />
@@ -290,54 +285,8 @@ export function Barra({
         <ConversasDaEquipe ativa={lista.ativa} aoNavegar={aoNavegar} />
       </div>
 
-      <div className="flex flex-col gap-px px-2.5">
-        <Dica rotulo="Atividade" atalho="ir-atividade">
-          <a
-            href="/atividade"
-            aria-current={telaAtual === "/atividade" ? "page" : undefined}
-            onClick={(e) => (aoClicarLink(e), aoNavegar())}
-            className={`${linkDe(telaAtual === "/atividade")} justify-between`}>
-            Atividade
-            {emAtividade > 0 && <span className="tabular font-mono text-xs text-tinta">{emAtividade}</span>}
-          </a>
-        </Dica>
-        <Dica rotulo="Biblioteca" atalho="ir-biblioteca">
-          <a
-            href="/biblioteca"
-            aria-current={telaAtual === "/biblioteca" ? "page" : undefined}
-            onClick={(e) => (aoClicarLink(e), aoNavegar())}
-            className={linkDe(telaAtual === "/biblioteca")}>
-            Biblioteca
-          </a>
-        </Dica>
-        <Dica rotulo="Calendário" atalho="ir-calendario">
-          <a
-            href="/calendario"
-            aria-current={telaAtual === "/calendario" ? "page" : undefined}
-            onClick={(e) => (aoClicarLink(e), aoNavegar())}
-            className={linkDe(telaAtual === "/calendario")}>
-            Calendário
-          </a>
-        </Dica>
-        <button type="button" onClick={abrirAtalhos} aria-keyshortcuts={ariaDe("atalhos", ehMac)} className={`${linkDe(false)} cursor-pointer justify-between`}>
-          Atalhos de teclado
-          <Teclas atalho="atalhos" />
-        </button>
-        <a
-          href="/uso"
-          aria-label="Crédito OpenAI e uso da API"
-          aria-current={telaAtual === "/uso" ? "page" : undefined}
-          onClick={(e) => (aoClicarLink(e), aoNavegar())}
-          className={`mt-2 flex rounded-item px-3 py-2.5 hover:bg-hover ${telaAtual === "/uso" ? "bg-ativo" : ""}`}
-        >
-          <SaldoCompacto />
-        </a>
-        <div className="flex items-center gap-2 border-t border-linha px-3 pt-3 text-xs text-tinta-3">
-          <span className="min-w-0 flex-1 truncate">{email}</span>
-          <button type="button" onClick={() => auth.signOut()} className="h-8 cursor-pointer rounded-full px-2.5 text-tinta-2 hover:bg-hover hover:text-tinta">
-            Sair
-          </button>
-        </div>
+      <div className="px-2.5">
+        <MenuDoPerfil email={email} telaAtual={telaAtual} emAtividade={emAtividade} abrirAtalhos={abrirAtalhos} aoNavegar={aoNavegar} />
       </div>
     </nav>
   );

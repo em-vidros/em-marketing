@@ -1,8 +1,9 @@
 import { useReducer, useRef } from "react";
-import { MAXIMO_COLADAS, MAXIMO_MARCADAS } from "../../../agent/limitesDoPedido";
+import { MAXIMO_COLADAS } from "../../../agent/limitesDoPedido";
 import type { DadosDaEscolha } from "../../../agent/pedido";
 import { apiImagensDoPedido, type ReferenciaDaApi } from "../../api";
 import { mostrarAviso } from "../menu/Avisos";
+import { alternada, alternarMarcada, limparMarcadas, useMarcadas } from "./marcadas";
 
 /** Os mesmos limites de POST /api/arquivos, checados antes para o aviso sair na hora. */
 export const ACEITOS = ["image/png", "image/jpeg", "image/webp"];
@@ -38,11 +39,8 @@ function trocar(coladas: readonly Colada[], id: number, nova: (c: Colada) => Col
 
 export function reduzir(e: Escolha, a: Acao): Escolha {
   switch (a.tipo) {
-    case "alternar": {
-      const marcada = e.marcadas.some((r) => r.id === a.referencia.id);
-      if (marcada) return { ...e, marcadas: e.marcadas.filter((r) => r.id !== a.referencia.id) };
-      return e.marcadas.length < MAXIMO_MARCADAS ? { ...e, marcadas: [...e.marcadas, a.referencia] } : e;
-    }
+    case "alternar":
+      return { ...e, marcadas: alternada(e.marcadas, a.referencia) };
     case "colar":
       return { ...e, coladas: [...e.coladas, ...a.coladas] };
     case "subindo":
@@ -90,7 +88,9 @@ export function dadosDa(e: Escolha): DadosDaEscolha | null {
 
 /** A escolha do composer de uma conversa: marcar, colar, subir, tentar de novo, tirar e limpar depois de enviar. */
 export function useEscolha() {
-  const [escolha, despachar] = useReducer(reduzir, VAZIA);
+  const [interna, despachar] = useReducer(reduzir, VAZIA);
+  const marcadas = useMarcadas();
+  const escolha: Escolha = { marcadas, coladas: interna.coladas };
   const proxima = useRef(0);
   const atual = useRef(escolha);
   atual.current = escolha;
@@ -121,12 +121,13 @@ export function useEscolha() {
   function limpar() {
     for (const c of atual.current.coladas) URL.revokeObjectURL(c.previa);
     despachar({ tipo: "limpar" });
+    limparMarcadas();
   }
 
   return {
     escolha,
     espera: esperaDe(escolha),
-    alternar: (referencia: ReferenciaDaApi) => despachar({ tipo: "alternar", referencia }),
+    alternar: (referencia: ReferenciaDaApi) => alternarMarcada(referencia),
     colar,
     tirar,
     tentar: () => atual.current.coladas.forEach((c) => c.estado === "falhou" && subir(c.id, c.arquivo)),

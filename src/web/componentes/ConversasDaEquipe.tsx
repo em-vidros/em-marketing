@@ -8,9 +8,9 @@ import { Expansivel } from "./Expansivel";
 const CHAVE = "barra:equipe-aberta";
 const lerAberta = () => {
   try {
-    return localStorage.getItem(CHAVE) === "1";
+    return localStorage.getItem(CHAVE) !== "0";
   } catch {
-    return false;
+    return true;
   }
 };
 

@@ -3,6 +3,7 @@ import { apiReferencias, useApi, type ReferenciaDaApi } from "../api";
 import { Falha } from "./Falha";
 import { mostrarAviso } from "./menu/Avisos";
 import { pilhaDeDesfazer } from "./menu/desfazer";
+import { BotaoReferencia } from "./referencias/BotaoReferencia";
 import { imagensDe } from "./referencias/soltas";
 
 /** Os mesmos limites do POST /api/referencias, checados antes para o erro sair na hora. */
@@ -131,6 +132,7 @@ export function Referencias({ ref, soltando }: { ref?: Ref<EnvioDeReferencias>; 
                   <a href={apiReferencias.imagem(r)} target="_blank" rel="noreferrer" className="block aspect-square overflow-hidden rounded-item bg-painel outline-1 -outline-offset-1 outline-linha">
                     <img src={apiReferencias.imagem(r)} alt={r.leitura} loading="lazy" className="size-full object-cover" />
                   </a>
+                  <BotaoReferencia referencia={r} />
                   <p title={r.leitura} className="line-clamp-2 text-xs/snug text-pretty text-tinta-3">
                     {r.leitura}
                   </p>
