@@ -6,6 +6,7 @@ import { useApi } from "../api";
 import { aoClicarLink } from "../rota";
 import { useAbrirNoEditor } from "./EscolhaDeArtes";
 import { Falha } from "./Falha";
+import { Segmentado } from "./Segmentado";
 import { dia } from "./peca";
 
 const POR_VEZ = 24;
@@ -31,19 +32,47 @@ function detalheDa(i: ImagemDaBiblioteca): string {
 
 const tituloDa = (i: ImagemDaBiblioteca) => i.titulo ?? "Imagem sem título";
 
+type Pasta = "todas" | "selecionadas" | "descartadas";
+
+/** As pastas filtram pela escolha do post. As artes do estúdio e as opções ainda sem escolha só aparecem em Todas. */
+const PASTAS = {
+  todas: { rotulo: "Todas", cabe: () => true, vazia: "" },
+  selecionadas: {
+    rotulo: "Selecionadas",
+    cabe: (i: ImagemDaBiblioteca) => i.origem === "post" && i.pasta === "selecionada",
+    vazia: "Nenhuma arte escolhida ainda. Quando você escolhe uma variação na conversa, ela vem para cá.",
+  },
+  descartadas: {
+    rotulo: "Descartadas",
+    cabe: (i: ImagemDaBiblioteca) => i.origem === "post" && i.pasta === "descartada",
+    vazia: "Nenhuma imagem descartada. As variações que você não escolher vêm para cá.",
+  },
+} satisfies Record<Pasta, { rotulo: string; cabe: (i: ImagemDaBiblioteca) => boolean; vazia: string }>;
+
+const ORDEM_DAS_PASTAS = ["todas", "selecionadas", "descartadas"] as const;
+
 /** Toda imagem gerada, da equipe inteira, a mais nova primeiro, com os atalhos para editar e baixar. */
 export function ImagensGeradas({ busca }: { busca: string }) {
   const [carga, tentar] = useApi<ImagemDaBiblioteca[]>("/api/biblioteca", 60000);
   const [abrindo, abrirNoEditor] = useAbrirNoEditor();
   const [limite, setLimite] = useState(POR_VEZ);
+  const [pasta, setPasta] = useState<Pasta>("todas");
   const termo = normalizar(busca.trim());
-  const imagens = carga.estado === "pronto" ? carga.dados.filter((i) => !termo || normalizar(tituloDa(i)).includes(termo)) : [];
+  const buscadas = carga.estado === "pronto" ? carga.dados.filter((i) => !termo || normalizar(tituloDa(i)).includes(termo)) : [];
+  const imagens = buscadas.filter(PASTAS[pasta].cabe);
+  const abas = ORDEM_DAS_PASTAS.map((valor) => ({ valor, rotulo: PASTAS[valor].rotulo, contagem: buscadas.filter(PASTAS[valor].cabe).length }));
 
   return (
     <section aria-labelledby="imagens" className="flex flex-col gap-4">
-      <h2 id="imagens" className="border-t border-linha pt-6 text-[15px] font-semibold">
-        Imagens
-      </h2>
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-linha pt-6">
+        <h2 id="imagens" className="text-[15px] font-semibold">
+          Imagens
+        </h2>
+        {carga.estado === "pronto" && carga.dados.length > 0 && (
+          <Segmentado tipo="abas" rotulo="Pasta" opcoes={abas} valor={pasta} aoMudar={setPasta} idDoPainel="imagens-da-pasta" />
+        )}
+      </div>
+      <div id="imagens-da-pasta" role="tabpanel" aria-label={PASTAS[pasta].rotulo} className="flex flex-col gap-4">
       {carga.estado === "carregando" ? (
         <p className="text-tinta-3">Carregando…</p>
       ) : carga.estado === "erro" ? (
@@ -51,7 +80,7 @@ export function ImagensGeradas({ busca }: { busca: string }) {
       ) : carga.dados.length === 0 ? (
         <p className="py-4 text-tinta-3">Nenhuma imagem ainda. Toda arte que os bots gerarem fica guardada aqui, inclusive as variações que não foram escolhidas.</p>
       ) : imagens.length === 0 ? (
-        <p className="py-4 text-tinta-3">Nenhuma imagem com essa busca.</p>
+        <p className="py-4 text-tinta-3">{termo ? "Nenhuma imagem com essa busca." : PASTAS[pasta].vazia}</p>
       ) : (
         <>
           <ul className="grid grid-cols-[repeat(auto-fill,minmax(min(160px,40vw),1fr))] items-end gap-x-4 gap-y-6 sm:grid-cols-[repeat(auto-fill,minmax(200px,1fr))]">
@@ -118,6 +147,7 @@ export function ImagensGeradas({ busca }: { busca: string }) {
           )}
         </>
       )}
+      </div>
       <p role="status" className={abrindo.tipo === "abrindo" ? "text-sm text-tinta-3" : "sr-only"}>
         {abrindo.tipo === "abrindo" ? "Abrindo o editor…" : ""}
       </p>
