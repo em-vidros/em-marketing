@@ -84,7 +84,8 @@ async function referenciasDasUltimasGeracoes(): Promise<string[][]> {
   });
 }
 
-const comoJpeg = (bytes: Uint8Array) => sharp(bytes).rotate().resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
+/** O JPEG não tem transparência: sem o fundo off-white da marca, a área transparente de um PNG sairia preta. */
+const comoJpeg = (bytes: Uint8Array) => sharp(bytes).rotate().resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).flatten({ background: "#F0EFEA" }).jpeg({ quality: 85 }).toBuffer();
 
 /**
  * Põe as referências na ordem de uso de uma geração nova: as marcadas pela pessoa; sem marcadas, a mais nova que a

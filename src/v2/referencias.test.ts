@@ -47,11 +47,11 @@ describe("escolha de referências", () => {
   });
 });
 
-test("a referência subida chega à geração em JPEG de até 1024 px, a mais nova primeiro e a usada na última geração por último", async () => {
+test("a referência subida chega à geração em JPEG de até 1024 px, com o transparente em off-white, a mais nova primeiro e a usada na última geração por último", async () => {
   const estudio = estudioDeTeste();
   await estudio.banco.delete(referencias);
 
-  const png = await sharp({ create: { width: 2000, height: 1000, channels: 3, background: "#2F646A" } }).png().toBuffer();
+  const png = await sharp({ create: { width: 2000, height: 1000, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).png().toBuffer();
   const subir = async (leitura: string, dia: number) => {
     const arquivo = await estudio.arquivos.salvar(png, "png");
     const [criada] = await estudio.banco.insert(referencias).values({ arquivo, leitura, criadaPor: "u-ana", criadaEm: new Date(Date.UTC(2026, 10, dia)) }).returning();
@@ -69,6 +69,8 @@ test("a referência subida chega à geração em JPEG de até 1024 px, a mais no
       [usada, "usada"],
     ]);
     expect(await sharp(carregadas[0]!.imagem).metadata()).toMatchObject({ format: "jpeg", width: 1024, height: 512 });
+    const { data } = await sharp(carregadas[0]!.imagem).raw().toBuffer({ resolveWithObject: true });
+    expect([...data.subarray(0, 3)]).toEqual([0xf0, 0xef, 0xea]);
   } finally {
     await q`DELETE FROM posts WHERE id = ${post!.id}`;
   }
