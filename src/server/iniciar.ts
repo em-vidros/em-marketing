@@ -3,10 +3,11 @@ import { arquivosNaNuvem, arquivosNoDisco } from "../v2/arquivos";
 import { abrirBanco } from "../v2/banco";
 import { chaveDe } from "../domain/chaves";
 import { iaDaOpenAI } from "../v2/ia";
+import { semearReferenciasDaCasa } from "../v2/referencias-da-casa";
 
 /**
  * O boot que o servidor local e a função da Vercel compartilham: abre o banco, cria as tabelas
- * que faltam e monta o estúdio. Nada pode usar o banco antes disto terminar.
+ * que faltam, monta o estúdio e põe os posts da casa na Biblioteca. Nada pode usar o banco antes disto terminar.
  */
 export async function iniciar() {
   const segredo = process.env.BETTER_AUTH_SECRET;
@@ -21,5 +22,7 @@ export async function iniciar() {
     ia: iaDaOpenAI(() => chaveDe("openai")),
     arquivos: process.env.BLOB_READ_WRITE_TOKEN ? arquivosNaNuvem() : arquivosNoDisco("data/arquivos"),
   };
+  await semearReferenciasDaCasa(estudio);
+
   return { estudio, segredoAprovacao };
 }
