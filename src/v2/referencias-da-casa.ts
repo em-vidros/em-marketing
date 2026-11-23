@@ -41,23 +41,24 @@ const DA_CASA: Record<string, { leitura: string; pilares: Pilar[] }> = {
 /**
  * Põe os posts reais da @emvidros na Biblioteca como referências comuns, uma vez só.
  * Depois da primeira vez, nada volta: uma referência da casa que a equipe removeu continua removida.
+ * Os arquivos sobem fora da transação, para um upload lento ou falho não segurar a trava nem desfazer nada.
  */
 export async function semearReferenciasDaCasa({ banco, arquivos }: Pick<Estudio, "banco" | "arquivos">): Promise<void> {
   if (await jaSemeada(banco)) return;
 
+  const novas = await Promise.all(
+    postsDaCasa().map(async ({ caminho, leitura, pilares }, i) => ({
+      arquivo: await arquivos.salvar(await Bun.file(caminho).bytes(), "jpg"),
+      leitura,
+      pilares,
+      criadaPor: CRIADA_PELA_CASA,
+      criadaEm: new Date(SEMEADAS_A_PARTIR_DE + i * 60_000),
+    })),
+  );
+
   await banco.transaction(async (transacao) => {
     await transacao.execute(sql`SELECT pg_advisory_xact_lock(${TRAVA_DA_SEMENTE})`);
     if (await jaSemeada(transacao)) return;
-
-    const novas = await Promise.all(
-      postsDaCasa().map(async ({ caminho, leitura, pilares }, i) => ({
-        arquivo: await arquivos.salvar(await Bun.file(caminho).bytes(), "jpg"),
-        leitura,
-        pilares,
-        criadaPor: CRIADA_PELA_CASA,
-        criadaEm: new Date(SEMEADAS_A_PARTIR_DE + i * 60_000),
-      })),
-    );
     await transacao.insert(referencias).values(novas);
   });
 }

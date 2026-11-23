@@ -22,7 +22,8 @@ export async function iniciar() {
     ia: iaDaOpenAI(() => chaveDe("openai")),
     arquivos: process.env.BLOB_READ_WRITE_TOKEN ? arquivosNaNuvem() : arquivosNoDisco("data/arquivos"),
   };
-  await semearReferenciasDaCasa(estudio);
+  // Sem os posts da casa a Biblioteca só fica menor; o app sobe mesmo assim e o próximo boot tenta de novo.
+  await semearReferenciasDaCasa(estudio).catch((erro: unknown) => console.error("iniciar: os posts da casa não entraram na Biblioteca", erro));
 
   return { estudio, segredoAprovacao };
 }
