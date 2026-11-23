@@ -4,7 +4,7 @@ import { tickDaFila } from "../domain/scheduler";
 import { rotaMcp } from "../mcp/servidor";
 import { criarApi } from "../v2/api";
 import { leiturasParaInspirar } from "../v2/referencias";
-import { usuarioDa } from "./auth";
+import { modosDeEntrar, usuarioDa } from "./auth";
 import { iniciar } from "./iniciar";
 import { rotas } from "./rotas";
 
@@ -50,6 +50,7 @@ export async function rotasDoApp() {
       const usuario = await usuarioDa(req);
       return usuario ? Response.json(usuario) : Response.json({ erro: "Entre para continuar." }, { status: 401 });
     },
+    "/api/entrar": () => Response.json(modosDeEntrar),
     "/api/mcp": rotaMcp,
     "/api/cron/diario": cronDiario,
   };

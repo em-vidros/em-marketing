@@ -35,6 +35,9 @@ const google =
       }
     : undefined;
 
+/** Como a tela de entrar oferece o login. A senha só liga com LOGIN_POR_SENHA=1, no `.env` local e nos testes; em produção a única porta é o Google. */
+export const modosDeEntrar = { senha: process.env.LOGIN_POR_SENHA === "1", google: Boolean(google) } as const;
+
 function opcoes() {
   return {
     basePath: "/api/auth",
@@ -45,8 +48,7 @@ function opcoes() {
     }),
     database: drizzleAdapter(banco(), { provider: "pg", schema: { user, session, account, verification } }),
     socialProviders: google,
-    // E-mail e senha só nos testes; em produção a única porta é o Google.
-    emailAndPassword: { enabled: process.env.LOGIN_POR_SENHA === "1", minPasswordLength: 6 },
+    emailAndPassword: { enabled: modosDeEntrar.senha, minPasswordLength: 6 },
     account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
     session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
     databaseHooks: {
