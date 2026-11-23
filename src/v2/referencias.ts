@@ -2,7 +2,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
 import type { Ancora, Pilar, ReferenciaParaGerar } from "../domain/art/pipeline";
-import { TIPO_DA_EXTENSAO, type Arquivos, type Extensao } from "./arquivos";
+import { PIXELS_MAXIMOS, TIPO_DA_EXTENSAO, type Arquivos, type Extensao } from "./arquivos";
 import type { Ia } from "./ia";
 import { q, type Banco } from "./banco";
 import { referencias, type Referencia } from "./schema";
@@ -122,7 +122,8 @@ async function referenciasDasUltimasGeracoes(): Promise<string[][]> {
 }
 
 /** O JPEG não tem transparência: sem o fundo off-white da marca, a área transparente de um PNG sairia preta. */
-const comoJpeg = (bytes: Uint8Array) => sharp(bytes).rotate().resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).flatten({ background: "#F0EFEA" }).jpeg({ quality: 85 }).toBuffer();
+const comoJpeg = (bytes: Uint8Array) =>
+  sharp(bytes, { limitInputPixels: PIXELS_MAXIMOS }).rotate().resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).flatten({ background: "#F0EFEA" }).jpeg({ quality: 85 }).toBuffer();
 
 /**
  * Põe as referências na ordem de uso de uma geração nova: as marcadas pela pessoa; sem marcadas, a mais nova que a

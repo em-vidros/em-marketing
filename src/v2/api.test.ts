@@ -105,13 +105,25 @@ describe("imagem colada no chat", () => {
   const colar = async () => (await (await subir(new File([await cenaFalsa("feed")], "colada.jpg", { type: "image/jpeg" }))).json()).chave as string;
   const arquivosDaBiblioteca = async () => ((await (await pedir("/api/referencias")).json()) as { arquivo: string }[]).map((r) => r.arquivo);
 
-  test("sobe sem a IA ler e sem entrar na Biblioteca; recusa o que não é PNG, JPEG ou WebP, o que passa de 10 MB e o que não abre", async () => {
+  /** Um PNG que declara 8000 × 5001 px no cabeçalho e não traz os pixels: o teto recusa sem decodificar. */
+  async function pngDe40Megapixels() {
+    const png = Buffer.from(await sharp({ create: { width: 1, height: 1, channels: 3, background: "#FFFFFF" } }).png().toBuffer());
+    png.writeUInt32BE(8000, 16);
+    png.writeUInt32BE(5001, 20);
+    png.writeUInt32BE(Bun.hash.crc32(png.subarray(12, 29)), 29);
+    return png;
+  }
+
+  test("sobe sem a IA ler e sem entrar na Biblioteca; recusa o que não é PNG, JPEG ou WebP, o que passa de 10 MB, o que não abre, o que mente o tipo e o que passa de 40 megapixels", async () => {
     const chave = await colar();
     const grande = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "grande.png", { type: "image/png" });
+    const png = await sharp({ create: { width: 8, height: 8, channels: 3, background: "#FFFFFF" } }).png().toBuffer();
     const recusas = await Promise.all([
       subir(new File(["%PDF"], "planta.pdf", { type: "application/pdf" })),
       subir(grande),
       subir(new File(["não é imagem"], "quebrada.png", { type: "image/png" })),
+      subir(new File([png], "disfarcada.jpg", { type: "image/jpeg" })),
+      subir(new File([await pngDe40Megapixels()], "enorme.png", { type: "image/png" })),
     ]);
 
     expect((await pedir(`/api/arquivos/${chave}`)).status).toBe(200);
@@ -121,6 +133,8 @@ describe("imagem colada no chat", () => {
       [400, "A imagem precisa ser PNG, JPEG ou WebP."],
       [400, "A imagem passa de 10 MB."],
       [400, "Não deu para ler essa imagem. Confira se o arquivo não está corrompido."],
+      [400, "O conteúdo do arquivo não é PNG, JPEG ou WebP."],
+      [400, "A imagem passa de 40 megapixels. Reduza e tente de novo."],
     ]);
   });
 

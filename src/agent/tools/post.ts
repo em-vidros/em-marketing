@@ -2,6 +2,7 @@ import { tool } from "ai";
 import sharp from "sharp";
 import { z } from "zod";
 import { emOrdem, idDaImagem, urlDaMidia } from "../../db";
+import { PIXELS_MAXIMOS } from "../../v2/arquivos";
 import { q } from "../../v2/banco";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief, type Pilar, type ReferenciaParaGerar } from "../../domain/art/pipeline";
@@ -41,7 +42,7 @@ async function baixarImagens(urls: string[]): Promise<{ imagens: Uint8Array[]; r
       if (!res.ok || !tipo.startsWith("image/")) throw new Error(tipo || String(res.status));
       const bytes = new Uint8Array(await res.arrayBuffer());
       if (bytes.byteLength > TETO_DA_IMAGEM) throw new Error("acima de 10 MB");
-      imagens.push(await sharp(bytes).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer());
+      imagens.push(await sharp(bytes, { limitInputPixels: PIXELS_MAXIMOS }).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer());
     } catch {
       recusadas.push(url);
     }
