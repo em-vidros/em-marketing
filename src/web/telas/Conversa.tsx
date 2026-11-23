@@ -10,6 +10,7 @@ import { antesDeAprovar, aprovacoesPendentes, CartaoAprovacao } from "../compone
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
 import { Pensando } from "../componentes/ia/Pensando";
+import { ArteCriada, ehArteCriada } from "../componentes/ArteCriada";
 import { EscolhaDeArtes, ehMostrarArtes } from "../componentes/EscolhaDeArtes";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
@@ -650,6 +651,7 @@ function ParteDoChefe({
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
   if (ehMostrarArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
+  if (ehArteCriada(parte)) return <ArteCriada parte={parte} />;
   if (ehDelegacao(parte)) {
     const quem = botDaDelegacao(parte as ParteDelegacao);
     return quem && <CartaoTarefa parte={parte as ParteDelegacao} bot={quem} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
@@ -660,7 +662,7 @@ function ParteDoChefe({
 }
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
-const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p);
+const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p) && !ehArteCriada(p);
 
 /** As chaves das imagens coladas que vieram com a mensagem. */
 const coladasDa = (m: Mensagem) => m.parts.flatMap((p) => (p.type === "data-referencias" ? p.data.coladas : []));

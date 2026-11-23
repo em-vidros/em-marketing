@@ -5,6 +5,7 @@ import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
 import { ImagensGeradas } from "../componentes/ImagensGeradas";
+import { NovaArte } from "../componentes/NovaArte";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { Check } from "../componentes/Passos";
 import { DetalheDaPecaPronta, PecasProntas, usePecasProntas } from "../componentes/PecasProntas";
@@ -92,6 +93,7 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   const [status, setStatus] = useState<StatusPost | null>(null);
   const [aberta, setAberta] = useState<number | null>(null);
   const [prontaAberta, setProntaAberta] = useState<string | null>(null);
+  const [criando, setCriando] = useState(false);
   const origem = useRef<HTMLElement | null>(null);
   const pecasProntas = usePecasProntas();
   const referencias = useRef<EnvioDeReferencias>(null);
@@ -110,11 +112,13 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   function abrir(id: number, de: HTMLElement) {
     origem.current = de;
     setProntaAberta(null);
+    setCriando(false);
     setAberta((atual) => (atual === id ? null : id));
   }
   function abrirPronta(id: string, de: HTMLElement) {
     origem.current = de;
     setAberta(null);
+    setCriando(false);
     setProntaAberta((atual) => (atual === id ? null : id));
   }
   const fechar = useCallback(() => {
@@ -125,6 +129,16 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   function guardarComo(destino: "referencia" | "peca") {
     if (pendentes) (destino === "peca" ? pecasProntas.receber : (a: File[]) => referencias.current?.receber(a))(pendentes);
     setPendentes(null);
+  }
+  const fecharCriacao = useCallback(() => {
+    setCriando(false);
+    devolverFoco(origem.current);
+  }, []);
+  function abrirCriacao(de: HTMLElement) {
+    origem.current = de;
+    setAberta(null);
+    setProntaAberta(null);
+    setCriando((aberto) => !aberto);
   }
   function limpar() {
     setBusca("");
@@ -139,6 +153,14 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
           <header className="flex flex-wrap items-center gap-2.5">
             <BotaoMenu abrir={abrirMenu} />
             <h1 className="mr-auto text-2xl/tight font-semibold tracking-[-0.02em]">Biblioteca</h1>
+            <button
+              type="button"
+              aria-expanded={criando}
+              onClick={(e) => abrirCriacao(e.currentTarget)}
+              className="pressiona cursor-pointer rounded-full bg-tinta px-4 py-2 text-sm font-medium text-sobre-tinta"
+            >
+              Nova arte
+            </button>
             <label htmlFor="busca" className="sr-only">
               Buscar peças
             </label>
@@ -277,6 +299,9 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
             }}
           />
         )}
+      </PainelLateral>
+      <PainelLateral aberto={criando} rotulo="Nova arte" fechar={fecharCriacao} className="flex flex-col">
+        <NovaArte fechar={fecharCriacao} />
       </PainelLateral>
       <EscolhaDoEnvio quantas={pendentes?.length ?? 0} escolher={guardarComo} cancelar={() => setPendentes(null)} />
     </div>

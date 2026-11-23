@@ -36,7 +36,7 @@ export async function rotasDoApp() {
   const { estudio, segredoAprovacao } = await iniciar();
   const api = criarApi(estudio, usuarioDa);
   const apiNova = (req: Request) => api.fetch(req);
-  const base = rotas({ segredoAprovacao, carregarReferencias: (o) => referenciasParaGerar(estudio, o), estudio });
+  const base = rotas({ segredoAprovacao, carregarReferencias: (o) => referenciasParaGerar(estudio, o), estudio, estudioDeArtes: estudio });
 
   return {
     ...base,

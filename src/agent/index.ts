@@ -5,6 +5,7 @@ import { modelo } from "./models";
 import { naConversa, registrarUso } from "../domain/uso";
 import { abrirConversa, postDaConversa, resumoDoPost } from "./post";
 import { APROVACAO, catalogo, type RodarDelegado } from "./tools";
+import type { Estudio } from "../v2/artes";
 import type { ReferenciasDoTurno } from "./pedido";
 
 export type ResolverModelo = (bot: ConfigBot) => LanguageModel | Promise<LanguageModel>;
@@ -21,6 +22,8 @@ export interface Opcoes {
   referencias?: ReferenciasDoTurno;
   /** O e-mail de quem está na conversa; sem sessão (testes, scripts), o próprio Chefe assina. */
   autor?: string;
+  /** O estúdio de artes que criar_convite e criar_aniversario usam. */
+  estudio?: Estudio;
 }
 
 const doRegistry: ResolverModelo = (bot) => modelo(bot.modelo);
@@ -43,16 +46,16 @@ const SO_COM_O_USUARIO = new Set(["mostrar_artes", "escolher_arte"]);
  * O especialista de uma tarefa roda na conversa do Chefe, então lê e grava o mesmo post.
  */
 export async function executar(botId: BotId, conversaId: string, messages: ModelMessage[], opcoes: Opcoes = {}) {
-  const { resolverModelo = doRegistry, abortSignal, delegada = false, segredoAprovacao, referencias, autor = "Chefe" } = opcoes;
+  const { resolverModelo = doRegistry, abortSignal, delegada = false, segredoAprovacao, referencias, autor = "Chefe", estudio } = opcoes;
   const bot = await detalheDoBot(botId);
   await abrirConversa(conversaId, botId);
   const rodar: RodarDelegado = (delegado, pedido, sinal) =>
-    executar(delegado, conversaId, [{ role: "user", content: pedido }], { resolverModelo, abortSignal: sinal, delegada: true, referencias, autor });
+    executar(delegado, conversaId, [{ role: "user", content: pedido }], { resolverModelo, abortSignal: sinal, delegada: true, referencias, autor, estudio });
   return streamText({
     model: await resolverModelo(bot),
     instructions: instrucoesDe(bot, { delegada, estadoDoPost: resumoDoPost(await postDaConversa(conversaId)), equipe: await botsParaDelegar(bot) }),
     messages,
-    tools: naConversaDoTurno(conversaId, await catalogo({ conversaId, botId, autor, rodar, referencias })),
+    tools: naConversaDoTurno(conversaId, await catalogo({ conversaId, botId, autor, rodar, referencias, estudio })),
     // Numa tarefa delegada ninguém vê a conversa: mostrar e escolher as artes só acontecem num turno com o usuário.
     activeTools: [...bot.tools, "lembrar" as const].filter((t) => !(delegada && SO_COM_O_USUARIO.has(t))),
     toolApproval: APROVACAO,

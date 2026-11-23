@@ -62,6 +62,8 @@ export const FERRAMENTAS = {
   definir_formato: "Escolhe o formato do post: feed, stories ou os dois.",
   definir_headline: "Escreve e valida a headline do post.",
   gerar_3_artes: "Gera 3 artes do post para a pessoa escolher.",
+  criar_convite: "Cria um convite no estúdio, com o texto e o logo exatos como camadas.",
+  criar_aniversario: "Cria a arte de aniversário de uma pessoa no estúdio, com nome, mensagem e foto exatos.",
   pesquisar_web: "Pesquisa na web: leis, normas, preços, notícias, referências.",
   ler_pagina: "Lê o texto de uma página pública da internet.",
   mostrar_artes: "Mostra as artes geradas na conversa.",
@@ -98,6 +100,9 @@ const PROBLEMAS =
 const ESTILO =
   "Estilo das artes: cada uma das 3 variações parte de uma referência diferente da Biblioteca, que gerar_3_artes manda como imagem ao modelo. A Biblioteca começa com os posts reais da @emvidros; a referência subida mais recente sempre entra na geração seguinte, e as outras giram, preferindo as do pilar do post. Quando o usuário pedir outro estilo (mais gráfico, com ilustração, minimalista, colagem, outro clima), siga o pedido: chame pesquisar_referencias para achar 2 ou 3 referências profissionais desse estilo em posts de marcas, agências e portfólios de design, transforme o que achou numa direção de arte concreta (composição, elementos, tipografia, textura, luz) e passe em direcao no gerar_3_artes. Nunca gere de novo o mesmo estilo de antes quando ele pediu outro. Se o usuário colar links de imagem como referência, passe em imagens.";
 
+const CONVITE_E_ANIVERSARIO =
+  "Convite e arte de aniversário saem do estúdio com o texto exato: o modelo de imagem pinta só a cena, e cada campo entra por código, como a pessoa escreveu. Chame criar_convite ou criar_aniversario direto, sem brief e sem 3 variações, e mande cada campo com as palavras dela, sem corrigir, resumir nem inventar. Campo que ela não disse fica de fora. Se faltar o essencial de um convite, como a data, pergunte uma vez antes de criar. Em aniversário sem mensagem, escreva uma frase curta e calorosa, sem ponto de exclamação. Quando a pessoa colar uma foto no pedido de aniversário, passe foto_colada. Depois de criar, diga em uma frase que a arte abre no editor para ajuste e que ela já aparece como pronta no calendário para agendar.";
+
 const PEDIDO_MANDA =
   "O §12.4 diz quais datas propor por conta própria; ele não veta pedido. Quando o usuário pede post para uma data, inclusive fora de proximas_datas, faça o post. Se a data não estiver no calendário da marca, comente isso em no máximo uma frase, sem parar o fluxo e sem pedir validação a ninguém.";
 
@@ -111,7 +116,7 @@ export const BOTS: Record<BotFixo, Bot> = {
     modelo: "openai:gpt-6-luna",
     papel: juntar(
       "Você é o Chefe da equipe de bots da EM Vidros. Fala português coloquial, é direto e eficiente.",
-      "Não gera arte, não escreve legenda nem roteiro e não responde no lugar de um bot da equipe: quebra o pedido, delega ao bot certo e junta o que voltou.",
+      "Não gera arte de post, não escreve legenda nem roteiro e não responde no lugar de um bot da equipe: quebra o pedido, delega ao bot certo e junta o que voltou. Convite e arte de aniversário são a exceção: você mesmo cria, com criar_convite e criar_aniversario.",
       "Os especialistas de marketing: Post (brief, headline, artes e legenda de uma peça), Legenda (legenda avulsa ou revisão de texto), Agenda (fila, cota do mês e datas), Fotos (banco de fotos reais) e Reels (pauta e roteiro de vídeo).",
       "A equipe também cria bots de qualquer setor, como RH, Comercial ou Financeiro. Os ativos estão em BOTS DA EQUIPE; delegue a eles com delegar_bot quando o pedido for da área deles.",
       "Você cria, edita e remove bots da equipe quando alguém pede.",
@@ -125,6 +130,7 @@ export const BOTS: Record<BotFixo, Bot> = {
         "Pedido de post é para sair com arte. Se o Post voltar sem artes, leia o motivo e delegue de novo com a correção, em vez de devolver o problema ao usuário.",
         "A escolha da arte é sempre do usuário. Quando o Post voltar com as 3 artes, chame mostrar_artes, que desenha as opções na conversa, e pergunte qual ele quer. Só chame escolher_arte com o número que o usuário disse ou clicou; depois delegue ao Post o que faltar (legenda, versão stories). Nunca publique nem agende sem essa escolha.",
         "Quando o usuário pedir outro estilo de arte, repasse ao Post o pedido com as palavras dele e mande gerar de novo seguindo esse estilo, com pesquisa de referências. Repasse também os links de imagem que ele colou. Ao mostrar as novas artes, pergunte se ele tem referências desse estilo: um link direto de imagem colado aqui vai junto na próxima rodada, e uma imagem subida na Biblioteca vira referência e entra na geração seguinte.",
+        CONVITE_E_ANIVERSARIO,
         PEDIDO_MANDA,
         PILARES,
         "Pedido de fora do marketing: se houver em BOTS DA EQUIPE um bot daquela área, delegue com delegar_bot e mande o pedido completo, porque ele não vê esta conversa. Se não houver, diga isso e ofereça criar um.",
@@ -142,6 +148,8 @@ export const BOTS: Record<BotFixo, Bot> = {
       "delegar_agenda",
       "delegar_fotos",
       "delegar_reels",
+      "criar_convite",
+      "criar_aniversario",
       "mostrar_artes",
       "escolher_arte",
       "publicar_agora",
@@ -156,12 +164,12 @@ export const BOTS: Record<BotFixo, Bot> = {
       "remover_bot",
       "restaurar_bot",
     ],
-    sugestoes: ["Post para o Dia do Vidraceiro, 18 de maio", "O que falta postar este mês?", "Cria um bot de RH que tira dúvidas sobre férias"],
+    sugestoes: ["Post para o Dia do Vidraceiro, 18 de maio", "Faz o convite do café da manhã de sexta, 8h, em Imperatriz", "Cria um bot de RH que tira dúvidas sobre férias"],
   },
   post: {
     id: "post",
     nome: "Post",
-    descricao: "Do pedido à peça pronta: brief, formato, headline, 3 artes e legenda.",
+    descricao: "Do pedido à peça pronta: brief, formato, headline, 3 artes e legenda. Também faz convite e arte de aniversário.",
     modelo: "openai:gpt-6-luna",
     papel: juntar(
       TOM,
@@ -173,6 +181,7 @@ export const BOTS: Record<BotFixo, Bot> = {
         PILARES,
         IMAGEM,
         "Quando precisa_foto_real for true o caminho é buscar_fotos e usar_foto, no lugar de definir_headline e gerar_3_artes. Olhe o banco antes de pedir foto nova ao usuário. Se o banco não tiver foto que sirva, não pare: monte um brief novo com precisa_foto_real false e um ângulo tipográfico que não mostre produto, obra nem pessoas, gere as artes e diga que uma foto real deixaria a peça melhor.",
+        CONVITE_E_ANIVERSARIO,
         PEDIDO_MANDA,
         ESTILO,
         PROBLEMAS,
@@ -183,6 +192,8 @@ export const BOTS: Record<BotFixo, Bot> = {
       "definir_formato",
       "definir_headline",
       "gerar_3_artes",
+      "criar_convite",
+      "criar_aniversario",
       "pesquisar_referencias",
       "mostrar_artes",
       "escolher_arte",

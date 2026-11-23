@@ -99,6 +99,8 @@ export const chegouAoModelo = (escolha: EscolhaDoPedido, carregadas: readonly An
 
 /** As âncoras que a geração deste turno usa e o aviso de que gerou com elas. As delegações do turno recebem as mesmas. */
 export interface ReferenciasDoTurno {
+  /** As chaves das imagens coladas que esta geração ainda pode usar. A de aniversário usa a primeira como foto da pessoa. */
+  coladas: readonly string[];
   carregar: (pilar: Pilar) => Promise<ReferenciaParaGerar[]>;
   usar: (carregadas: readonly Ancora[]) => void;
 }

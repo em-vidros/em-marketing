@@ -216,6 +216,18 @@ describe("as rotas do convite", () => {
     expect([width, height]).toEqual([1080, 1350]);
   });
 
+  test("o editor grava de volta as camadas que o convite e o aniversário criaram", async () => {
+    const foto = await base.arquivos.salvar(new Uint8Array(await sharp({ create: { width: 300, height: 300, channels: 3, background: "#336699" } }).png().toBuffer()), "png");
+    for (const corpo of [
+      { tipo: "convite", formato: "story", campos: { ...CONVITE, observacao: "Confirme presença" } },
+      { tipo: "aniversario", formato: "feed", campos: { nome: "Ana", mensagem: "Parabéns", foto } },
+    ]) {
+      const arte = await (await post(corpo)).json();
+      const gravada = await pedir(`/api/artes/${arte.id}`, { method: "PUT", body: JSON.stringify({ camadas: arte.camadas, ajustes: arte.ajustes }) });
+      expect(gravada.status).toBe(200);
+    }
+  });
+
   test("o pedido em texto livre continua funcionando", async () => {
     const res = await post({ pedido: "Uma arte sobre box temperado", formato: "story" });
     expect(res.status).toBe(201);
