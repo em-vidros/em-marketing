@@ -1,13 +1,25 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { auth } from "../auth";
+import { navegar } from "../rota";
 
 /** O better-auth volta para /entrar?error=... quando o Google recusa ou o e-mail não é da empresa. */
-function mensagemDoErro(codigo: string | null): string | null {
+function mensagemDoGoogle(codigo: string | null): string | null {
   if (!codigo) return null;
   if (/access_denied/i.test(codigo)) return "O login com o Google foi cancelado. Tente de novo.";
   if (/forbidden|unable_to_create_user|user/i.test(codigo)) return "Só e-mails @emvidros.com.br entram. Use a conta Google da empresa.";
   return "Não deu para entrar agora. Tente de novo em instantes.";
 }
+
+/** better-auth não diz se o e-mail existe; o usuário vê a mesma mensagem nos dois casos. */
+function mensagemDaSenha(status: number | undefined): string {
+  if (status === 401 || status === 403) return "E-mail ou senha não conferem. Confira os dois ou peça acesso à equipe.";
+  if (status === 429) return "Muitas tentativas seguidas. Espere um minuto e tente de novo.";
+  if (status === undefined || status === 0) return "Sem conexão com o servidor. Confira a internet e tente de novo.";
+  return "Não deu para entrar agora. Tente de novo em instantes.";
+}
+
+/** O que o servidor liga em /api/entrar: senha só no `.env` local, Google em produção. */
+type Modos = { senha: boolean; google: boolean };
 
 function IconeGoogle() {
   return (
@@ -21,14 +33,19 @@ function IconeGoogle() {
 }
 
 export function Entrar() {
-  const [erro, setErro] = useState(() => mensagemDoErro(new URLSearchParams(location.search).get("error")));
+  const [modos, setModos] = useState<Modos | null>(null);
+  const [erro, setErro] = useState(() => mensagemDoGoogle(new URLSearchParams(location.search).get("error")));
   const [enviando, setEnviando] = useState(false);
+  const email = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     document.title = "Entrar · EM Marketing";
+    fetch("/api/entrar")
+      .then((r) => r.json() as Promise<Modos>)
+      .then(setModos, () => setModos({ senha: false, google: true }));
   }, []);
 
-  async function entrar() {
+  async function entrarComGoogle() {
     if (enviando) return;
     setEnviando(true);
     setErro(null);
@@ -41,26 +58,91 @@ export function Entrar() {
     }
   }
 
+  async function entrarComSenha(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (enviando) return;
+    const dados = new FormData(e.currentTarget);
+    setEnviando(true);
+    setErro(null);
+    const { error } = await auth.signIn
+      .email({ email: String(dados.get("email")).trim(), password: String(dados.get("senha")) })
+      .catch(() => ({ error: { status: undefined } }));
+    setEnviando(false);
+    if (!error) return navegar("/", { substituir: true });
+    setErro(mensagemDaSenha(error.status));
+    email.current?.focus();
+  }
+
+  const campo =
+    "w-full rounded-full border border-borda-campo bg-superficie px-[18px] py-3 text-base text-tinta outline-none transition-[border-color] duration-150 focus-visible:border-tinta focus-visible:outline-none aria-invalid:border-erro sm:text-[15px]";
+
   return (
     <main className="grid min-h-dvh place-items-center px-4 py-6">
       <div className="flex w-full max-w-[360px] flex-col gap-4">
         <div className="mb-3 flex flex-col items-center gap-2.5 text-center">
           <img src="/logo/emvidros-oficial.svg" alt="EM Vidros" width={76} height={63} className="h-[63px] w-auto" />
           <h1 className="mt-1.5 text-[28px]/[1.1] font-semibold tracking-[-0.025em]">EM Marketing</h1>
-          <p className="text-tinta-3">Entre com a sua conta Google da EM Vidros.</p>
+          {modos && <p className="text-tinta-3">{modos.senha ? "Entre com o e-mail liberado pela equipe." : "Entre com a sua conta Google da EM Vidros."}</p>}
         </div>
-        <button
-          type="button"
-          onClick={entrar}
-          aria-busy={enviando}
-          className="pressiona mt-1 flex cursor-pointer items-center justify-center gap-2.5 rounded-full bg-tinta px-[18px] py-3 text-[15px] font-medium text-sobre-tinta aria-busy:opacity-60"
-        >
-          <span className="grid size-6 place-items-center rounded-full bg-white">
-            <IconeGoogle />
-          </span>
-          {enviando ? "Abrindo o Google…" : "Entrar com Google"}
-        </button>
-        <p role="status" className="text-erro text-center text-[13px] empty:hidden">
+        {modos?.senha && (
+          <form onSubmit={entrarComSenha} noValidate className="flex flex-col gap-4">
+            <label htmlFor="email" className="sr-only">
+              E-mail
+            </label>
+            <input
+              ref={email}
+              id="email"
+              name="email"
+              type="email"
+              inputMode="email"
+              autoComplete="username"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+              placeholder="E-mail"
+              aria-invalid={erro ? true : undefined}
+              aria-describedby="entrar-erro"
+              className={campo}
+            />
+            <label htmlFor="senha" className="sr-only">
+              Senha
+            </label>
+            <input
+              id="senha"
+              name="senha"
+              type="password"
+              autoComplete="current-password"
+              required
+              placeholder="Senha"
+              aria-invalid={erro ? true : undefined}
+              aria-describedby="entrar-erro"
+              className={campo}
+            />
+            <button
+              type="submit"
+              aria-busy={enviando}
+              className="pressiona mt-1 cursor-pointer rounded-full bg-tinta px-[18px] py-3 text-[15px] font-medium text-sobre-tinta aria-busy:opacity-60"
+            >
+              {enviando ? "Entrando…" : "Entrar"}
+            </button>
+          </form>
+        )}
+        {modos?.google && (
+          <button
+            type="button"
+            onClick={entrarComGoogle}
+            aria-busy={enviando}
+            className={`pressiona mt-1 flex cursor-pointer items-center justify-center gap-2.5 rounded-full px-[18px] py-3 text-[15px] font-medium aria-busy:opacity-60 ${
+              modos.senha ? "border border-linha-forte text-tinta hover:bg-hover" : "bg-tinta text-sobre-tinta"
+            }`}
+          >
+            <span className="grid size-6 place-items-center rounded-full bg-white">
+              <IconeGoogle />
+            </span>
+            {enviando ? "Abrindo o Google…" : "Entrar com Google"}
+          </button>
+        )}
+        <p id="entrar-erro" role="status" className="text-erro text-center text-[13px] empty:hidden">
           {erro}
         </p>
       </div>

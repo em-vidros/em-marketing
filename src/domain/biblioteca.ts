@@ -1,4 +1,4 @@
-import { imagensGeradas, type TipoImagem } from "../db";
+import { imagensGeradas, type PastaDaImagem, type TipoImagem } from "../db";
 import { artesDoEstudio, resumoDaArte } from "../v2/artes";
 import type { Banco } from "../v2/banco";
 import type { Formato } from "../v2/camadas";
@@ -19,6 +19,7 @@ export type ImagemDaBiblioteca =
       postId: number;
       conversaId: string | null;
       criadaEm: string;
+      pasta: PastaDaImagem;
     }
   | { origem: "estudio"; id: string; url: string; formato: Formato; titulo: string; criadaEm: string };
 
@@ -36,6 +37,7 @@ export async function imagensDaBiblioteca(banco: Banco, userId: string): Promise
       postId: i.postId,
       conversaId: i.conversaId,
       criadaEm: new Date(i.criadaEm).toISOString(),
+      pasta: i.pasta,
     }),
   );
   const doEstudio = (await artesDoEstudio(banco)).map((a): ImagemDaBiblioteca => {

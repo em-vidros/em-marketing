@@ -7,6 +7,7 @@ export interface Opcao<V extends string> {
   rotulo: string;
   /** Com ícone, o rótulo vira só o nome acessível. */
   icone?: ReactNode;
+  contagem?: number;
 }
 
 /**
@@ -89,7 +90,10 @@ export function Segmentado<V extends string>({
                 className="absolute inset-0 rounded-full bg-tinta"
               />
             )}
-            <span className="relative">{o.icone ?? o.rotulo}</span>
+            <span className="relative">
+              {o.icone ?? o.rotulo}
+              {o.contagem !== undefined && <span className="ml-1.5 tabular opacity-60">{o.contagem}</span>}
+            </span>
           </button>
         );
       })}

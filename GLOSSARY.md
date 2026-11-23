@@ -58,28 +58,40 @@ _Evite_: layer, overlay
 Uma das três artes que um pedido gera para a pessoa escolher.
 _Evite_: opção, versão
 
+**Ajuste**:
+Uma mudança que a pessoa pede numa arte já escolhida, como trocar o título, e que altera só aquela arte, sem gerar três novas. A pessoa pede à IA ou faz no editor, como preferir.
+_Evite_: refação, nova geração
+
 **Formato**:
 O tamanho de publicação de uma arte: feed (1080×1350) ou story (1080×1920).
 _Evite_: proporção, tamanho
 
 **Biblioteca**:
-A tela onde fica tudo o que foi gerado: toda variação de toda geração, inclusive as que ninguém escolheu, as versões story e as artes do estúdio. Cada imagem abre no editor ou é baixada dali. A mesma tela guarda as referências.
+A tela onde fica tudo o que foi gerado: toda variação de toda geração, inclusive as que ninguém escolheu, as versões story e as artes do estúdio. Cada imagem abre no editor ou é baixada dali. A mesma tela guarda as referências e as peças prontas.
 _Evite_: galeria, tela de artes
 
 **Pilar**:
 A categoria editorial do brandbook (§12.1) que todo post declara: PROVA, AUTORIDADE, GENTE ou MARCA.
 _Evite_: tema, categoria
 
+**Público**:
+Quem o post quer alcançar: vidraceiro, arquiteto ou consumidor. Arquiteto e consumidor são levados a uma vidraçaria parceira, nunca a falar com a EM Vidros.
+_Evite_: persona, audiência
+
+**Peça pronta**:
+Uma imagem que a equipe sobe já finalizada, como um convite, para publicar como está, sem geração. O Chefe agenda e publica igual a uma arte, com o mesmo cartão de aprovação.
+_Evite_: imagem pronta, arte pronta, upload
+
 ## Referências
 
 **Referência**:
-Uma arte da EM Vidros que a equipe considera bem pensada e que ensina aos bots os princípios a seguir, nunca o visual a copiar.
+Uma imagem que a equipe sobe ou marca para guiar o visual das artes: paleta, composição, tipografia e acabamento. O modelo de imagem vê a própria referência, não uma descrição dela, e nunca copia o texto ou o logo.
 _Evite_: inspiração, modelo, template
 
 **Leitura**:
-O texto curto que descreve os princípios de uma referência, como o par de fontes, o tipo de ilustração e a composição. Um bot escreve e qualquer pessoa pode corrigir.
+O texto curto que descreve o que uma referência ensina, como o par de fontes, o tipo de ilustração e a composição. Um bot escreve e qualquer pessoa pode corrigir.
 _Evite_: análise, descrição, prompt
 
 **Biblioteca de referências**:
-O conjunto único de referências da empresa, compartilhado por todos, que cresce com as artes aprovadas que alguém marca como referência.
+O conjunto único de referências da empresa, compartilhado por todos. Começa com os posts reais da @emvidros e cresce com o que a equipe sobe ou marca.
 _Evite_: galeria, moodboard

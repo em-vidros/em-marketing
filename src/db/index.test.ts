@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { q } from "../v2/banco";
-import { criarTabelas, primeira } from ".";
+import { criarTabelas, pastaDa, primeira, type TipoImagem } from ".";
 
 /**
  * criarTabelas roda em todo boot, inclusive em dois boots ao mesmo tempo na Vercel. O banco de teste
@@ -61,5 +61,26 @@ describe("publicacoes, a chave que liga a peça ao Instagram", () => {
   test("media_type fora do domínio é rejeitado pelo banco", async () => {
     const post = await novoPost();
     await expect(q`INSERT INTO publicacoes (post_id, media_type, ig_media_id) VALUES (${post}, 'REEL', ${ig("reel")})`).rejects.toThrow();
+  });
+});
+
+// Pega a imagem na pasta errada: a escolhida trocada que ficava em Selecionadas, ou a rodada anterior que sumia das Descartadas.
+describe("pastaDa, a pasta de cada imagem na Biblioteca", () => {
+  const arts = JSON.stringify([1, 2, 3].map((v) => ({ variant: v, path: `r2-v${v}.jpg` })));
+  const imagem = (path: string, tipo: TipoImagem = "variacao") => ({ path, tipo });
+
+  test("com escolha: a escolhida e o story dela são Selecionadas, o resto é Descartada", () => {
+    const post = { arts, chosen: 2, story_path: "story-v2.jpg" };
+    expect(pastaDa(imagem("r2-v2.jpg"), post)).toBe("selecionada");
+    expect(pastaDa(imagem("story-v2.jpg", "story"), post)).toBe("selecionada");
+    expect(pastaDa(imagem("r2-v1.jpg"), post)).toBe("descartada");
+    expect(pastaDa(imagem("r1-v2.jpg"), post)).toBe("descartada");
+    expect(pastaDa(imagem("story-v1.jpg", "story"), post)).toBe("descartada");
+  });
+
+  test("sem escolha: as opções atuais ficam em aberto e as rodadas anteriores são Descartadas", () => {
+    const post = { arts, chosen: null, story_path: null };
+    expect(pastaDa(imagem("r2-v3.jpg"), post)).toBe("aberta");
+    expect(pastaDa(imagem("r1-v3.jpg"), post)).toBe("descartada");
   });
 });

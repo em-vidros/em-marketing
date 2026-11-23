@@ -408,9 +408,26 @@ export interface ImagemGerada {
   angulo: string | null;
   conversaId: string | null;
   criadaEm: number;
+  pasta: PastaDaImagem;
 }
 
-type LinhaDaImagem = {
+/** Onde a imagem fica na Biblioteca: a escolhida do post, uma opção ainda sem escolha, ou o que sobrou. */
+export type PastaDaImagem = "selecionada" | "aberta" | "descartada";
+
+/**
+ * A escolhida e o story dela são Selecionadas. Sem escolha, as opções da geração atual estão em aberto.
+ * O resto é Descartada: as outras opções, as rodadas anteriores e o story de uma escolha trocada.
+ */
+export function pastaDa(imagem: { path: string; tipo: TipoImagem }, post: ColunasDoPost & { story_path: string | null }): PastaDaImagem {
+  const opcoes = (post.arts ? JSON.parse(post.arts) : []) as { variant: number; path: string }[];
+  const escolhida = opcoes.find((a) => a.variant === post.chosen);
+  if (imagem.tipo === "story") return escolhida && imagem.path === post.story_path ? "selecionada" : "descartada";
+  if (escolhida) return imagem.path === escolhida.path ? "selecionada" : "descartada";
+  return opcoes.some((a) => a.path === imagem.path) ? "aberta" : "descartada";
+}
+
+type LinhaDaImagem = ColunasDoPost & {
+  story_path: string | null;
   id: number;
   post_id: number;
   path: string;
@@ -438,19 +455,20 @@ async function imagemDa(r: LinhaDaImagem): Promise<ImagemGerada> {
     angulo: brief.angulo ?? null,
     conversaId: r.conversa_id,
     criadaEm: r.criada_em,
+    pasta: pastaDa(r, r),
   };
 }
 
 /** Todas as imagens geradas, da equipe inteira, as mais novas primeiro e as variações de uma geração em ordem. */
 export async function imagensGeradas(userId: string): Promise<ImagemGerada[]> {
-  const linhas = await q<LinhaDaImagem>`SELECT i.id, i.post_id, i.path, i.tipo, i.variante, i.formato, i.criada_em, p.headline, p.brief,
+  const linhas = await q<LinhaDaImagem>`SELECT i.id, i.post_id, i.path, i.tipo, i.variante, i.formato, i.criada_em, p.headline, p.brief, p.arts, p.chosen, p.story_path,
       (SELECT c.id FROM conversas c WHERE c.post_id = p.id AND c.user_id = ${userId} AND c.apagada_em IS NULL ORDER BY c.updated_at DESC LIMIT 1) AS conversa_id
     FROM imagens_geradas i JOIN posts p ON p.id = i.post_id ORDER BY i.criada_em DESC, i.id`;
   return emOrdem(linhas, imagemDa);
 }
 
 export async function imagemGerada(id: number): Promise<ImagemGerada | null> {
-  const linha = await primeira(q<LinhaDaImagem>`SELECT i.id, i.post_id, i.path, i.tipo, i.variante, i.formato, i.criada_em, p.headline, p.brief, NULL AS conversa_id
+  const linha = await primeira(q<LinhaDaImagem>`SELECT i.id, i.post_id, i.path, i.tipo, i.variante, i.formato, i.criada_em, p.headline, p.brief, p.arts, p.chosen, p.story_path, NULL AS conversa_id
     FROM imagens_geradas i JOIN posts p ON p.id = i.post_id WHERE i.id = ${id}`);
   return linha && imagemDa(linha);
 }
