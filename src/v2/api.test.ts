@@ -19,7 +19,7 @@ const cenaFalsa = (formato: Formato) =>
 
 let leiturasRecebidas: string[][] = [];
 const iaFalsa: Ia = {
-  lerReferencia: async () => "Par de fontes bold e fina, ilustração chapada, foco no canto esquerdo.",
+  lerReferencia: async () => ({ leitura: "Par de fontes bold e fina, ilustração chapada, foco no canto esquerdo.", pilares: ["AUTORIDADE", "MARCA"] }),
   planejarArte: async (_pedido, _formato, leituras) => {
     leiturasRecebidas.push(leituras);
     return { cena: "flat matte glass texture", titulo: "Vidro temperado aguenta o dia a dia", apoio: "Box sob medida em 7 dias", display: false, fundoEscuro: false };
@@ -71,7 +71,7 @@ describe("biblioteca de referências", () => {
     const enviada = await enviarReferencia();
     expect(enviada.status).toBe(201);
     const ref = await enviada.json();
-    expect(ref.leitura).toContain("Par de fontes");
+    expect(ref).toMatchObject({ leitura: expect.stringContaining("Par de fontes"), pilares: ["AUTORIDADE", "MARCA"] });
 
     const editada = await pedir(`/api/referencias/${ref.id}`, { method: "PATCH", ...json({ leitura: "Só a fonte bold." }) });
     expect(await editada.json()).toMatchObject({ leitura: "Só a fonte bold.", leituraEditadaPor: "u-ana" });

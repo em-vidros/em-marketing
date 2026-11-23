@@ -1,11 +1,12 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
+import type { Pilar } from "../domain/art/pipeline";
 import type { Banco } from "./banco";
 import { referencias, type Referencia } from "./schema";
 
 export const listarReferencias = (banco: Banco) =>
   banco.select().from(referencias).where(isNull(referencias.removidaEm)).orderBy(desc(referencias.criadaEm));
 
-export async function criarReferencia(banco: Banco, nova: { arquivo: string; leitura: string; criadaPor: string }): Promise<Referencia> {
+export async function criarReferencia(banco: Banco, nova: { arquivo: string; leitura: string; pilares: Pilar[]; criadaPor: string }): Promise<Referencia> {
   const [criada] = await banco.insert(referencias).values(nova).returning();
   return criada!;
 }

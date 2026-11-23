@@ -1,6 +1,8 @@
 import OpenAI, { toFile } from "openai";
 import { zodTextFormat } from "openai/helpers/zod";
 import sharp from "sharp";
+import { z } from "zod";
+import { PILARES } from "../domain/art/pipeline";
 import { MODELO_DE_IMAGEM, MODELO_DE_TEXTO } from "../openai";
 import { fetchQueConta } from "../domain/uso";
 import { FORMATOS, Plano, type Formato } from "./camadas";
@@ -8,7 +10,7 @@ import { Elementos, type Area } from "./separar";
 
 /** Tudo o que o backend novo pede a um modelo. Os testes trocam por uma versão falsa. */
 export interface Ia {
-  lerReferencia(imagem: Uint8Array, tipo: string): Promise<string>;
+  lerReferencia(imagem: Uint8Array, tipo: string): Promise<LeituraDaReferencia>;
   planejarArte(pedido: string, formato: Formato, leituras: string[]): Promise<Plano>;
   /** Devolve a cena já no tamanho final do formato, em JPEG. */
   gerarCena(prompt: string, formato: Formato): Promise<Uint8Array>;
@@ -17,6 +19,9 @@ export interface Ia {
   /** Apaga as áreas e completa com o fundo em volta. Devolve a imagem inteira redesenhada, no tamanho do modelo. */
   apagarAreas(imagem: Uint8Array, formato: Formato, areas: Area[]): Promise<Uint8Array>;
 }
+
+export const LeituraDaReferencia = z.object({ leitura: z.string(), pilares: z.array(z.enum(PILARES)) });
+export type LeituraDaReferencia = z.infer<typeof LeituraDaReferencia>;
 
 /** Tamanho pedido ao modelo de imagem: mesma proporção do formato, lados múltiplos de 16. */
 const TAMANHO_DA_GERACAO: Record<Formato, `${number}x${number}`> = { feed: "1024x1280", story: "1008x1792" };
@@ -28,11 +33,15 @@ const comComposicao = (prompt: string, formato: Formato) =>
   `${prompt}\n\nHard composition rule: the top ${TOPO_LIVRE[formato]}% of the canvas is plain flat #F0EFEA background with nothing drawn on it. Every shape and object stays below that line. Keep the bottom-right corner empty.`;
 
 const INSTRUCOES_DA_LEITURA = `
-Você analisa artes de Instagram da EM Vidros, uma vidraçaria, que a equipe guardou como referência.
-Escreva em português do Brasil a leitura da arte: os princípios que fazem ela funcionar e que outra arte pode seguir sem copiar o visual.
-Cubra, quando existir na arte: o par de fontes e o contraste de peso, o tipo de imagem ou ilustração, a composição e onde fica o foco, o uso da cor, a hierarquia do texto e o tom.
-Não descreva o assunto da peça nem transcreva o texto dela. Diga o princípio, não o objeto.
+Você analisa artes de Instagram que a equipe da EM Vidros, uma vidraçaria, guardou como referência. O modelo de imagem recebe a própria arte junto da sua leitura e segue o visual dela.
+Em leitura, escreva em português do Brasil o que uma arte nova deve tirar desta no visual: a paleta e onde cada cor entra, a composição e onde fica o foco, o par de fontes e o contraste de peso, o tipo de imagem ou ilustração e o acabamento.
+Não transcreva o texto da arte nem descreva o assunto dela. Fale do visual, não do objeto.
 Até 6 frases curtas, sem lista, sem título, sem elogio.
+Em pilares, diga para quais pilares de conteúdo a peça serve. Pode ser mais de um, ou nenhum:
+- PROVA: obra entregue, produto, pronta entrega, capacidade da fábrica, antes e depois, detalhe de acabamento.
+- AUTORIDADE: tipos de vidro, espessura, norma, erro comum de especificação, manutenção, aplicação por ambiente.
+- GENTE: bastidor, rota de entrega, equipe, vaga, aniversário de colaborador, treinamento.
+- MARCA: aniversário da empresa, data do setor, data cívica ou religiosa da região, campanha institucional, comunicado.
 `.trim();
 
 const INSTRUCOES_DO_PLANO = `
@@ -72,7 +81,7 @@ export function iaDaOpenAI(chave: () => Promise<string | undefined>): Ia {
   const cliente = async () => new OpenAI({ apiKey: (await chave()) ?? "", fetch: fetchQueConta("Estúdio de artes", MODELO_DE_IMAGEM) });
   return {
     async lerReferencia(imagem, tipo) {
-      const resposta = await (await cliente()).responses.create({
+      const resposta = await (await cliente()).responses.parse({
         model: MODELO_DE_TEXTO,
         reasoning: { effort: "medium" },
         instructions: INSTRUCOES_DA_LEITURA,
@@ -82,8 +91,10 @@ export function iaDaOpenAI(chave: () => Promise<string | undefined>): Ia {
             content: [{ type: "input_image", detail: "high", image_url: `data:${tipo};base64,${Buffer.from(imagem).toString("base64")}` }],
           },
         ],
+        text: { format: zodTextFormat(LeituraDaReferencia, "leitura") },
       });
-      return resposta.output_text.trim();
+      if (!resposta.output_parsed) throw new Error("O modelo não devolveu a leitura da referência.");
+      return { leitura: resposta.output_parsed.leitura.trim(), pilares: resposta.output_parsed.pilares };
     },
 
     async planejarArte(pedido, formato, leituras) {

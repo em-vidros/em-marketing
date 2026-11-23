@@ -79,9 +79,9 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     if (!extensao) return c.json(erro("A referência precisa ser PNG, JPEG ou WebP."), 400);
     if (arquivo.size > TAMANHO_MAXIMO) return c.json(erro("A imagem passa de 10 MB."), 400);
     const bytes = new Uint8Array(await arquivo.arrayBuffer());
-    const leitura = await estudio.ia.lerReferencia(bytes, arquivo.type);
+    const { leitura, pilares } = await estudio.ia.lerReferencia(bytes, arquivo.type);
     const chave = await arquivos.salvar(bytes, extensao);
-    return c.json(await criarReferencia(banco, { arquivo: chave, leitura, criadaPor: c.get("usuario").id }), 201);
+    return c.json(await criarReferencia(banco, { arquivo: chave, leitura, pilares, criadaPor: c.get("usuario").id }), 201);
   });
 
   api.patch("/referencias/:id", async (c) => {
