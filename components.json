@@ -19,6 +19,7 @@
     "hooks": "@/shadcn/hooks"
   },
   "registries": {
-    "@calendarcn": "https://calendarcn.xyz/r/{name}.json"
+    "@calendarcn": "https://calendarcn.xyz/r/{name}.json",
+    "@beautifui": "https://www.beautifului.dev/r/{name}.json"
   }
 }
