@@ -99,3 +99,13 @@ _Evite_: anexo, upload, imagem colada
 **Biblioteca de referências**:
 O conjunto único de referências da empresa, compartilhado por todos. Começa com os posts reais da @emvidros e cresce com o que a equipe sobe ou marca.
 _Evite_: galeria, moodboard
+
+## Custo
+
+**Custo**:
+O valor em US$ de uma chamada às APIs de IA, pela tabela de preços do app, gravado no momento da chamada. O custo de um post soma tudo o que a conversa gastou enquanto ele estava em andamento.
+_Evite_: gasto da OpenAI, fatura
+
+**Crédito estimado**:
+O último saldo que a equipe informou do painel da OpenAI, mais os depósitos depois dele, menos o custo medido desde então. A OpenAI não deixa o app ler o saldo de verdade; informar o saldo de novo corrige a diferença.
+_Evite_: saldo real, crédito disponível

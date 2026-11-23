@@ -65,7 +65,7 @@ import {
 import { PILARES } from "../domain/art/pipeline";
 import { apagarData, criarData, dataPorId, diaExiste, mudarData, restaurarData, TESTES } from "../domain/scheduler/calendar";
 import { conectarChave, desconectarChave, ehProvedor, estadosDasChaves } from "../domain/chaves";
-import { saldo } from "../domain/saldo";
+import { informar, NovoMovimento, removerMovimento, saldo } from "../domain/saldo";
 import { resumoDoUso } from "../domain/uso";
 import { concluirLogin, urlDeLogin } from "../domain/instagram/meta-login";
 import { arteDaImagem, listarArtes, pedidoDaImagem, resumoDaArte, resumosDasArtes } from "../v2/artes";
@@ -451,7 +451,19 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
     },
     "/api/atividade": { GET: comSessao(async (_, u) => Response.json(await tarefasAtivas(u.id))) },
     "/api/uso": { GET: comSessao(async () => Response.json(await resumoDoUso())) },
-    "/api/saldo": { GET: comSessao(async () => Response.json(await saldo())) },
+    "/api/saldo": {
+      GET: comSessao(async () => Response.json(await saldo())),
+      POST: comSessao(async (req, u) => {
+        const corpo = await lerCorpo(req, NovoMovimento);
+        return "resposta" in corpo ? corpo.resposta : Response.json(await informar(corpo.dados, u.email), { status: 201 });
+      }),
+    },
+    "/api/saldo/:id": {
+      DELETE: comSessao<"/api/saldo/:id">(async (req) => ((await removerMovimento(req.params.id, true)) ? new Response(null, { status: 204 }) : naoEncontrado())),
+    },
+    "/api/saldo/:id/restaurar": {
+      POST: comSessao<"/api/saldo/:id/restaurar">(async (req) => ((await removerMovimento(req.params.id, false)) ? new Response(null, { status: 204 }) : naoEncontrado())),
+    },
     "/api/chaves": { GET: comSessao(async () => Response.json(await estadosDasChaves())) },
     "/api/chaves/:provedor": {
       PUT: comSessao<"/api/chaves/:provedor">(async (req, u) => {

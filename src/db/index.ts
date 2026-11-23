@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import type { UIMessage } from "ai";
 import type { BotId } from "../agent/bots";
 import { ehUrl } from "../armazem";
+import { custoDe } from "../domain/precos";
 import { q, transacao } from "../v2/banco";
 
 /**
@@ -207,6 +208,16 @@ export async function criarTabelas(): Promise<void> {
       imagens integer NOT NULL DEFAULT 0
     )`;
     await q`CREATE INDEX IF NOT EXISTS uso_api_em ON uso_api(em)`;
+    // custo é US$ pela tabela de domain/precos.ts no momento da chamada; conversa e post_id dão o custo de cada post.
+    await q`ALTER TABLE uso_api
+      ADD COLUMN IF NOT EXISTS cache_lido integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS cache_escrito integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS entrada_imagem integer NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS custo double precision,
+      ADD COLUMN IF NOT EXISTS conversa text,
+      ADD COLUMN IF NOT EXISTS post_id integer`;
+    await q`CREATE INDEX IF NOT EXISTS uso_api_post ON uso_api(post_id) WHERE post_id IS NOT NULL`;
+    await custearUsoAntigo();
 
     // Toda imagem que o fluxo de posts já gravou: variações, versões 9:16 e fotos recortadas. Só cresce.
     // posts.arts guarda só a última geração, e gerar de novo apagaria as anteriores da Biblioteca.
@@ -241,6 +252,21 @@ export async function criarTabelas(): Promise<void> {
       valor text NOT NULL
     )`;
   });
+}
+
+/**
+ * As linhas de antes da coluna custo. Elas não separam cache nem token de imagem, então a imagem
+ * entra pelo preço do texto e o custo antigo sai menor que o real.
+ */
+async function custearUsoAntigo(): Promise<void> {
+  const linhas = await q<{ id: number; modelo: string; entrada: number; saida: number }>`SELECT id, modelo, entrada, saida FROM uso_api WHERE custo IS NULL`;
+  const custos = linhas.flatMap((l) => {
+    const custo = custoDe(l);
+    return custo === null ? [] : [{ id: l.id, custo }];
+  });
+  if (custos.length === 0) return;
+  await q`UPDATE uso_api SET custo = c.custo FROM unnest(${custos.map((c) => c.id)}::int[], ${custos.map((c) => c.custo)}::double precision[]) AS c(id, custo)
+    WHERE uso_api.id = c.id`;
 }
 
 /** A primeira linha, ou null. */

@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { boolean, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { Pilar } from "../domain/art/pipeline";
 import { AJUSTES_NEUTROS, type Ajustes, type Camada, type Formato } from "./camadas";
 
@@ -31,6 +31,19 @@ export const artes = pgTable("artes", {
   criadaPor: text().notNull(),
   criadaEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
   atualizadaEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
+});
+
+/**
+ * O que a equipe informa do crédito da OpenAI: o saldo que o painel mostra ou um depósito. O saldo
+ * na tela é o último saldo informado, mais os depósitos depois dele, menos o custo medido desde então.
+ */
+export const movimentosDoSaldo = pgTable("movimentos_do_saldo", {
+  id: uuid().primaryKey().defaultRandom(),
+  tipo: text().$type<"saldo" | "deposito">().notNull(),
+  valor: doublePrecision().notNull(),
+  por: text().notNull(),
+  em: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  removidoEm: timestamp({ withTimezone: true }),
 });
 
 export type Referencia = typeof referencias.$inferSelect;
