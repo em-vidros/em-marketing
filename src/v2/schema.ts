@@ -1,18 +1,23 @@
 import { sql } from "drizzle-orm";
-import { boolean, jsonb, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { boolean, jsonb, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import type { Pilar } from "../domain/art/pipeline";
 import { AJUSTES_NEUTROS, type Ajustes, type Camada, type Formato } from "./camadas";
 
-export const referencias = pgTable("referencias", {
-  id: uuid().primaryKey().defaultRandom(),
-  arquivo: text().notNull(),
-  leitura: text().notNull(),
-  leituraEditadaPor: text(),
-  pilares: text().array().$type<Pilar[]>().notNull().default(sql`'{}'::text[]`),
-  criadaPor: text().notNull(),
-  criadaEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
-  removidaEm: timestamp({ withTimezone: true }),
-});
+export const referencias = pgTable(
+  "referencias",
+  {
+    id: uuid().primaryKey().defaultRandom(),
+    arquivo: text().notNull(),
+    leitura: text().notNull(),
+    leituraEditadaPor: text(),
+    pilares: text().array().$type<Pilar[]>().notNull().default(sql`'{}'::text[]`),
+    criadaPor: text().notNull(),
+    criadaEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
+    removidaEm: timestamp({ withTimezone: true }),
+  },
+  // Dois cliques em Guardar ao mesmo tempo não criam duas referências do mesmo arquivo.
+  (t) => [uniqueIndex("referencias_arquivo_ativa").on(t.arquivo).where(sql`${t.removidaEm} is null`)],
+);
 
 export const artes = pgTable("artes", {
   id: uuid().primaryKey().defaultRandom(),

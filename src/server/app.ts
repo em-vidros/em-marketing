@@ -36,11 +36,11 @@ export async function rotasDoApp() {
   const { estudio, segredoAprovacao } = await iniciar();
   const api = criarApi(estudio, usuarioDa);
   const apiNova = (req: Request) => api.fetch(req);
-  const base = rotas({ segredoAprovacao, carregarReferencias: (pedido) => referenciasParaGerar(estudio, pedido), estudio });
+  const base = rotas({ segredoAprovacao, carregarReferencias: (o) => referenciasParaGerar(estudio, o), estudio });
 
   return {
     ...base,
-    ...Object.fromEntries(["/api/referencias", "/api/referencias/*", "/api/artes", "/api/artes/*", "/api/arquivos/*", "/api/fontes"].map((rota) => [rota, apiNova])),
+    ...Object.fromEntries(["/api/referencias", "/api/referencias/*", "/api/artes", "/api/artes/*", "/api/arquivos", "/api/arquivos/*", "/api/fontes"].map((rota) => [rota, apiNova])),
     "/api/bots/:id/config": { ...base["/api/bots/:id/config"], PUT: soAdmin(base["/api/bots/:id/config"].PUT as Manipulador) },
     "/api/bots/:id/versoes/:versao/restaurar": { POST: soAdmin(base["/api/bots/:id/versoes/:versao/restaurar"].POST as Manipulador) },
     "/api/bots/:id/padrao": { POST: soAdmin(base["/api/bots/:id/padrao"].POST as Manipulador) },

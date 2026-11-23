@@ -34,12 +34,54 @@
   --color-erro-sobre-tinta: #ffb4ab;
   --color-erro: #b42318;
 
+  /* Materiais (apple-design): vidro claro sobre a conversa. Quanto maior a superfície, mais grosso o material. */
+  --color-material: rgb(250 249 248 / 0.72);
+  --color-material-grosso: rgb(250 249 248 / 0.86);
+  --color-material-fino: rgb(255 255 255 / 0.62);
+  --color-borda-material: rgb(255 255 255 / 0.7);
+  --color-preenchimento: rgb(120 116 112 / 0.12);
+  --color-preenchimento-forte: rgb(120 116 112 / 0.2);
+  --color-separador: rgb(60 56 52 / 0.16);
+  --color-veu: rgb(5 5 5 / 0.3);
+  --color-velado: rgb(5 5 5 / 0.5);
+  --color-sombra-perto: rgb(15 13 10 / 0.08);
+  --color-sombra-longe: rgb(15 13 10 / 0.16);
+
+  --blur-desfoque: 24px;
+  --blur-desfoque-grosso: 40px;
+
+  --shadow-material: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 0.5px var(--color-separador), 0 1px 3px var(--color-sombra-perto), 0 12px 32px -6px var(--color-sombra-longe);
+  --shadow-material-foco: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 1px var(--color-borda-campo), 0 0 0 4px var(--color-preenchimento), 0 1px 3px var(--color-sombra-perto), 0 12px 32px -6px var(--color-sombra-longe);
+  --shadow-popover: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 0.5px var(--color-separador), 0 2px 8px var(--color-sombra-perto), 0 24px 56px -8px var(--color-sombra-longe);
+  --shadow-capsula: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 0.5px var(--color-separador), 0 4px 14px -4px var(--color-sombra-longe);
+
+  /* Escala de tipo da Apple em Inter, com a entrelinha e o espaçamento de cada tamanho. */
+  --text-titulo-grande: 28px;
+  --text-titulo-grande--line-height: 1.12;
+  --text-titulo-grande--letter-spacing: -0.022em;
+  --text-manchete: 17px;
+  --text-manchete--letter-spacing: -0.012em;
+  --text-titulo: 15px;
+  --text-titulo--line-height: 1.3;
+  --text-titulo--letter-spacing: -0.012em;
+  --text-nota: 13px;
+  --text-nota--line-height: 1.3;
+  --text-legenda: 12px;
+  --text-legenda--line-height: 1.3;
+  --text-legenda--letter-spacing: 0.006em;
+  --text-legenda-2: 11px;
+
+  --radius-miniatura: 10px;
   --radius-item: 12px;
   --radius-cartao: 16px;
+  --radius-popover: 20px;
   --radius-balao: 24px;
   --radius-composer: 28px;
+  --radius-folha: 34px;
 
   --ease-saida: cubic-bezier(0.23, 1, 0.32, 1);
+  /* A curva de folha do iOS (Ionic): sobe rápido e assenta devagar, sem quique. */
+  --ease-folha: cubic-bezier(0.32, 0.72, 0, 1);
 }
 
 @layer base {
@@ -158,10 +200,37 @@
   }
 }
 
+/* O vidro do composer, do seletor e das cápsulas. Sem transparência, vira superfície sólida. */
+@utility material {
+  background-color: var(--color-material);
+  backdrop-filter: blur(var(--blur-desfoque)) saturate(180%);
+}
+@utility material-grosso {
+  background-color: var(--color-material-grosso);
+  backdrop-filter: blur(var(--blur-desfoque-grosso)) saturate(180%);
+}
+/*
+ * Os botões pequenos de vidro sobre uma imagem. A troca sem transparência fica dentro da utility, na camada dela,
+ * para um estado como bg-tinta na marcada continuar valendo por cima.
+ */
+@utility material-fino {
+  background-color: var(--color-material-fino);
+  backdrop-filter: blur(8px) saturate(180%);
+  @media (prefers-reduced-transparency: reduce) {
+    backdrop-filter: none;
+    background-color: var(--color-superficie);
+  }
+}
+
 @media (prefers-reduced-transparency: reduce) {
   .vidro {
     backdrop-filter: none;
     background-color: var(--color-fundo);
+  }
+  .material,
+  .material-grosso {
+    backdrop-filter: none;
+    background-color: var(--color-superficie);
   }
 }
 
@@ -273,6 +342,61 @@ button.linha:focus-visible {
   }
 }
 
+/* O seletor de referências nasce da seta do botão, com escala .96, e fecha mais rápido pelo mesmo caminho (transitions-dev, menu dropdown). */
+.seletor-popup {
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 200ms var(--ease-saida),
+    scale 200ms var(--ease-saida);
+}
+.seletor-popup[data-starting-style],
+.seletor-popup[data-ending-style] {
+  opacity: 0;
+  scale: 0.96;
+}
+.seletor-popup[data-ending-style] {
+  scale: 0.99;
+  transition-duration: 150ms;
+}
+
+/*
+ * A folha de baixo do celular (Drawer do Base UI) sobe pelo próprio tamanho e desce pelo mesmo caminho. Arrastada,
+ * segue o dedo sem transição; solta, fecha no tempo que a força do gesto pede. O véu clareia junto com o arrasto.
+ */
+.folha {
+  transform: translateY(var(--drawer-swipe-movement-y, 0px));
+  transition: transform 400ms var(--ease-folha);
+}
+.folha[data-starting-style],
+.folha[data-ending-style] {
+  transform: translateY(100%);
+}
+.folha[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * 300ms);
+}
+.folha-fundo {
+  opacity: calc(1 - var(--drawer-swipe-progress, 0));
+  transition: opacity 400ms var(--ease-folha);
+}
+.folha-fundo[data-starting-style],
+.folha-fundo[data-ending-style] {
+  opacity: 0;
+}
+.folha[data-swiping],
+.folha-fundo[data-swiping] {
+  transition-duration: 0ms;
+}
+
+/* O aviso de soltar aparece com o arquivo sobre a janela, uma vez, sem mexer o fundo. */
+.soltar-aqui {
+  animation: soltar-aqui 150ms var(--ease-saida) both;
+}
+@keyframes soltar-aqui {
+  from {
+    opacity: 0;
+  }
+}
+
 /* Menus de "…" e de clique direito: 200 ms de scale .95 a partir do gatilho (medido no Grok). */
 .menu-popup {
   transform-origin: var(--transform-origin);
@@ -334,16 +458,21 @@ button.linha:focus-visible {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .gaveta {
+  .gaveta,
+  .folha {
     transition-property: opacity;
   }
   .gaveta[data-starting-style],
-  .gaveta[data-ending-style] {
+  .gaveta[data-ending-style],
+  .folha[data-starting-style],
+  .folha[data-ending-style] {
     transform: none;
     opacity: 0;
   }
   .menu-popup[data-starting-style],
   .menu-popup[data-ending-style],
+  .seletor-popup[data-starting-style],
+  .seletor-popup[data-ending-style],
   .dica[data-starting-style],
   .dica[data-ending-style] {
     scale: 1;

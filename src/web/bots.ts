@@ -1,6 +1,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 import type { BotFixo, BotId, Forma } from "../agent/bots";
 import type { ConfigBot } from "../agent/config";
+import type { ToolName } from "../agent/tools";
 import { pegar } from "./api";
 
 export type { BotFixo, BotId, Forma };
@@ -89,6 +90,8 @@ export interface BotDaEquipe {
   descricao: string;
   setor: string;
   visual: Visual;
+  /** Gera artes, direto ou pelo Post: o composer dele aceita referências e imagens do pedido. */
+  geraArtes: boolean;
 }
 
 /** Os bots de GET /api/bots. `de` acha qualquer id, inclusive o de um bot apagado que ainda tem conversa. */
@@ -99,7 +102,16 @@ export interface Equipe {
 
 const SETOR_PADRAO = "Marketing";
 
-const doFixo = (id: BotFixo): BotDaEquipe => ({ id, nome: BOTS[id].nome, descricao: BOTS[id].papel, setor: SETOR_PADRAO, visual: BOTS[id] });
+const GERAM_ARTES: readonly ToolName[] = ["gerar_3_artes", "delegar_post"];
+
+const doFixo = (id: BotFixo): BotDaEquipe => ({
+  id,
+  nome: BOTS[id].nome,
+  descricao: BOTS[id].papel,
+  setor: SETOR_PADRAO,
+  visual: BOTS[id],
+  geraArtes: id === "chefe" || id === "post",
+});
 
 const daApi = (b: ConfigBot): BotDaEquipe => ({
   id: b.id,
@@ -107,9 +119,17 @@ const daApi = (b: ConfigBot): BotDaEquipe => ({
   descricao: b.descricao,
   setor: b.setor,
   visual: b.criado ? visualCriado(b.criado.forma, b.criado.cor) : ehBotFixo(b.id) ? BOTS[b.id] : visualCriado("circulo", CORES[0]),
+  geraArtes: b.tools.some((t) => GERAM_ARTES.includes(t)),
 });
 
-const APAGADO = (id: BotId): BotDaEquipe => ({ id, nome: "Bot apagado", descricao: "Este bot foi apagado.", setor: "", visual: visualCriado("circulo", "#a8a29e") });
+const APAGADO = (id: BotId): BotDaEquipe => ({
+  id,
+  nome: "Bot apagado",
+  descricao: "Este bot foi apagado.",
+  setor: "",
+  visual: visualCriado("circulo", "#a8a29e"),
+  geraArtes: false,
+});
 
 function montar(lista: readonly BotDaEquipe[]): Equipe {
   const porId = new Map(lista.map((b) => [b.id, b]));

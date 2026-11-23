@@ -13,6 +13,12 @@ export type Extensao = (typeof EXTENSOES)[keyof typeof EXTENSOES];
 
 export const TIPO_DA_EXTENSAO: Record<Extensao, string> = { png: "image/png", jpg: "image/jpeg", webp: "image/webp" };
 
+/** O `format` que o sharp lê no conteúdo de cada extensão. */
+export const FORMATO_DA_EXTENSAO = { png: "png", jpg: "jpeg", webp: "webp" } as const satisfies Record<Extensao, string>;
+
+/** Teto de pixels de uma imagem que alguém sobe ou cola: acima disso, decodificar estoura a memória da função. */
+export const PIXELS_MAXIMOS = 40_000_000;
+
 const CHAVE = /^[0-9a-f-]{36}\.(png|jpg|webp)$/;
 export const ehChave = (s: string) => CHAVE.test(s);
 

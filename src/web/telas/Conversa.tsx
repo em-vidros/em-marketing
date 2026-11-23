@@ -3,7 +3,7 @@ import { Menu } from "@base-ui/react/menu";
 import { lastAssistantMessageIsCompleteWithApprovalResponses } from "ai";
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, useState, useSyncExternalStore } from "react";
-import { pararResposta, useApi } from "../api";
+import { apiImagensDoPedido, pararResposta, useApi } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
@@ -20,6 +20,11 @@ import { pilhaDeDesfazer } from "../componentes/menu/desfazer";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { PainelTarefa } from "../componentes/PainelTarefa";
 import { Passos, trechosDe } from "../componentes/Passos";
+import { BarraDaEscolha, SoltarAqui } from "../componentes/referencias/Barra";
+import { dadosDa, useEscolha } from "../componentes/referencias/escolha";
+import { Fila } from "../componentes/referencias/Fila";
+import { GuardarNaBiblioteca } from "../componentes/referencias/Guardar";
+import { useImagensSoltas } from "../componentes/referencias/soltas";
 import { recarregarBots, useEquipe } from "../bots";
 import { Chevron } from "../componentes/ia/Raciocinio";
 import { Check } from "../componentes/Passos";
@@ -195,11 +200,28 @@ function SeletorDeBot({ escolha }: { escolha: EscolhaDoBot }) {
 /** Uma mensagem longa (um briefing colado, um texto inteiro) fica em dez linhas até pedir o resto. */
 const LONGA = 700;
 
-function BalaoDoUsuario({ texto }: { texto: string }) {
+/** O balão de quem pediu. As imagens coladas no pedido vêm em cima, cada uma com o próprio Guardar na Biblioteca. */
+function BalaoDoUsuario({ texto, coladas }: { texto: string; coladas: readonly string[] }) {
   const [tudo, setTudo] = useState(false);
   const longa = texto.length > LONGA || texto.split("\n").length > 10;
   return (
     <div className="flex max-w-full flex-col items-end gap-1">
+      {coladas.length > 0 && (
+        <ul aria-label="Imagens coladas no pedido" className="mb-0.5 flex max-w-full flex-wrap justify-end gap-3">
+          {coladas.map((chave) => (
+            <li key={chave} className="flex flex-col items-end gap-1.5">
+              <a href={apiImagensDoPedido.url(chave)} target="_blank" rel="noreferrer" className="block rounded-cartao">
+                <img
+                  src={apiImagensDoPedido.url(chave)}
+                  alt="Imagem colada no pedido. Abre em outra aba"
+                  className="block h-[132px] w-[176px] rounded-cartao bg-painel object-cover shadow-[0_0_0_0.5px_var(--color-separador)]"
+                />
+              </a>
+              <GuardarNaBiblioteca chave={chave} />
+            </li>
+          ))}
+        </ul>
+      )}
       <div data-balao className="max-w-full rounded-balao border border-linha bg-ativo px-4 py-2.5 whitespace-pre-line [overflow-wrap:anywhere]">
         <p className={longa && !tudo ? "line-clamp-[10]" : undefined}>{texto}</p>
       </div>
@@ -329,10 +351,22 @@ function Chat({
     devolverFoco(origem.current);
   }, []);
 
-  function enviar(t: string) {
+  // O que a pessoa marcou e colou vai com a próxima mensagem que ela escreve, só para bots que geram artes.
+  const escolhaDoPedido = useEscolha();
+  const geraArtes = nomes.de(bot).geraArtes;
+  const soltando = useImagensSoltas(escolhaDoPedido.colar, geraArtes);
+
+  function enviar(t: string, { comEscolha = true } = {}) {
+    // O composer já espera; uma sugestão clicada no meio do envio da imagem passaria sem ela.
+    const espera = comEscolha && geraArtes ? escolhaDoPedido.espera : null;
+    if (espera)
+      return mostrarAviso({ tipo: "erro", texto: espera === "subindo" ? "Espere a imagem terminar de subir." : "Uma imagem não subiu. Tente de novo ou tire a imagem do pedido." });
     if (!travada && chat.messages.length === 0) navegar(`/c/${id}`, { substituir: true });
     fim.forcar();
-    chat.sendMessage({ text: t });
+    const dados = comEscolha && geraArtes ? dadosDa(escolhaDoPedido.escolha) : null;
+    if (!dados) return void chat.sendMessage({ text: t });
+    escolhaDoPedido.limpar();
+    void chat.sendMessage({ parts: [{ type: "text", text: t }, { type: "data-referencias", data: dados }] });
   }
 
   // Responder duas vezes ao mesmo pedido publicaria duas vezes: clique, A e R passam por aqui.
@@ -417,7 +451,9 @@ function Chat({
     pendente.current = { antes: chat.messages, edicao: { id: editando.id, texto: textoNovo, volta: editando.volta } };
     setFoco(editando.id);
     setEditando(null);
-    void chat.sendMessage({ text: textoNovo, messageId: editando.id });
+    // A escolha vai junto: o servidor apaga a resposta que a usou, e ela volta a valer para a nova.
+    const escolhaDaMensagem = chat.messages.find((m) => m.id === editando.id)!.parts.filter((p) => p.type === "data-referencias");
+    void chat.sendMessage({ parts: [{ type: "text", text: textoNovo }, ...escolhaDaMensagem], messageId: editando.id });
   }
   function refazer(mensagemId: string) {
     if (respondendo) return;
@@ -463,10 +499,10 @@ function Chat({
 
   const erro = chat.error ? lerErro(chat.error) : null;
   const ultima = chat.messages.at(-1);
-  const turno = ultima?.role === "assistant" ? ultima : null;
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1">
+    <div className="relative flex min-h-0 min-w-0 flex-1">
+      {soltando && <SoltarAqui />}
       <main id="conteudo" onKeyDown={aoTeclar} className="relative flex min-w-0 flex-1 flex-col overflow-y-auto">
         <Cabecalho abrirMenu={abrirMenu} bot={bot} estado={estadoDe(estados, bot)} titulo={titulo} dono={dono} />
         {chat.messages.length === 0 ? (
@@ -500,7 +536,7 @@ function Chat({
                 >
                   {m.role === "user" ? (
                     <TrocaDeEdicao editando={editando?.id === m.id}>
-                      <BalaoDoUsuario texto={textoDaMensagem(m)} />
+                      <BalaoDoUsuario texto={textoDaMensagem(m)} coladas={coladasDa(m)} />
                       {editando?.id === m.id && (
                         <EditorDeMensagem
                           key={editando.vez}
@@ -522,7 +558,7 @@ function Chat({
                           key={t.chave}
                           parte={t.parte}
                           noAr={respondendo && m === ultima}
-                          escolher={!respondendo && m === ultima ? (n) => enviar(`Quero a variação ${n}.`) : null}
+                          escolher={!respondendo && m === ultima ? (n) => enviar(`Quero a variação ${n}.`, { comEscolha: false }) : null}
                           painel={painel}
                           abrir={abrir}
                           responder={responder}
@@ -557,7 +593,14 @@ function Chat({
         <Composer
           rotulo={`Mensagem para ${nomes.de(bot).nome}`}
           placeholder={bot === "chefe" ? "O que vamos postar?" : `Escreva para ${nomes.de(bot).nome}`}
-          extra={chat.messages.length === 0 && !travada ? <SeletorDeBot escolha={escolha} /> : null}
+          extra={
+            <>
+              {chat.messages.length === 0 && !travada && <SeletorDeBot escolha={escolha} />}
+              {geraArtes && <BarraDaEscolha controle={escolhaDoPedido} />}
+            </>
+          }
+          fila={geraArtes && <Fila controle={escolhaDoPedido} />}
+          esperando={geraArtes && escolhaDoPedido.espera !== null}
           respondendo={respondendo}
           aoSubirVazio={() => executar("mensagem-editar-ultima")}
           enviar={enviar}
@@ -613,6 +656,9 @@ function ParteDoChefe({
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
 const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p);
+
+/** As chaves das imagens coladas que vieram com a mensagem. */
+const coladasDa = (m: Mensagem) => m.parts.flatMap((p) => (p.type === "data-referencias" ? p.data.coladas : []));
 
 /** Para onde o foco volta quando a edição fecha: a mensagem, ou o composer quando o ↑ abriu a edição de lá. */
 type Volta = string | "composer";

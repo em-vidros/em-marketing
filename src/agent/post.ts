@@ -275,18 +275,21 @@ function lerLinha(row: PostRow): EtapaPost {
   return { ...base, etapa: "formato", formato };
 }
 
-/** posts.arts de antes das referências da Biblioteca: `style` no lugar de `referencia`, e "foto-real" marcava a foto do banco. */
-type ArteAntiga = { variant: number; style: string; path: string; problemas: Problema[] };
+/**
+ * posts.arts de antes das referências no chat. As de antes da Biblioteca têm `style`, e "foto-real" marcava a foto do banco;
+ * as seguintes têm só o id em `referencia`. Nenhuma guarda a imagem, então voltam sem `ancora`. O id fica, para a story
+ * derivada saber que a arte veio de uma referência e pular o gate de paleta.
+ */
+type ArteGravada = Omit<ArtVariant, "referencia"> & { foto?: true; style?: string; referencia?: string | null };
 
 function artesGravadas(arts: string | null): Arte[] {
-  const gravadas: (Arte | ArteAntiga)[] = arts ? JSON.parse(arts) : [];
+  const gravadas: ArteGravada[] = arts ? JSON.parse(arts) : [];
   return gravadas.map(arteAtual);
 }
 
-function arteAtual(gravada: Arte | ArteAntiga): Arte {
-  if (!("style" in gravada)) return gravada;
-  const { style, ...resto } = gravada;
-  return style === "foto-real" ? { ...resto, foto: true } : { ...resto, referencia: null };
+function arteAtual({ foto, style, referencia, ...resto }: ArteGravada): Arte {
+  if (foto || style === "foto-real") return { variant: resto.variant, foto: true, path: resto.path, problemas: resto.problemas };
+  return referencia ? { ...resto, referencia } : resto;
 }
 
 const STATUS: Record<Etapa, string> = {

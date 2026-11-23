@@ -66,11 +66,11 @@ describe("generate3Arts", () => {
   }
 
   test("cada variação parte de uma referência diferente: a imagem dela vai primeiro, a leitura dela vai no prompt e as imagens coladas vão depois", async () => {
-    const referencias = ["a", "b", "c"].map((id, i) => ({ id, leitura: `leitura da ${id}`, imagem: new Uint8Array([i + 1]) }));
+    const referencias = ["a", "b", "c"].map((id, i) => ({ origem: "biblioteca" as const, id, arquivo: `${id}.png`, leitura: `leitura da ${id}`, imagem: new Uint8Array([i + 1]) }));
     const colada = new Uint8Array([9]);
     const { artes, pedidos } = await gerarComFalso({ referencias, anexos: [colada] });
 
-    expect(artes.map((a) => a.referencia)).toEqual(["a", "b", "c"]);
+    expect(artes.map((a) => a.ancora)).toEqual(referencias.map(({ imagem: _, ...ancora }) => ancora));
     for (const r of referencias) {
       const pedido = pedidos.find((p) => p.prompt.includes(r.leitura));
       expect(pedido?.referencias).toEqual([r.imagem, colada]);
@@ -80,7 +80,7 @@ describe("generate3Arts", () => {
   test("com a Biblioteca vazia, as 3 variações saem no visual da casa, sem imagem de referência", async () => {
     const { artes, pedidos } = await gerarComFalso({ referencias: [], anexos: [] });
 
-    expect(artes.map((a) => a.referencia)).toEqual([null, null, null]);
+    expect(artes.map((a) => a.ancora)).toEqual([null, null, null]);
     expect(pedidos.map((p) => [p.referencias, p.prompt.includes("house look")])).toEqual([
       [[], true],
       [[], true],
@@ -91,7 +91,7 @@ describe("generate3Arts", () => {
   test("o gate de paleta só mede a arte no visual da casa: a variação de uma referência e a story derivada dela pulam a checagem", async () => {
     const vermelho = "#D02020";
     const temPaleta = (a: { problemas: { regra: string }[] }) => a.problemas.some((p) => p.regra === "§4.1 paleta");
-    const referencia = { id: "foto", leitura: "foto de obra", imagem: new Uint8Array([1]) };
+    const referencia = { origem: "biblioteca" as const, id: "foto", arquivo: "foto.png", leitura: "foto de obra", imagem: new Uint8Array([1]) };
 
     const daReferencia = await gerarComFalso({ referencias: [referencia], anexos: [] }, vermelho);
     const daCasa = await gerarComFalso({ referencias: [], anexos: [] }, vermelho);

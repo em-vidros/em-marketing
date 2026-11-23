@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useApi } from "../api";
 import { navegar } from "../rota";
 import type { Parte } from "../tipos";
+import { ReferenciasUsadas } from "./referencias/Usadas";
 
 export type ParteMostrarArtes = Extract<Parte, { type: "tool-mostrar_artes" }>;
 
@@ -70,6 +71,7 @@ export function EscolhaDeArtes({ parte, escolher }: { parte: ParteMostrarArtes; 
   const proporcao = formato === "stories" ? "aspect-[9/16]" : "aspect-[4/5]";
   return (
     <section aria-label="Escolha uma arte" className="flex flex-col gap-3">
+      <ReferenciasUsadas artes={artes} />
       <ul className="grid max-w-2xl grid-cols-3 gap-2.5 sm:gap-3">
         {artes.map((a) => (
           <li key={a.variante} className="flex min-w-0 flex-col gap-2">

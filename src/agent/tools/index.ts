@@ -5,7 +5,7 @@ import { toolsDeEquipe } from "./equipe";
 import { toolsDeFotos } from "./fotos";
 import { toolsDeMemoria } from "./memoria";
 import { toolsDePost } from "./post";
-import type { CarregarReferencias } from "../../v2/referencias";
+import type { ReferenciasDoTurno } from "../pedido";
 import { toolsDeTexto } from "./texto";
 import { buscaNaWeb, toolsDeWeb } from "./web";
 
@@ -18,15 +18,15 @@ export interface Turno {
   /** Quem está na conversa. Vai como autor das versões que o Chefe grava ao criar ou editar um bot. */
   autor: string;
   rodar: RodarDelegado;
-  carregarReferencias?: CarregarReferencias;
+  referencias?: ReferenciasDoTurno;
 }
 
 /**
  * Todas as tools. As de post leem e gravam o post da conversa; as de delegação rodam especialistas nela;
  * lembrar grava na memória do bot que está no turno.
  */
-export const catalogo = async ({ conversaId, botId, autor, rodar, carregarReferencias }: Turno) => ({
-  ...toolsDePost(conversaId, carregarReferencias),
+export const catalogo = async ({ conversaId, botId, autor, rodar, referencias }: Turno) => ({
+  ...toolsDePost(conversaId, referencias),
   ...toolsDeFotos,
   ...toolsDeAgenda,
   ...toolsDeTexto,

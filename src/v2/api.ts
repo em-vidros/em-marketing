@@ -5,10 +5,10 @@ import sharp from "sharp";
 import { z } from "zod";
 import type { Usuario } from "../server/auth";
 import { criarArte, gravarEdicao, listarArtes, novaCena, pegarArte, separarElementos, separavel, type Estudio } from "./artes";
-import { EXTENSOES, ehChave, TIPO_DA_EXTENSAO, type Extensao } from "./arquivos";
+import { EXTENSOES, FORMATO_DA_EXTENSAO, PIXELS_MAXIMOS, ehChave, TIPO_DA_EXTENSAO, type Extensao } from "./arquivos";
 import { Ajustes, Camadas, FORMATOS, type Formato } from "./camadas";
 import { catalogoDeFontes, fonteRecusada } from "./fontsource";
-import { criarReferencia, editarLeitura, listarReferencias, removerReferencia, restaurarReferencia } from "./referencias";
+import { criarReferencia, editarLeitura, guardarNaBiblioteca, listarReferencias, removerReferencia, restaurarReferencia } from "./referencias";
 import { renderizar } from "./render";
 
 /** O servidor não tem fontes de sistema: texto dentro de um SVG enviado sai com as fontes da marca. */
@@ -36,6 +36,17 @@ const Edicao = z.object({ camadas: Camadas, ajustes: Ajustes });
 type Ambiente = { Variables: { usuario: Usuario } };
 
 const erro = (mensagem: string) => ({ erro: mensagem });
+
+/** O tipo que o navegador declara não prova nada: o conteúdo precisa abrir, ser do formato da extensão e caber no teto de pixels. */
+async function recusaDaImagem(bytes: Uint8Array, extensao: Extensao): Promise<string | null> {
+  const m = await sharp(bytes)
+    .metadata()
+    .catch(() => null);
+  if (!m?.width || !m.height) return "Não deu para ler essa imagem. Confira se o arquivo não está corrompido.";
+  if (m.format !== FORMATO_DA_EXTENSAO[extensao]) return "O conteúdo do arquivo não é PNG, JPEG ou WebP.";
+  if (m.width * m.height > PIXELS_MAXIMOS) return "A imagem passa de 40 megapixels. Reduza e tente de novo.";
+  return null;
+}
 
 /**
  * As rotas novas: biblioteca de referências e artes com camadas.
@@ -79,6 +90,8 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     if (!extensao) return c.json(erro("A referência precisa ser PNG, JPEG ou WebP."), 400);
     if (arquivo.size > TAMANHO_MAXIMO) return c.json(erro("A imagem passa de 10 MB."), 400);
     const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    const recusa = await recusaDaImagem(bytes, extensao);
+    if (recusa) return c.json(erro(recusa), 400);
     const { leitura, pilares } = await estudio.ia.lerReferencia(bytes, arquivo.type);
     const chave = await arquivos.salvar(bytes, extensao);
     return c.json(await criarReferencia(banco, { arquivo: chave, leitura, pilares, criadaPor: c.get("usuario").id }), 201);
@@ -98,6 +111,26 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
   api.post("/referencias/:id/restaurar", async (c) => {
     const restaurada = await restaurarReferencia(banco, c.req.param("id"));
     return restaurada ? c.json(restaurada) : c.json(erro("Não encontrado."), 404);
+  });
+
+  // A imagem que a pessoa cola no chat sobe aqui, sem a IA ler: ela vale só para o próximo pedido, e a mensagem guarda a chave.
+  api.post("/arquivos", async (c) => {
+    const form = await c.req.formData().catch(() => null);
+    const arquivo = form?.get("arquivo");
+    if (!(arquivo instanceof File)) return c.json(erro("Mande a imagem no campo arquivo."), 400);
+    const extensao: Extensao | undefined = EXTENSOES[arquivo.type as keyof typeof EXTENSOES];
+    if (!extensao) return c.json(erro("A imagem precisa ser PNG, JPEG ou WebP."), 400);
+    if (arquivo.size > TAMANHO_MAXIMO) return c.json(erro("A imagem passa de 10 MB."), 400);
+    const bytes = new Uint8Array(await arquivo.arrayBuffer());
+    const recusa = await recusaDaImagem(bytes, extensao);
+    if (recusa) return c.json(erro(recusa), 400);
+    return c.json({ chave: await arquivos.salvar(bytes, extensao) }, 201);
+  });
+
+  api.post("/arquivos/:chave/referencia", async (c) => {
+    const chave = c.req.param("chave");
+    const guardada = ehChave(chave) ? await guardarNaBiblioteca(estudio, chave, c.get("usuario").id) : null;
+    return guardada ? c.json({ ...guardada.referencia, criada: guardada.criada }, guardada.criada ? 201 : 200) : c.json(erro("Não encontrado."), 404);
   });
 
   api.get("/arquivos/:chave", async (c) => {

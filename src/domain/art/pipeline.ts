@@ -20,24 +20,31 @@ export interface Brief {
   precisaFotoReal?: boolean;
 }
 
-/** Uma referência da Biblioteca pronta para o modelo de imagem: a própria imagem em JPEG e a leitura da equipe. */
-export interface ReferenciaParaGerar {
-  id: string;
-  leitura: string;
-  imagem: Uint8Array;
-}
+/**
+ * A imagem que guiou uma variação: uma referência da Biblioteca, com a leitura da equipe, ou uma imagem que a
+ * pessoa colou no pedido, que ninguém leu. `arquivo` é a chave em /api/arquivos.
+ */
+export type Ancora = { origem: "biblioteca"; id: string; arquivo: string; leitura: string } | { origem: "pedido"; arquivo: string };
+
+/** Uma âncora pronta para o modelo de imagem, com a própria imagem em JPEG. */
+export type ReferenciaParaGerar = Ancora & { imagem: Uint8Array };
 
 export interface ArtVariant {
   variant: number;
-  /** A referência da Biblioteca que guiou a variação. Null quando a Biblioteca não tinha nenhuma ou não respondeu. */
-  referencia: string | null;
+  /**
+   * A imagem que guiou a variação. Null: a variação saiu no visual da casa.
+   * Ausente nas artes gravadas antes das referências no chat, que não guardavam a imagem.
+   */
+  ancora?: Ancora | null;
+  /** Só nas artes gravadas antes das referências no chat: o id da referência que guiou, sem a imagem. */
+  referencia?: string;
   path: string;
   /** Gate visual (§4, §6) — medido no JPEG final, ver art/validate.ts. */
   problemas: Problema[];
 }
 
 /** De onde vem a cara da arte: uma referência da Biblioteca, o visual padrão da casa, ou a arte de feed que a story adapta. */
-export type Visual = { tipo: "referencia"; leitura: string } | { tipo: "casa" } | { tipo: "adaptacao" };
+export type Visual = { tipo: "referencia"; leitura: string } | { tipo: "pedido" } | { tipo: "casa" } | { tipo: "adaptacao" };
 
 /**
  * O que a marca não aceita em nenhuma arte. Os posts reais da @emvidros usam vidro 3D, brilho,
@@ -98,7 +105,7 @@ export function buildPrompt(opts: {
     FORMATO: FORMATOS_DO_PROMPT[formato].descricao,
     TEMA: `${brief.tema}${brief.angulo ? `, angle: ${brief.angulo}` : ""}${brief.data ? ` (date: ${brief.data})` : ""} [content pillar: ${brief.pilar}]`,
     VISUAL: linguagemVisual(visual),
-    ANEXOS: anexos > 0 ? `EXTRA IMAGES: the ${visual.tipo === "referencia" ? "images after the first one" : "attached images"} were sent by the client in the chat. Use them for what they show (a subject, a mood, a detail), never as a reason to drop the visual language above.` : "",
+    ANEXOS: anexos > 0 ? `EXTRA IMAGES: the ${visual.tipo === "referencia" || visual.tipo === "pedido" ? "images after the first one" : "attached images"} were sent by the client in the chat. Use them for what they show (a subject, a mood, a detail), never as a reason to drop the visual language above.` : "",
     DIRECAO: opts.direcao
       ? `ART DIRECTION FROM THE CLIENT (this overrides the visual language above wherever they conflict; keep the colour family and professional agency quality):\n${opts.direcao}`
       : "",
@@ -116,6 +123,8 @@ function linguagemVisual(visual: Visual): string {
   switch (visual.tipo) {
     case "referencia":
       return `VISUAL LANGUAGE: match the visual language of the first reference image (palette, composition, typography, finish). It is an EM Vidros-approved piece. Never copy its text, subject, layout details or logo.\nThe EM Vidros team's note about it: ${visual.leitura}`;
+    case "pedido":
+      return "VISUAL LANGUAGE: match the visual language of the first image (palette, composition, typography, finish). The client attached it to this request to show the look they want. Never copy its text, subject, layout details or logo.";
     case "casa":
       return "VISUAL LANGUAGE: the EM Vidros house look. Teal family (#2F646A, #63B5AF) with white and off-white #F0EFEA, one clear focal element, a bold geometric sans headline with strong weight contrast, generous margins and a clean, premium advertising-agency finish.";
     case "adaptacao":
@@ -124,8 +133,8 @@ function linguagemVisual(visual: Visual): string {
 }
 
 /**
- * US-3: gera 3 variações em paralelo, cada uma ancorada numa referência diferente da Biblioteca.
- * Sem referência, a variação sai no visual padrão da casa. `gerar` só muda nos testes.
+ * US-3: gera 3 variações em paralelo, cada uma ancorada numa imagem diferente, da Biblioteca ou do pedido.
+ * Sem âncora, a variação sai no visual padrão da casa. `gerar` só muda nos testes.
  */
 export async function generate3Arts(
   opts: {
@@ -136,8 +145,9 @@ export async function generate3Arts(
     apoio?: string;
     /** Estilo pedido pelo usuário. As 3 variações seguem a direção, cada uma sobre a base da sua referência. */
     direcao?: string;
+    /** As âncoras, uma por variação, em rodízio quando vêm menos de 3. */
     referencias: readonly ReferenciaParaGerar[];
-    /** Imagens que o usuário mandou na conversa (bytes já baixados). Vão nas 3 variações, depois da referência. */
+    /** Imagens extras do pedido (links colados, escolhas além da terceira). Vão nas 3 variações, depois da âncora. */
     anexos: readonly Uint8Array[];
   },
   gerar = generateArt,
@@ -154,7 +164,7 @@ export async function generate3Arts(
   return Promise.all(
     [1, 2, 3].map(async (variant, i) => {
       const ancora = referencias.length > 0 ? referencias[i % referencias.length] : undefined;
-      const visual: Visual = ancora ? { tipo: "referencia", leitura: ancora.leitura } : { tipo: "casa" };
+      const visual: Visual = !ancora ? { tipo: "casa" } : ancora.origem === "biblioteca" ? { tipo: "referencia", leitura: ancora.leitura } : { tipo: "pedido" };
       const prompt = buildPrompt({ formato, brief, headline, apoio, visual, anexos: anexos.length, direcao });
       const gerada = await gerar({ prompt, formato, referencias: [...(ancora ? [ancora.imagem] : []), ...anexos] });
 
@@ -163,7 +173,7 @@ export async function generate3Arts(
       // A paleta só se mede no visual da casa: a referência e a direção do usuário trazem as cores delas, muitas vezes de foto.
       const problemas = await validarArte(jpeg, formato, { paleta: !ancora && !direcao });
 
-      return { variant, referencia: ancora?.id ?? null, path, problemas };
+      return { variant, ancora: ancora ? semImagem(ancora) : null, path, problemas };
     }),
   );
 }
@@ -186,5 +196,8 @@ export async function deriveStory(
   const jpeg = await aplicarLogo(gerada, "stories");
   const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived-${Math.floor(Date.now() / 1000)}.jpg`, jpeg, "image/jpeg");
 
-  return { path, problemas: await validarArte(jpeg, "stories", { paleta: opts.chosen.referencia === null }) };
+  return { path, problemas: await validarArte(jpeg, "stories", { paleta: !opts.chosen.ancora && !opts.chosen.referencia }) };
 }
+
+const semImagem = (r: ReferenciaParaGerar): Ancora =>
+  r.origem === "biblioteca" ? { origem: r.origem, id: r.id, arquivo: r.arquivo, leitura: r.leitura } : { origem: r.origem, arquivo: r.arquivo };

@@ -2,6 +2,7 @@ import { tool } from "ai";
 import sharp from "sharp";
 import { z } from "zod";
 import { emOrdem, idDaImagem, urlDaMidia } from "../../db";
+import { PIXELS_MAXIMOS } from "../../v2/arquivos";
 import { q } from "../../v2/banco";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief, type Pilar, type ReferenciaParaGerar } from "../../domain/art/pipeline";
@@ -24,7 +25,7 @@ import {
 } from "../post";
 import { agendarPost } from "../fila";
 import { fotoPublica } from "./fotos";
-import type { CarregarReferencias } from "../../v2/referencias";
+import type { ReferenciasDoTurno } from "../pedido";
 
 const formato = z.enum(["feed", "stories", "ambos"]);
 
@@ -41,7 +42,7 @@ async function baixarImagens(urls: string[]): Promise<{ imagens: Uint8Array[]; r
       if (!res.ok || !tipo.startsWith("image/")) throw new Error(tipo || String(res.status));
       const bytes = new Uint8Array(await res.arrayBuffer());
       if (bytes.byteLength > TETO_DA_IMAGEM) throw new Error("acima de 10 MB");
-      imagens.push(await sharp(bytes).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer());
+      imagens.push(await sharp(bytes, { limitInputPixels: PIXELS_MAXIMOS }).resize(1024, 1024, { fit: "inside" }).jpeg({ quality: 85 }).toBuffer());
     } catch {
       recusadas.push(url);
     }
@@ -50,9 +51,9 @@ async function baixarImagens(urls: string[]): Promise<{ imagens: Uint8Array[]; r
 }
 
 /** Sem a Biblioteca, as artes saem no visual padrão da casa em vez de falhar. */
-async function referenciasOuNenhuma(carregar: CarregarReferencias | undefined, pilar: Pilar): Promise<ReferenciaParaGerar[]> {
-  if (!carregar) return [];
-  return carregar({ pilar }).catch((erro: unknown) => {
+async function referenciasOuNenhuma(referencias: ReferenciasDoTurno | undefined, pilar: Pilar): Promise<ReferenciaParaGerar[]> {
+  if (!referencias) return [];
+  return referencias.carregar(pilar).catch((erro: unknown) => {
     console.error("gerar_3_artes: as artes saem sem referência porque a Biblioteca não respondeu", erro);
     return [];
   });
@@ -70,14 +71,15 @@ async function aplicar(conversaId: string, evento: Evento) {
 
 const artePublica = async (a: Arte) => ({
   variante: a.variant,
-  referencia: "foto" in a ? null : a.referencia,
+  /** A imagem que guiou a variação, para a linha de referências usadas. Ausente na foto real e nas artes antigas. */
+  ancora: "foto" in a ? undefined : a.ancora,
   url: await urlDaMidia(a.path),
   /** A chave de POST /api/imagens/:id/editar. gravarPost registra a imagem antes de a tool responder. */
   imagemId: await idDaImagem(a.path),
   problemas: a.problemas,
 });
 
-export function toolsDePost(conversaId: string, carregarReferencias?: CarregarReferencias) {
+export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno) {
   const atual = (): Promise<EtapaPost | null> => postDaConversa(conversaId);
 
   return {
@@ -121,7 +123,7 @@ export function toolsDePost(conversaId: string, carregarReferencias?: CarregarRe
 
     gerar_3_artes: tool({
       description:
-        "Gera as 3 variações de arte no formato escolhido. Cada variação parte de uma referência diferente da Biblioteca, que vai como imagem ao modelo: a subida mais recente sempre entra e as outras giram, preferindo as do pilar do post. Refazer as artes é chamar de novo. Quando o usuário pedir outro estilo, passe direcao com o que ele pediu, detalhado com o que você achou em pesquisar_referencias.",
+        "Gera as 3 variações de arte no formato escolhido. Cada variação parte de uma imagem diferente, que vai ao modelo: primeiro as referências que a pessoa marcou e as imagens que ela colou no pedido, sozinhas, sem você repassar; sem escolha dela, a referência subida mais recente e uma rotação da Biblioteca que prefere o pilar do post. Refazer as artes é chamar de novo. Quando o usuário pedir outro estilo, passe direcao com o que ele pediu, detalhado com o que você achou em pesquisar_referencias.",
       inputSchema: z.object({
         direcao: z
           .string()
@@ -145,10 +147,13 @@ export function toolsDePost(conversaId: string, carregarReferencias?: CarregarRe
 
         // "ambos": feed primeiro, o stories sai depois por derivar_story (PRD US-2).
         const alvo = p.formato === "ambos" ? "feed" : p.formato;
-        const referencias = await referenciasOuNenhuma(carregarReferencias, p.brief.pilar);
+        // Até 3 âncoras, uma por variação; o que a pessoa escolheu além disso vai junto nas 3, como os links colados.
+        const carregadas = await referenciasOuNenhuma(referencias, p.brief.pilar);
         const baixadas = imagens?.length ? await baixarImagens(imagens) : { imagens: [], recusadas: [] };
+        const anexos = [...carregadas.slice(3).map((r) => r.imagem), ...baixadas.imagens];
 
-        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, direcao, referencias, anexos: baixadas.imagens });
+        const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, direcao, referencias: carregadas.slice(0, 3), anexos });
+        referencias?.usar(carregadas);
         const estado = await aplicar(conversaId, { tipo: "artes", artes });
 
         return {

@@ -1,5 +1,6 @@
-import type { InferUITools, UIDataTypes, UIMessage } from "ai";
+import type { InferUITools, UIMessage } from "ai";
 import type { BotId } from "../agent/bots";
+import type { DadosDaEscolha } from "../agent/pedido";
 import type { Conversa, ConversaDaEquipe, Pessoa } from "../agent/conversas";
 import type { ResumoTarefa, Tarefa } from "../agent/tarefas";
 import type { Catalogo, SaidaDelegacao, ToolName } from "../agent/tools";
@@ -9,7 +10,8 @@ export type { BotId, Conversa, ConversaDaEquipe, Pessoa, ResumoTarefa, SaidaDele
 /** As tools do servidor, como o useChat as vê. Os tipos de entrada e saída vêm das definições. */
 export type Ferramentas = InferUITools<Catalogo>;
 
-export type Mensagem = UIMessage<unknown, UIDataTypes, Ferramentas>;
+/** A parte data-referencias leva o que a pessoa marcou e colou para o pedido. */
+export type Mensagem = UIMessage<unknown, { referencias: DadosDaEscolha }, Ferramentas>;
 export type Parte = Mensagem["parts"][number];
 
 export type ParteDelegacao = Extract<Parte, { type: `tool-delegar_${string}` }>;

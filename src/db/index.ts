@@ -20,7 +20,7 @@ export async function criarTabelas(): Promise<void> {
       formato text CHECK (formato IN ('feed','stories','ambos')),
       headline text,
       legenda text,
-      arts text,                      -- JSON [{variant, referencia, path, problemas}]; a foto real tem foto: true; linhas antigas têm style
+      arts text,                      -- JSON [{variant, ancora, path, problemas}]; a foto real tem foto: true; linhas antigas têm style ou referencia
       chosen integer,                 -- 1..3
       story_path text,
       status text DEFAULT 'draft',    -- draft|generated|chosen|scheduled|published|failed
