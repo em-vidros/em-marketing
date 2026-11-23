@@ -2,7 +2,7 @@ import { useState } from "react";
 import type { ReferenciaDaApi } from "../../api";
 import { alternarMarcada, useMarcadas, usarComoReferencia } from "./marcadas";
 
-const TROCA = "absolute inset-0 size-full transition-[opacity,transform,filter] duration-200 ease-(--ease-saida) motion-reduce:transition-opacity";
+const TROCA = "absolute inset-0 size-full transition-[opacity,scale,filter] duration-200 ease-(--ease-saida) motion-reduce:transition-opacity";
 const MOSTRADO = "scale-100 opacity-100 blur-none";
 const ESCONDIDO = "scale-[0.25] opacity-0 blur-[4px] motion-reduce:scale-100 motion-reduce:blur-none";
 
@@ -25,7 +25,6 @@ export function BotaoReferencia({
   const marcada = referencia ? marcadas.some((r) => r.id === referencia.id) : false;
   const cheio = tamanho === "cheio";
   const rotulo = marcada ? "Tirar das referências do pedido" : "Usar como referência no próximo pedido";
-  const entrada = `transition-[scale,filter,color,background-color] duration-200 ease-(--ease-saida) motion-reduce:transition-none ${marcada ? "" : "scale-90 blur-[3px] pointer-coarse:scale-100 pointer-coarse:blur-none motion-reduce:scale-100 motion-reduce:blur-none"}`;
   const botao = (
     <button
       type="button"
@@ -40,12 +39,12 @@ export function BotaoReferencia({
         await usarComoReferencia(imagem.url, imagem.nome);
         setSubindo(false);
       }}
-      className={`pressiona grid cursor-pointer place-items-center rounded-full disabled:cursor-default ${entrada} ${cheio ? "size-9 group-hover/imagem:scale-100 group-hover/imagem:blur-none focus-visible:scale-100 focus-visible:blur-none" : "size-7 group-hover:scale-100 group-hover:blur-none focus-visible:scale-100 focus-visible:blur-none"} ${
+      className={`pressiona grid cursor-pointer place-items-center rounded-full disabled:cursor-default ${cheio ? "size-9" : "size-7"} ${
         marcada
           ? "bg-tinta text-sobre-tinta"
           : cheio
             ? "bg-superficie text-tinta shadow-[0_1px_2px_rgb(0_0_0/0.12),0_0_0_1px_rgb(0_0_0/0.06)]"
-            : "bg-black/55 text-white backdrop-blur-sm"
+            : "bg-black/65 text-white"
       }`}
     >
       {/* O + vira ✓ com blur e escala; os dois ficam empilhados e só opacidade, escala e blur mudam. */}
@@ -61,7 +60,14 @@ export function BotaoReferencia({
   );
   // Nas imagens o CSS de .editar mostra as ações no hover; marcada, o botão fica à vista.
   if (cheio) return <div className={`editar absolute top-2 left-2 z-10 ${marcada ? "opacity-100!" : ""}`}>{botao}</div>;
+  // Uma camada só anima a entrada: opacidade e escala, na mesma curva. Filtro e backdrop-filter aqui piscam.
   return (
-    <div className={`absolute top-1.5 left-1.5 transition-opacity duration-150 focus-within:opacity-100 ${marcada ? "opacity-100" : "opacity-0 group-hover:opacity-100 pointer-coarse:opacity-100"}`}>{botao}</div>
+    <div
+      className={`absolute top-1.5 left-1.5 origin-top-left transition-[opacity,scale] duration-200 ease-(--ease-saida) focus-within:scale-100 focus-within:opacity-100 motion-reduce:transition-opacity ${
+        marcada ? "scale-100 opacity-100" : "scale-90 opacity-0 group-hover:scale-100 group-hover:opacity-100 pointer-coarse:scale-100 pointer-coarse:opacity-100 motion-reduce:scale-100"
+      }`}
+    >
+      {botao}
+    </div>
   );
 }
