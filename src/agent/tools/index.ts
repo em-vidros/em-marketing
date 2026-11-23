@@ -4,6 +4,7 @@ import type { BotId } from "../bots";
 import { toolsDeEquipe } from "./equipe";
 import { toolsDeFotos } from "./fotos";
 import { toolsDeMemoria } from "./memoria";
+import { toolsDePecasProntas } from "./pecas";
 import { toolsDePost } from "./post";
 import type { ReferenciasDoTurno } from "../pedido";
 import { toolsDeTexto } from "./texto";
@@ -29,6 +30,7 @@ export const catalogo = async ({ conversaId, botId, autor, rodar, referencias }:
   ...toolsDePost(conversaId, referencias),
   ...toolsDeFotos,
   ...toolsDeAgenda,
+  ...toolsDePecasProntas,
   ...toolsDeTexto,
   ...toolsDeMemoria(botId),
   ...toolsDeWeb,

@@ -38,7 +38,7 @@ const ROTULO_DO_TESTE: Record<Teste, string> = { setor: "Setor", regiao: "Regiã
 
 const legivel = (p: string) => p.charAt(0) + p.slice(1).toLowerCase();
 
-const chaveDaFonte = (f: Fonte) => (f.tipo === "post" ? `post:${f.postId}` : `arte:${f.arteId}`);
+const chaveDaFonte = (f: Fonte) => (f.tipo === "post" ? `post:${f.postId}` : f.tipo === "arte" ? `arte:${f.arteId}` : `peca:${f.pecaId}`);
 
 /** "Stories", "Feed" ou "Feed ou Stories": o formato em que a peça pode sair. */
 const formatosDo = (p: Pronto) => p.midias.map((m) => MIDIA[m]).join(" ou ");

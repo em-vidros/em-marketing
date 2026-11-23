@@ -37,7 +37,7 @@ export const FORMAS = ["circulo", "squircle", "nuvem", "triangulo"] as const;
 export type Forma = (typeof FORMAS)[number];
 
 /**
- * As tools de um bot criado. Delegar, publicar e cuidar dos bots ficam com o Chefe; lembrar, todo bot tem.
+ * As tools de um bot criado. Delegar, publicar, as peças prontas e cuidar dos bots ficam com o Chefe; lembrar, todo bot tem.
  * pesquisar_referencias é a busca de pesquisar_web com o nome que o Post usa: as duas juntas mandariam a mesma tool duas vezes.
  */
 export type Livre = Exclude<
@@ -45,6 +45,8 @@ export type Livre = Exclude<
   | `delegar_${string}`
   | "publicar_agora"
   | "agendar_publicacao"
+  | "listar_pecas_prontas"
+  | "legenda_da_peca_pronta"
   | "lembrar"
   | "pesquisar_referencias"
   | "listar_bots"
@@ -118,6 +120,7 @@ export const BOTS: Record<BotFixo, Bot> = {
     regras: juntar(
         "Cada delegar_<bot> roda um especialista e devolve só o resumo do que ele fez. O especialista não vê esta conversa, então escreva o pedido completo: pilar, tema, ângulo, data, formato e o que já foi decidido.",
         "O Post trabalha no post desta conversa. Quando ele deixar o post pronto (peça escolhida, legenda no feed e versão stories no formato ambos), publique com publicar_agora ou agende com agendar_publicacao; o sistema pede aprovação ao usuário, e esse cartão já é a confirmação.",
+        "Peça pronta é uma arte que a equipe fez fora do app e subiu na Biblioteca para sair como está. Quando pedirem para publicar ou agendar uma (\"agenda aquela peça do café da manhã para sexta às 9h\"), chame listar_pecas_prontas e ache a peça pela leitura; se mais de uma servir, pergunte qual. No feed, chame legenda_da_peca_pronta e mostre a legenda. Depois chame agendar_publicacao ou publicar_agora com peca_pronta_id e o media_type do formato da peça. Peça pronta não passa pelo Post e nunca vira referência.",
         "Agendamento em linguagem natural: \"posta sexta ao meio-dia nos stories\" basta. Converta a data relativa pelo calendário de DATA DE HOJE, sem perguntar dia nem ano. Se faltar a hora, use 12h; se faltar o formato, use feed. Diga na resposta a data, a hora e o formato que você assumiu, para o usuário trocar se quiser. Só pergunte o que não dá para deduzir.",
         "Pedido de post é para sair com arte. Se o Post voltar sem artes, leia o motivo e delegue de novo com a correção, em vez de devolver o problema ao usuário.",
         "A escolha da arte é sempre do usuário. Quando o Post voltar com as 3 artes, chame mostrar_artes, que desenha as opções na conversa, e pergunte qual ele quer. Só chame escolher_arte com o número que o usuário disse ou clicou; depois delegue ao Post o que faltar (legenda, versão stories). Nunca publique nem agende sem essa escolha.",
@@ -144,6 +147,8 @@ export const BOTS: Record<BotFixo, Bot> = {
       "publicar_agora",
       "agendar_publicacao",
       "listar_agenda",
+      "listar_pecas_prontas",
+      "legenda_da_peca_pronta",
       "delegar_bot",
       "listar_bots",
       "criar_bot",

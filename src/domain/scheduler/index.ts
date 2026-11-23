@@ -21,11 +21,11 @@ interface Devida {
 export async function tickDaFila(): Promise<void> {
   const devidas = await q<Devida & ColunasDaFonte>`UPDATE queue SET status = 'publishing'
     WHERE status = 'pending' AND publish_at <= ${utcDe(Date.now())}
-    RETURNING id, post_id, arte_id, media_type, jpeg_path, legenda`;
+    RETURNING id, post_id, arte_id, peca_id, media_type, jpeg_path, legenda`;
 
   for (const item of devidas) {
     const fonte = fonteDa(item);
-    const nome = fonte.tipo === "post" ? `post ${fonte.postId}` : `arte ${fonte.arteId}`;
+    const nome = fonte.tipo === "post" ? `post ${fonte.postId}` : fonte.tipo === "arte" ? `arte ${fonte.arteId}` : `peça pronta ${fonte.pecaId}`;
     try {
       if (!item.jpeg_path) throw new Error("Arquivo da arte não encontrado");
       const igId = await publishImage({ fonte, jpegPath: item.jpeg_path, mediaType: item.media_type, caption: item.legenda ?? undefined });
@@ -42,8 +42,8 @@ export async function tickDaFila(): Promise<void> {
 }
 
 export function listQueue() {
-  return q<{ id: number; media_type: "IMAGE" | "STORIES"; publish_at: string; brief: string | null }>`SELECT q.id, q.media_type, q.publish_at, p.brief
-    FROM queue q LEFT JOIN posts p ON p.id = q.post_id
+  return q<{ id: number; media_type: "IMAGE" | "STORIES"; publish_at: string; brief: string | null; peca_tema: string | null }>`SELECT q.id, q.media_type, q.publish_at, p.brief, pp.tema AS peca_tema
+    FROM queue q LEFT JOIN posts p ON p.id = q.post_id LEFT JOIN pecas_prontas pp ON pp.id::text = q.peca_id
     WHERE q.status = 'pending' ORDER BY q.publish_at`;
 }
 
@@ -61,10 +61,10 @@ export interface PecaDaFila {
 
 /** publishAt em "AAAA-MM-DD HH:MM:SS" UTC (db.utcDe), que o tick compara como texto. Devolve o id da fila. */
 export async function enqueue(peca: PecaDaFila, publishAt: string): Promise<number> {
-  const [postId, arteId] = colunasDaFonte(peca.fonte);
+  const [postId, arteId, pecaId] = colunasDaFonte(peca.fonte);
   const { id } = (await primeira(
-    q<{ id: number }>`INSERT INTO queue (post_id, arte_id, media_type, publish_at, jpeg_path, legenda)
-      VALUES (${postId}, ${arteId}, ${peca.midia}, ${publishAt}, ${peca.jpegPath}, ${peca.legenda}) RETURNING id`,
+    q<{ id: number }>`INSERT INTO queue (post_id, arte_id, peca_id, media_type, publish_at, jpeg_path, legenda)
+      VALUES (${postId}, ${arteId}, ${pecaId}, ${peca.midia}, ${publishAt}, ${peca.jpegPath}, ${peca.legenda}) RETURNING id`,
   ))!;
   if (peca.fonte.tipo === "post") await q`UPDATE posts SET status = 'scheduled' WHERE id = ${peca.fonte.postId}`;
   return id;

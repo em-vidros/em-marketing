@@ -63,6 +63,8 @@ export const PASSOS: Record<ToolName, { fazendo: string; feito: string }> = {
   validar_texto: { fazendo: "Conferindo o texto", feito: "Texto conferido" },
   derivar_story: { fazendo: "Gerando o story", feito: "Story gerado" },
   listar_agenda: { fazendo: "Lendo a agenda", feito: "Agenda lida" },
+  listar_pecas_prontas: { fazendo: "Procurando a peça pronta", feito: "Peças prontas lidas" },
+  legenda_da_peca_pronta: { fazendo: "Escrevendo a legenda da peça", feito: "Legenda da peça escrita" },
   status_do_mes: { fazendo: "Conferindo a cota do mês", feito: "Cota do mês conferida" },
   cancelar_agendamento: { fazendo: "Cancelando o agendamento", feito: "Agendamento cancelado" },
   proximas_datas: { fazendo: "Olhando as próximas datas", feito: "Datas conferidas" },
@@ -121,10 +123,14 @@ export interface Passo {
   saida: unknown;
 }
 
-/** O primeiro texto curto da entrada de uma tool ("feed", "2026-10"), ou null. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** O primeiro texto curto da entrada de uma tool ("feed", "2026-10"), ou null. Um id não diz nada à pessoa e fica de fora. */
 function detalheDe(entrada: unknown): string | null {
   if (!entrada || typeof entrada !== "object") return null;
-  const curto = Object.values(entrada).find((v): v is string | number => (typeof v === "string" && v.length <= 60) || typeof v === "number");
+  const curto = Object.values(entrada).find(
+    (v): v is string | number => (typeof v === "string" && v.length <= 60 && !UUID.test(v)) || typeof v === "number",
+  );
   return curto === undefined ? null : String(curto);
 }
 
