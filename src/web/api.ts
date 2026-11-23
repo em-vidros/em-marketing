@@ -6,7 +6,9 @@ import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
 import type { EstadoDaChave, Provedor } from "../domain/chaves";
 import type { Movimento } from "../domain/saldo";
 import type { Edicao } from "../v2/artes";
-import type { Arte, Referencia } from "../v2/schema";
+import type { Formato } from "../v2/camadas";
+import type { PedidoDeArte } from "../v2/campos";
+import type { Arte, PecaPronta, Referencia } from "../v2/schema";
 import type { ApiConversas } from "./componentes/menu/conversas";
 import { navegar } from "./rota";
 import type { Conversa } from "./tipos";
@@ -88,7 +90,15 @@ export const apiChaves = {
 export type ArteDaApi = Omit<Arte, "criadaEm" | "atualizadaEm"> & { criadaEm: string; atualizadaEm: string; separavel?: boolean };
 
 /** As rotas de artes do backend novo (src/v2/api.ts). */
+/** Um convite ou uma arte de aniversário: os campos como a pessoa escreveu, mais o formato. */
+export type NovaArteComCampos = { tipo: PedidoDeArte["tipo"]; formato: Formato; campos: Record<string, string | undefined> };
+
 export const apiArtes = {
+  /** Cria a arte com os campos de um tipo. Leva uns 30 segundos: o modelo de imagem gera a cena. */
+  criar: (pedido: NovaArteComCampos) => comCorpo<ArteDaApi>("/api/artes", "POST", pedido),
+  /** Devolve a arte inteira; `restaurar` aceita esse mesmo corpo de volta. */
+  apagar: (id: string) => comCorpo<ArteDaApi>(`/api/artes/${id}`, "DELETE"),
+  restaurar: (arte: ArteDaApi) => comCorpo<ArteDaApi>(`/api/artes/${arte.id}/restaurar`, "POST", arte),
   /** `base` é o atualizadaEm da versão editada; se outra pessoa gravou depois, o servidor recusa com 409. */
   gravar: async (id: string, edicao: Edicao, base: string) =>
     (await pedir(`/api/artes/${id}`, { method: "PUT", body: JSON.stringify(edicao), headers: { "if-match": base } })).json() as Promise<ArteDaApi>,
@@ -124,6 +134,22 @@ export const apiReferencias = {
   remover: (id: string) => semCorpo(`/api/referencias/${id}`, "DELETE"),
   restaurar: (id: string) => comCorpo<ReferenciaDaApi>(`/api/referencias/${id}/restaurar`, "POST"),
   imagem: (r: ReferenciaDaApi) => `/api/arquivos/${r.arquivo}`,
+};
+
+export type PecaProntaDaApi = Omit<PecaPronta, "criadaEm" | "removidaEm"> & { criadaEm: string; removidaEm: string | null; url: string };
+
+/** As peças prontas da Biblioteca (src/v2/api.ts). Enviar espera a IA ler a peça, uns segundos. */
+export const apiPecasProntas = {
+  enviar: async (arquivo: File) => {
+    const form = new FormData();
+    form.set("arquivo", arquivo);
+    return (await pedir("/api/pecas-prontas", { method: "POST", body: form })).json() as Promise<PecaProntaDaApi>;
+  },
+  remover: (id: string) => semCorpo(`/api/pecas-prontas/${id}`, "DELETE"),
+  restaurar: (id: string) => comCorpo<PecaProntaDaApi>(`/api/pecas-prontas/${id}/restaurar`, "POST"),
+  legenda: (id: string, legenda: string) => comCorpo<PecaProntaDaApi>(`/api/pecas-prontas/${id}`, "PATCH", { legenda }),
+  /** Uma conversa nova com o Chefe e o pedido que a tela manda nela. */
+  conversa: (id: string) => comCorpo<{ conversaId: string; pedido: string }>(`/api/pecas-prontas/${id}/conversa`, "POST"),
 };
 
 /** A imagem do pedido: sobe sem a IA ler, e guardar na Biblioteca reusa o mesmo arquivo. */

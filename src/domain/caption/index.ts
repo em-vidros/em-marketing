@@ -3,8 +3,12 @@ import { VOZ } from "../brand";
 import { validarLegenda, validarTextoDaArte, temErro, formatarProblemas, type Problema } from "../brand/validate";
 import { MODELO_DE_TEXTO, openai } from "../../openai";
 import { comoExemplos, postsDaMarca } from "../historico";
+import { chamadaDoPublico, publicoDoBrief, quemEOPublico } from "../publico";
 
 const exemplos = async () => comoExemplos(await postsDaMarca().catch(() => []));
+
+/** Os exemplos aprovados mostram o tom da marca. A chamada deles pode ser de outro público. */
+const SO_O_TOM = "Os exemplos abaixo valem para o tom. A chamada segue o público acima, não a deles.";
 
 /**
  * Gera, valida contra o checklist do capítulo 16 e devolve para reescrita quando
@@ -55,17 +59,22 @@ export async function definirHeadline(
   brief: Brief,
   formato: string,
 ): Promise<{ headline: string; apoio: string; problemas: Problema[] }> {
+  const publico = publicoDoBrief(brief);
   const { texto, problemas } = await gerarValidando(
     SYSTEM_TEXTO(),
     `Gere o texto que vai DENTRO da arte, em JSON: {"headline": "...", "apoio": "..."}.
 Headline curto e concreto, português impecável, no máximo 8 palavras. Apoio: 1 linha (em stories, vazio).
-Emoji é proibido na arte (§11.2). Unidades como "10 mm", "6, 8 e 10 mm". Responda SÓ o JSON.${await exemplos()}
+A arte não precisa de chamada. Se o apoio levar uma, ela segue o público do brief.
+Emoji é proibido na arte (§11.2). Unidades como "10 mm", "6, 8 e 10 mm". Responda SÓ o JSON.
+${SO_O_TOM}${await exemplos()}
 
-Brief: ${JSON.stringify(brief)}. Formato: ${formato}.`,
+Brief: ${JSON.stringify({ ...brief, publico })}. Formato: ${formato}.
+${quemEOPublico(publico)}
+${chamadaDoPublico(publico)}`,
     (saida) => {
       try {
         const { headline, apoio } = JSON.parse(saida.replace(/```json?|```/g, "").trim());
-        return validarTextoDaArte(headline ?? "", apoio ?? "");
+        return validarTextoDaArte(headline ?? "", apoio ?? "", { publico });
       } catch {
         return [{ regra: "formato", severidade: "erro", detalhe: "resposta não é JSON válido." }];
       }
@@ -82,17 +91,21 @@ export async function escreverLegenda(
   brief: Brief,
   headline: string,
 ): Promise<{ legenda: string; problemas: Problema[] }> {
+  const publico = publicoDoBrief(brief);
+  const semCta = brief.pilar === "MARCA";
   const { texto, problemas } = await gerarValidando(
     SYSTEM_TEXTO(),
     `Escreva a legenda do post do brief abaixo seguindo a estrutura fixa do §10.1:
 gancho (1 linha, no máximo 8 palavras, sem emoji, sem pergunta genérica) → linha em branco →
 corpo (2 a 4 linhas, uma ideia por linha) → linha em branco →
-1 CTA, um único pedido (no pilar MARCA, SEM CTA: §10.3, post do pilar MARCA não leva CTA) → linha em branco →
+1 CTA, um único pedido, o do público do brief (no pilar MARCA, SEM CTA: §10.3, post do pilar MARCA não leva CTA) → linha em branco →
 bloco de no máximo 5 hashtags, #EMVidros a primeira.
-Responda SÓ a legenda.${await exemplos()}
+Responda SÓ a legenda.
+${SO_O_TOM}${await exemplos()}
 
-Brief: ${JSON.stringify(brief)}. Headline da arte: "${headline}". Pilar: ${brief.pilar}${brief.pilar === "MARCA" ? ", sem CTA" : ""}.`,
-    (saida) => validarLegenda(saida, { pilar: brief.pilar }),
+Brief: ${JSON.stringify({ ...brief, publico })}. Headline da arte: "${headline}". Pilar: ${brief.pilar}${semCta ? ", sem CTA" : ""}.
+${quemEOPublico(publico)}${semCta ? "" : `\n${chamadaDoPublico(publico)}`}`,
+    (saida) => validarLegenda(saida, { pilar: brief.pilar, publico }),
     "em-vidros-legenda",
   );
 

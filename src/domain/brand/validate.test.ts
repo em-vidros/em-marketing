@@ -122,3 +122,59 @@ describe("texto da arte", () => {
     expect(validarTextoDaArte("Temperado 8mm certificado").some((p) => p.regra === "§5.6 unidades")).toBe(true);
   });
 });
+
+describe("§10.3 o CTA segue o público", () => {
+  const comCta = (cta: string) => `Box em temperado 8 mm, pronta entrega.
+
+Tamanhos padronizados.
+Sem espera por beneficiamento.
+
+${cta}
+
+#EMVidros #VidroTemperado #Maranhão`;
+  const regraDoPublico = (texto: string, publico: "vidraceiro" | "arquiteto" | "consumidor", pilar = "PROVA") =>
+    validarLegenda(texto, { pilar, publico }).filter((p) => p.regra === "§10.3 CTA por público");
+
+  test('"compre com a gente" é erro para o consumidor e passa para o vidraceiro', () => {
+    const texto = comCta("Compre com a gente.");
+    expect(regraDoPublico(texto, "consumidor").some((p) => p.detalhe.includes("Compre com a gente"))).toBe(true);
+    expect(regraDoPublico(texto, "vidraceiro")).toEqual([]);
+  });
+
+  test("o arquiteto também não é levado direto à EM Vidros", () => {
+    for (const cta of ["Fale com a EM Vidros.", "Fale com a unidade mais próxima.", "Peça o orçamento pelo 0800 150 0103."])
+      expect(temErro(regraDoPublico(comCta(cta), "arquiteto"))).toBe(true);
+  });
+
+  test("a vidraçaria parceira aprova o consumidor e o arquiteto", () => {
+    const texto = comCta("Procure uma vidraçaria parceira EM Vidros.");
+    expect(regraDoPublico(texto, "consumidor")).toEqual([]);
+    expect(regraDoPublico(texto, "arquiteto")).toEqual([]);
+    expect(regraDoPublico(comCta("Peça o orçamento a uma vidraçaria parceira EM Vidros."), "consumidor")).toEqual([]);
+  });
+
+  test("consumidor sem a chamada da vidraçaria parceira é erro, e o vidraceiro mantém os CTAs da EM", () => {
+    expect(regraDoPublico(comCta("Salve para consultar depois."), "consumidor").some((p) => p.detalhe.includes("falta a chamada"))).toBe(true);
+    expect(regraDoPublico(comCta("Peça o orçamento pelo 0800 150 0103."), "vidraceiro")).toEqual([]);
+  });
+
+  test("MARCA e GENTE não exigem a vidraçaria parceira", () => {
+    expect(regraDoPublico(comCta("Estamos contratando, link na bio."), "consumidor", "GENTE")).toEqual([]);
+    expect(regraDoPublico(comCta("Aniversário de 30 anos da EM Vidros."), "consumidor", "MARCA")).toEqual([]);
+  });
+
+  test("sem público a validação segue como antes", () => {
+    expect(validarLegenda(comCta("Compre com a gente."), { pilar: "PROVA" }).some((p) => p.regra === "§10.3 CTA por público")).toBe(false);
+  });
+
+  test("a chamada da vidraçaria parceira conta como CTA no pilar MARCA", () => {
+    const ps = validarLegenda(comCta("Procure uma vidraçaria parceira EM Vidros."), { pilar: "MARCA", publico: "consumidor" });
+    expect(ps.some((p) => p.regra === "§10.3 CTA" && p.severidade === "erro")).toBe(true);
+  });
+
+  test("o texto da arte acusa a chamada direta para o consumidor", () => {
+    expect(temErro(validarTextoDaArte("Box em 8 mm", "Compre com a gente", { publico: "consumidor" }))).toBe(true);
+    expect(temErro(validarTextoDaArte("Box em 8 mm", "Compre com a gente", { publico: "vidraceiro" }))).toBe(false);
+    expect(temErro(validarTextoDaArte("Box em 8 mm", "", { publico: "consumidor" }))).toBe(false);
+  });
+});

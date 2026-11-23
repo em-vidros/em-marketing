@@ -74,8 +74,8 @@ export async function publishImage(opts: {
   });
 
   if (mediaId) await q`UPDATE media SET expired = 1 WHERE id = ${mediaId}`;
-  const [postId, arteId] = colunasDaFonte(opts.fonte);
-  await q`INSERT INTO publicacoes (post_id, arte_id, media_type, ig_media_id, permalink)
-    VALUES (${postId}, ${arteId}, ${opts.mediaType}, ${igMediaId}, ${await permalink(igMediaId)})`;
+  const [postId, arteId, pecaId] = colunasDaFonte(opts.fonte);
+  await q`INSERT INTO publicacoes (post_id, arte_id, peca_id, media_type, ig_media_id, permalink)
+    VALUES (${postId}, ${arteId}, ${pecaId}, ${opts.mediaType}, ${igMediaId}, ${await permalink(igMediaId)})`;
   return igMediaId;
 }

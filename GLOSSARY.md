@@ -5,7 +5,7 @@ Fábrica de conteúdo da EM Vidros: a equipe pede uma peça em linguagem natural
 ## Bots
 
 **Chefe**:
-O bot que recebe todo pedido, divide em partes, entrega cada parte a um especialista ou a um bot criado e junta o resultado. Pedido de post ele mesmo produz, com uma ferramenta que monta o brief, a headline, as 3 artes e a legenda em código, sem delegar ao Post (ADR 0002). Também cria, edita e remove bots criados quando alguém pede.
+O bot que recebe todo pedido, divide em partes, entrega cada parte a um especialista ou a um bot criado e junta o resultado. Também cria, edita e remove bots criados quando alguém pede. Pedido de post ele mesmo produz, com uma ferramenta que monta o brief, a headline, as 3 artes e a legenda em código, sem delegar ao Post (ADR 0002). Convite e arte de aniversário ele cria direto, porque o texto entra por código.
 _Evite_: orquestrador, agente principal
 
 **Especialista**:
@@ -54,6 +54,10 @@ _Evite_: background, imagem gerada
 Um elemento editável da arte, como um texto ou o logo, que a pessoa muda no editor como no Canva.
 _Evite_: layer, overlay
 
+**Tipo de arte**:
+Uma arte de estúdio com campos fixos, como o convite (título, evento, data, hora, local e observação) e o aniversário (nome, mensagem e foto). O modelo de imagem gera só a cena, e cada campo entra por código como camada, com o texto exatamente como a pessoa escreveu. Campo vazio não aparece na arte.
+_Evite_: modelo, template, formulário
+
 **Variação**:
 Uma das três artes que um pedido gera para a pessoa escolher.
 _Evite_: opção, versão
@@ -79,7 +83,7 @@ Quem o post quer alcançar: vidraceiro, arquiteto ou consumidor. Arquiteto e con
 _Evite_: persona, audiência
 
 **Peça pronta**:
-Uma imagem que a equipe sobe já finalizada, como um convite, para publicar como está, sem geração. O Chefe agenda e publica igual a uma arte, com o mesmo cartão de aprovação.
+Uma imagem que a equipe sobe já finalizada, como um convite, para publicar como está, sem geração. O Chefe agenda e publica igual a uma arte, com o mesmo cartão de aprovação. Quem sobe escolhe entre referência e peça pronta, e uma nunca vira a outra. Ao receber, a IA lê o texto pintado, o tema e o pilar, e o Chefe acha a peça por essa leitura. A legenda sai do mesmo gerador dos posts.
 _Evite_: imagem pronta, arte pronta, upload
 
 ## Referências

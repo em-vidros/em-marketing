@@ -1,4 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { apiPecasProntas, useApi, type PecaProntaDaApi } from "../api";
+import { mostrarAviso } from "./menu/Avisos";
 import { ariaDe, ehMac } from "../teclado/atalhos";
 import { ehAprovacao, faseDa, type Mensagem, type ParteAprovacao } from "../tipos";
 import { COR_DO_ROTULO, IconeDaFase } from "./ia/LinhaFerramenta";
@@ -17,12 +19,14 @@ const quando = {
 
 function pergunta(p: ParteAprovacao) {
   const midia = p.input?.media_type ? MIDIA[p.input.media_type] : "";
-  if (p.type === "tool-publicar_agora") return { titulo: "Publicar agora no Instagram?", detalhe: `${midia}. Sai na hora, sem volta.` };
+  const peca = p.input?.peca_pronta_id ? " a peça pronta" : "";
+  if (p.type === "tool-publicar_agora") return { titulo: peca ? "Publicar a peça pronta agora?" : "Publicar agora no Instagram?", detalhe: `${midia}. Sai na hora, sem volta.` };
   // Enquanto a entrada chega pelo stream, a data ainda está pela metade e não vira Date válida.
   const data = new Date(p.input && "publish_at" in p.input ? (p.input.publish_at ?? "") : "");
-  if (Number.isNaN(data.getTime())) return { titulo: "Agendar a publicação?", detalhe: `${midia}.` };
+  const titulo = peca ? "Agendar a peça pronta?" : "Agendar a publicação?";
+  if (Number.isNaN(data.getTime())) return { titulo, detalhe: `${midia}.` };
   const passou = data.getTime() < Date.now() ? " Esse horário já passou. Recuse e peça outro." : "";
-  return { titulo: "Agendar a publicação?", detalhe: `${midia}, ${quando.format(data)}.${passou}` };
+  return { titulo, detalhe: `${midia}, ${quando.format(data)}.${passou}` };
 }
 
 function desfecho(p: ParteAprovacao): { texto: string; erro?: boolean } | null {
@@ -45,6 +49,12 @@ function desfecho(p: ParteAprovacao): { texto: string; erro?: boolean } | null {
   }
 }
 
+/**
+ * O que precisa terminar antes de uma aprovação sair, por id do pedido: hoje, guardar a legenda revisada da
+ * peça pronta. Devolve false quando não deu, e a aprovação não sai.
+ */
+export const antesDeAprovar = new Map<string, () => Promise<boolean>>();
+
 /** Os pedidos de aprovação ainda sem resposta, nem do servidor nem desta tela. */
 export function aprovacoesPendentes(mensagens: readonly Mensagem[], respondidas: ReadonlySet<string>): string[] {
   return mensagens.flatMap((m) =>
@@ -64,6 +74,36 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
   // Publicar agora não tem volta: o botão diz o que faz e ganha a cor de atenção.
   const agora = parte.type === "tool-publicar_agora";
   const secao = useRef<HTMLElement>(null);
+  const pecaId = parte.input?.peca_pronta_id ?? null;
+  const [peca] = useApi<PecaProntaDaApi>(pecaId && `/api/pecas-prontas/${pecaId}`);
+  // null enquanto a pessoa não mexe: vale a legenda guardada na peça.
+  const [legenda, setLegenda] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState(false);
+
+  /** A legenda revisada vai para a peça antes da aprovação; a tool publica o que está na peça. */
+  async function guardarLegenda(): Promise<boolean> {
+    const guardada = peca.estado === "pronto" ? (peca.dados.legenda ?? "") : null;
+    if (!pecaId || legenda === null || legenda === guardada) return true;
+    setSalvando(true);
+    try {
+      await apiPecasProntas.legenda(pecaId, legenda);
+      return true;
+    } catch (e) {
+      mostrarAviso({ tipo: "erro", texto: `Não deu para guardar a legenda. Nada foi aprovado. ${(e as Error).message}` });
+      return false;
+    } finally {
+      setSalvando(false);
+    }
+  }
+  const guardarAtual = useRef(guardarLegenda);
+  guardarAtual.current = guardarLegenda;
+  // Clique e tecla A passam pelo responder da conversa, que consulta este registro antes de aprovar.
+  const approvalId = pendente ? parte.approval.id : null;
+  useEffect(() => {
+    if (!approvalId || !pecaId) return;
+    antesDeAprovar.set(approvalId, () => guardarAtual.current());
+    return () => void antesDeAprovar.delete(approvalId);
+  }, [approvalId, pecaId]);
 
   // O botão some ou fica desabilitado ao responder; o foco fica no cartão, que anuncia o desfecho.
   useEffect(() => {
@@ -82,6 +122,7 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
     >
       <p className="font-medium">{titulo}</p>
       <p className="text-pretty text-tinta-2">{detalhe}</p>
+      {pecaId && <PecaNoCartao carga={peca} editavel={pendente && !respondida && !salvando} legenda={legenda} mudar={setLegenda} />}
       {pendente ? (
         <div className="mt-3 flex justify-end gap-2">
           <button
@@ -98,14 +139,14 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
           </button>
           <button
             type="button"
-            disabled={respondida}
+            disabled={respondida || salvando}
             onClick={() => responder(parte.approval.id, true)}
             aria-keyshortcuts={ariaDe("aprovar", ehMac)}
             className={`pressiona flex h-9 cursor-pointer items-center gap-2 rounded-full px-4 text-[13px] font-medium text-sobre-tinta disabled:cursor-default disabled:opacity-50 ${
               agora ? "bg-esperando-texto" : "bg-tinta"
             }`}
           >
-            {agora ? "Publicar agora" : "Agendar"}
+            {salvando ? "Guardando a legenda" : agora ? "Publicar agora" : "Agendar"}
             <span className="hidden group-focus-within/aprovacao:inline-flex">
               <Teclas atalho="aprovar" tom="escuro" />
             </span>
@@ -120,5 +161,47 @@ export function CartaoAprovacao({ parte, respondida, responder }: { parte: Parte
         )
       )}
     </section>
+  );
+}
+
+/** A peça pronta que o cartão vai publicar: a imagem e a legenda, que a pessoa revisa antes de aprovar. */
+function PecaNoCartao({
+  carga,
+  editavel,
+  legenda,
+  mudar,
+}: {
+  carga: ReturnType<typeof useApi<PecaProntaDaApi>>[0];
+  editavel: boolean;
+  legenda: string | null;
+  mudar: (legenda: string) => void;
+}) {
+  if (carga.estado === "carregando") return <p className="mt-3 text-tinta-3">Carregando a peça…</p>;
+  if (carga.estado === "erro") return <p className="mt-3 text-erro">Não deu para abrir a peça pronta. {carga.erro.message}</p>;
+  const p = carga.dados;
+  const texto = legenda ?? p.legenda ?? "";
+  return (
+    <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-start">
+      <img src={p.url} alt={p.texto || p.tema} className="w-24 flex-none rounded-item object-contain outline-1 -outline-offset-1 outline-linha" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <p className="font-medium [overflow-wrap:anywhere]">{p.tema}</p>
+        {p.formato === "story" ? (
+          <p className="text-tinta-3">Story sai sem legenda.</p>
+        ) : editavel ? (
+          <label className="flex flex-col gap-1">
+            <span className="text-xs text-tinta-3">Legenda, revise antes de aprovar</span>
+            <textarea
+              value={texto}
+              onChange={(e) => mudar(e.target.value)}
+              rows={6}
+              maxLength={2200}
+              className="w-full resize-y rounded-item border border-borda-campo bg-transparent px-3 py-2 text-base/normal sm:text-sm/normal"
+            />
+          </label>
+        ) : (
+          <p className="whitespace-pre-line text-pretty text-tinta-2 [overflow-wrap:anywhere]">{texto || "Sem legenda."}</p>
+        )}
+      </div>
+    </div>
   );
 }

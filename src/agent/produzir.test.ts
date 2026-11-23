@@ -95,7 +95,7 @@ describe("produzir_post", () => {
     await turnoDoChefe(`produzir-${crypto.randomUUID()}`, chefe, [{ role: "user", content: "Oi" }]);
     const ferramentas = (chefe.doStreamCalls[0]?.tools ?? []).map((t) => t.name);
 
-    expect(ferramentas).toEqual(expect.arrayContaining(["produzir_post", "escolher_arte", "derivar_story", "pesquisar_referencias", "usar_foto"]));
+    expect(ferramentas).toEqual(expect.arrayContaining(["produzir_post", "escolher_arte", "derivar_story", "ajustar_arte", "voltar_arte", "pesquisar_referencias", "usar_foto"]));
     expect(ferramentas).not.toContain("delegar_post");
   });
 

@@ -3,6 +3,7 @@ import { colunasDaFonte, emOrdem, fonteDa, isoDoUtc, primeira, utcDe, urlDaMidia
 import { cancelQueueItem, enqueue, type PecaDaFila } from "../domain/scheduler";
 import type { Arquivos } from "../v2/arquivos";
 import { pegarArte, type ResumoDaArte } from "../v2/artes";
+import { listarPecasProntas, pegarPecaPronta } from "../v2/pecas-prontas";
 import { q, transacao, type Banco } from "../v2/banco";
 import type { Formato } from "../v2/camadas";
 import { renderizarJpeg } from "../v2/render";
@@ -42,15 +43,15 @@ const NOME_DO_STATUS: Record<StatusFila, string> = {
   cancelled: "cancelado",
 };
 
-const nomeDa = (f: Fonte) => (f.tipo === "post" ? `O post ${f.postId}` : "Esta arte");
+const nomeDa = (f: Fonte) => (f.tipo === "post" ? `O post ${f.postId}` : f.tipo === "arte" ? "Esta arte" : "Esta peça pronta");
 
 /** Outro agendamento ativo ou uma publicação desta mídia. Falha ou cancelado não conta: agendar de novo é o jeito de tentar outra vez. */
 async function recusaSeOcupada(fonte: Fonte, midia: TipoMidia): Promise<RecusaDaFila | null> {
-  const [postId, arteId] = colunasDaFonte(fonte);
+  const [postId, arteId, pecaId] = colunasDaFonte(fonte);
   const ocupada = await q`SELECT 1 FROM queue WHERE post_id IS NOT DISTINCT FROM ${postId}::int AND arte_id IS NOT DISTINCT FROM ${arteId}::text
-      AND media_type = ${midia} AND status IN ('pending', 'publishing')
+      AND peca_id IS NOT DISTINCT FROM ${pecaId}::text AND media_type = ${midia} AND status IN ('pending', 'publishing')
     UNION ALL SELECT 1 FROM publicacoes WHERE post_id IS NOT DISTINCT FROM ${postId}::int AND arte_id IS NOT DISTINCT FROM ${arteId}::text
-      AND media_type = ${midia} LIMIT 1`;
+      AND peca_id IS NOT DISTINCT FROM ${pecaId}::text AND media_type = ${midia} LIMIT 1`;
   return ocupada.length ? recusa(409, `${nomeDa(fonte)} já tem ${NOME_DA_MIDIA[midia]} agendado ou publicado.`) : null;
 }
 
@@ -110,8 +111,42 @@ export interface PedidoDeAgendamento {
 
 export async function agendar(estudio: EstudioDaFila, { fonte, midia, publicaEm, legenda }: PedidoDeAgendamento): Promise<{ ok: true; filaId: number } | RecusaDaFila> {
   if (fonte.tipo === "arte") return agendarArte(estudio, fonte.arteId, midia, publicaEm, legenda);
+  if (fonte.tipo === "peca") return agendarPecaPronta(estudio.banco, fonte.pecaId, midia, publicaEm, legenda);
   const post = await postPorId(fonte.postId);
   return post ? agendarPost(post, midia, publicaEm, legenda) : recusa(404, "Post não encontrado.");
+}
+
+/**
+ * A peça pronta e a mídia que ela pode ocupar: a do formato dela, sem nada ativo nessa mídia. A legenda é a da
+ * peça, que a pessoa revisou no cartão de aprovação; `legenda` mandada troca a dela, como no post.
+ */
+export async function pecaProntaParaPublicar(
+  banco: Banco,
+  pecaId: string,
+  midia: TipoMidia,
+  legenda?: string,
+): Promise<{ ok: true; peca: PecaDaFila & { fonte: { tipo: "peca"; pecaId: string } } } | RecusaDaFila> {
+  const peca = await pegarPecaPronta(banco, pecaId);
+  if (!peca) return recusa(404, "Peça pronta não encontrada.");
+  const daPeca = MIDIA_DO_FORMATO[peca.formato];
+  if (midia !== daPeca) return recusa(409, `Esta peça pronta é de ${peca.formato}, então só vai para o ${NOME_DA_MIDIA[daPeca]}.`);
+  const fonte = { tipo: "peca" as const, pecaId };
+  return (await recusaSeOcupada(fonte, midia)) ?? { ok: true, peca: { fonte, midia, jpegPath: peca.arquivo, legenda: legendaDa(midia, legenda, peca.legenda) } };
+}
+
+/** O arquivo da peça já é o JPEG que sai: a fila aponta para ele, sem renderizar nada. */
+export async function agendarPecaPronta(
+  banco: Banco,
+  pecaId: string,
+  midia: TipoMidia,
+  publicaEm: number,
+  legenda?: string,
+  agora = Date.now(),
+): Promise<{ ok: true; filaId: number } | RecusaDaFila> {
+  const pode = await pecaProntaParaPublicar(banco, pecaId, midia, legenda);
+  if (!pode.ok) return pode;
+  if (publicaEm <= agora) return NO_PASSADO;
+  return enfileirarSeLivre(pode.peca, publicaEm);
 }
 
 /**
@@ -152,7 +187,7 @@ type LinhaDaFila = ColunasDaFonte & {
 };
 
 const linhaDaFila = (filaId: number) =>
-  primeira(q<LinhaDaFila>`SELECT post_id, arte_id, media_type, publish_at, status, error FROM queue WHERE id = ${filaId}`);
+  primeira(q<LinhaDaFila>`SELECT post_id, arte_id, peca_id, media_type, publish_at, status, error FROM queue WHERE id = ${filaId}`);
 
 /** PATCH /api/fila/:id */
 export interface Reagendado {
@@ -183,9 +218,9 @@ export async function cancelar(filaId: number): Promise<{ ok: true } | RecusaDaF
   return recusa(409, `Só dá para cancelar um agendamento pendente ou com falha. Este está ${NOME_DO_STATUS[linha.status]}.`);
 }
 
-/** A linha já tem o JPEG: o post ainda precisa estar com a peça desta mídia, a arte não. */
+/** A linha já tem o JPEG: o post ainda precisa estar com a peça desta mídia, a arte e a peça pronta não. */
 async function recusaParaVoltar(fonte: Fonte, midia: TipoMidia): Promise<RecusaDaFila | null> {
-  if (fonte.tipo === "arte") return recusaSeOcupada(fonte, midia);
+  if (fonte.tipo !== "post") return recusaSeOcupada(fonte, midia);
   const pode = await pecaDoPost(await postPorId(fonte.postId), midia);
   return pode.ok ? null : pode;
 }
@@ -221,13 +256,22 @@ export interface Pronto {
   /** Arte do estúdio não tem pilar. */
   pilar: Pilar | null;
   midias: TipoMidia[];
-  /** A legenda que o feed leva se nada for mandado: a do post; arte não tem. */
+  /** A legenda que o feed leva se nada for mandado: a do post ou da peça pronta; arte não tem. */
   legenda: string | null;
 }
 
-/** As artes vêm do Postgres do estúdio, lidas por quem chama; as artes primeiro, que é onde o trabalho novo está. */
-export async function prontos(artes: readonly ResumoDaArte[]): Promise<Pronto[]> {
-  return [...(await artesProntas(artes)), ...(await postsProntos())];
+/** As artes vêm do Postgres do estúdio, lidas por quem chama; as artes e as peças prontas primeiro, que é onde o trabalho novo está. */
+export async function prontos(artes: readonly ResumoDaArte[], banco: Banco): Promise<Pronto[]> {
+  return [...(await artesProntas(artes)), ...(await pecasProntasLivres(banco)), ...(await postsProntos())];
+}
+
+async function pecasProntasLivres(banco: Banco): Promise<Pronto[]> {
+  const porPeca = await emOrdem(await listarPecasProntas(banco), async (p): Promise<Pronto[]> => {
+    const midia = MIDIA_DO_FORMATO[p.formato];
+    const fonte: Fonte = { tipo: "peca", pecaId: p.id };
+    return (await recusaSeOcupada(fonte, midia)) ? [] : [{ fonte, titulo: p.tema, capa: p.url, pilar: p.pilar, midias: [midia], legenda: p.legenda }];
+  });
+  return porPeca.flat();
 }
 
 async function artesProntas(artes: readonly ResumoDaArte[]): Promise<Pronto[]> {

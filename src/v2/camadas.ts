@@ -4,12 +4,12 @@ import { NOME_DE_FAMILIA, PESOS } from "./fontes";
 /** Tamanho final de publicação e a área segura de cada formato (tokens.json, `formats`). */
 export const FORMATOS = {
   feed: { largura: 1080, altura: 1350, topo: 80, base: 80 },
-  story: { largura: 1080, altura: 1920, topo: 250, base: 320 },
+  story: { largura: 1080, altura: 1920, topo: 250, base: 340 },
 } as const;
 
 export type Formato = keyof typeof FORMATOS;
 
-const MARGEM = 80;
+export const MARGEM = 80;
 
 /** Altura sobre largura do logo oficial (viewBox 2272×1888). */
 export const PROPORCAO_DO_LOGO = 1888 / 2272;
@@ -154,14 +154,27 @@ export function linhasEstimadas(texto: string, fonte: string, tamanho: number, l
   return linhas;
 }
 
+/** O logo no canto inferior direito, sobre a margem e acima da zona segura de baixo. Largura de 14% da arte, dentro dos 12 a 16% do brandbook. */
+export function camadaDoLogo(formato: Formato, fundoEscuro: boolean): Camada {
+  const { largura, altura, base } = FORMATOS[formato];
+  const larguraLogo = Math.round(largura * 0.14);
+  return {
+    id: "logo",
+    tipo: "logo",
+    variante: fundoEscuro ? "branca" : "cor",
+    x: largura - MARGEM - larguraLogo,
+    y: altura - base - Math.round(larguraLogo * PROPORCAO_DO_LOGO),
+    largura: larguraLogo,
+  };
+}
+
 /** As camadas de partida: título e apoio alinhados à esquerda no topo, logo no canto inferior direito. */
 export function camadasIniciais(formato: Formato, plano: Plano): Camada[] {
-  const { largura, altura, topo, base } = FORMATOS[formato];
+  const { largura, topo } = FORMATOS[formato];
   const escala = formato === "story" ? 1.15 : 1;
   const corDoTexto = plano.fundoEscuro ? "#FFFFFF" : "#2F646A";
   const tamanhoTitulo = Math.round((plano.display ? 104 : 76) * escala);
   const larguraTexto = largura - 2 * MARGEM;
-  const larguraLogo = Math.round(largura * 0.14);
   const titulo: Camada = {
     id: "titulo",
     tipo: "texto",
@@ -194,13 +207,6 @@ export function camadasIniciais(formato: Formato, plano: Plano): Camada[] {
         },
       ]
     : [];
-  const logo: Camada = {
-    id: "logo",
-    tipo: "logo",
-    variante: plano.fundoEscuro ? "branca" : "cor",
-    x: largura - MARGEM - larguraLogo,
-    y: altura - base - Math.round(larguraLogo * PROPORCAO_DO_LOGO),
-    largura: larguraLogo,
-  };
+  const logo = camadaDoLogo(formato, plano.fundoEscuro);
   return [titulo, ...apoio, logo];
 }

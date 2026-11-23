@@ -18,7 +18,7 @@ export const BRIEF_FALSO = {
   tema: "vidro temperado x comum",
   angulo: "quebra segura",
   data: null,
-  publico: "B2B",
+  publico: null,
   precisa_foto_real: false,
   formato: "feed",
   direcao: null,

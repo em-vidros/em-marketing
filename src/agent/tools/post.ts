@@ -1,10 +1,10 @@
 import { tool } from "ai";
 import { z } from "zod";
-import { emOrdem, urlDaMidia } from "../../db";
-import { q } from "../../v2/banco";
+import { emOrdem, idDaImagem, urlDaMidia } from "../../db";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief } from "../../domain/art/pipeline";
 import { temErro } from "../../domain/brand/validate";
+import { montarBrief, PUBLICOS } from "../../domain/publico";
 import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
 import {
@@ -22,7 +22,9 @@ import {
   type EtapaPost,
   type FotoReal,
 } from "../post";
-import { agendarPost } from "../fila";
+import { ajustarArteDoPost, voltarArteDoPost } from "../ajuste";
+import { agendarPecaPronta, agendarPost, pecaProntaParaPublicar } from "../fila";
+import { banco, q } from "../../v2/banco";
 import { fotoPublica } from "./fotos";
 import type { ReferenciasDoTurno } from "../pedido";
 import { artePublica, AVISO_DE_LINKS, baixarImagens, produzirPost, referenciasOuNenhuma, type ProgressoDoPost } from "../produzir";
@@ -30,6 +32,11 @@ import { artePublica, AVISO_DE_LINKS, baixarImagens, produzirPost, referenciasOu
 const formato = z.enum(["feed", "stories", "ambos"]);
 
 const mediaType = z.enum(["IMAGE", "STORIES"]);
+
+const pecaProntaId = z
+  .uuid()
+  .optional()
+  .describe("O id de uma peça pronta de listar_pecas_prontas. Omita para o post desta conversa. media_type segue o formato da peça: feed é IMAGE, story é STORIES.");
 
 /** Grava o evento e devolve o estado novo, ou a recusa da máquina de estados. */
 async function aplicar(conversaId: string, evento: Evento) {
@@ -74,6 +81,10 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
       description: "Registra o brief estruturado de um post novo e o devolve para o usuário confirmar.",
       inputSchema: z.object({
         pilar: z.enum(PILARES).describe("§12.1, a que pilar de conteúdo o post pertence"),
+        publico: z
+          .enum(PUBLICOS)
+          .optional()
+          .describe("§1.2, para quem o post fala: vidraceiro, arquiteto ou consumidor. Omita só se o pedido não diz; sai vidraceiro. A chamada da headline e da legenda segue esse público."),
         tema: z.string(),
         angulo: z.string().optional(),
         data: z.string().optional(),
@@ -83,7 +94,7 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
         formato: formato.optional().describe("só se o usuário já disse"),
       }),
       execute: async ({ precisa_foto_real, formato, ...resto }) => {
-        const brief: Brief = { ...resto, precisaFotoReal: precisa_foto_real };
+        const brief = montarBrief({ ...resto, precisaFotoReal: precisa_foto_real });
         const post = await criarPost(conversaId, brief, formato ?? null);
         const candidatas = brief.precisaFotoReal ? await emOrdem(await buscarFotos(`${brief.tema} ${brief.angulo ?? ""}`), fotoPublica) : [];
         return { ok: true as const, postId: post.postId, brief, formato: formato ?? null, fotosCandidatas: candidatas, proximoPasso: proximoPasso(post) };
@@ -211,11 +222,36 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
           postId: p.postId,
           brief: p.brief,
           headline: p.peca.headline.headline,
+          apoio: p.peca.headline.apoio || undefined,
           chosen: p.peca.arte,
         });
         const estado = await aplicar(conversaId, { tipo: "story", path });
-        return { ...estado, url: await urlDaMidia(path), problemas };
+        return { ...estado, postId: p.postId, url: await urlDaMidia(path), imagemId: await idDaImagem(path), problemas };
       },
+    }),
+
+    ajustar_arte: tool({
+      description:
+        "Muda uma coisa pontual na arte escolhida, como trocar um texto ou tirar um objeto, e mantém o resto da arte igual. A versão de antes fica guardada. Só chame quando a pessoa pedir a mudança nesta conversa. Nunca chame por conta própria, nem para corrigir um aviso da conferência do texto: sugira e espere o pedido. Um pedido por chamada.",
+      inputSchema: z.object({
+        tipo: z.enum(["texto", "objeto"]).describe("texto: trocar um texto pintado na arte. objeto: mudar ou tirar um elemento da cena."),
+        texto_atual: z.string().max(400).optional().describe("Só em tipo texto: o texto que está na arte hoje, como aparece nela."),
+        texto_novo: z.string().min(1).max(400).optional().describe("Só em tipo texto: o texto que entra no lugar, exatamente como a pessoa quer."),
+        objeto: z.string().max(300).optional().describe("Só em tipo objeto: o elemento e onde fica, em inglês, como 'the vase in the bottom left corner'."),
+        mudanca: z.string().max(500).optional().describe("Só em tipo objeto: o que fazer com ele, em inglês, como 'remove it'."),
+      }),
+      execute: async ({ tipo, texto_atual, texto_novo, objeto, mudanca }) => {
+        if (tipo === "texto" && !(texto_atual && texto_novo)) return { ok: false as const, motivo: "Num ajuste de texto, mande texto_atual e texto_novo." };
+        if (tipo === "objeto" && !(objeto && mudanca)) return { ok: false as const, motivo: "Num ajuste de objeto, mande objeto e mudanca." };
+        const pedido = tipo === "texto" ? { tipo, atual: texto_atual!, novo: texto_novo! } : { tipo, objeto: objeto!, mudanca: mudanca! };
+        return ajustarArteDoPost(await atual(), pedido);
+      },
+    }),
+
+    voltar_arte: tool({
+      description: "Desfaz o último ajuste da arte escolhida: ela volta a ser como estava antes dele. Chame quando a pessoa pedir para voltar como estava.",
+      inputSchema: z.object({}),
+      execute: async () => voltarArteDoPost(await atual()),
     }),
 
     escrever_legenda: tool({
@@ -233,12 +269,19 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
     }),
 
     agendar_publicacao: tool({
-      description: "Agenda a publicação no Instagram.",
+      description:
+        "Agenda a publicação no Instagram. Sem peca_pronta_id, agenda o post desta conversa. Com peca_pronta_id, agenda aquela peça pronta da Biblioteca como está, com a legenda guardada nela, que a pessoa revisa no cartão de aprovação.",
       inputSchema: z.object({
         publish_at: z.iso.datetime({ offset: true }).describe("ISO 8601 com o offset de America/Sao_Paulo"),
         media_type: mediaType,
+        peca_pronta_id: pecaProntaId,
       }),
-      execute: async ({ publish_at, media_type }) => {
+      execute: async ({ publish_at, media_type, peca_pronta_id }) => {
+        if (peca_pronta_id) {
+          const r = await agendarPecaPronta(banco(), peca_pronta_id, media_type, Date.parse(publish_at));
+          if (!r.ok) return { ok: false as const, motivo: r.motivo };
+          return { ok: true as const, pecaProntaId: peca_pronta_id, mediaType: media_type, publishAt: publish_at };
+        }
         const r = await agendarPost(await atual(), media_type, Date.parse(publish_at));
         if (!r.ok) return { ok: false as const, motivo: r.motivo };
         return { ok: true as const, postId: r.postId, mediaType: media_type, publishAt: publish_at };
@@ -246,9 +289,17 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
     }),
 
     publicar_agora: tool({
-      description: "Publica imediatamente no Instagram.",
-      inputSchema: z.object({ media_type: mediaType }),
-      execute: async ({ media_type }) => {
+      description:
+        "Publica imediatamente no Instagram. Sem peca_pronta_id, publica o post desta conversa. Com peca_pronta_id, publica aquela peça pronta da Biblioteca como está, com a legenda guardada nela.",
+      inputSchema: z.object({ media_type: mediaType, peca_pronta_id: pecaProntaId }),
+      execute: async ({ media_type, peca_pronta_id }) => {
+        if (peca_pronta_id) {
+          const p = await pecaProntaParaPublicar(banco(), peca_pronta_id, media_type);
+          if (!p.ok) return { ok: false as const, motivo: p.motivo };
+          const { fonte, jpegPath, legenda } = p.peca;
+          const igMediaId = await publishImage({ fonte, jpegPath, mediaType: media_type, caption: legenda ?? undefined });
+          return { ok: true as const, pecaProntaId: peca_pronta_id, mediaType: media_type, igMediaId };
+        }
         const r = midiaParaPublicar(await atual(), media_type);
         if (!r.ok) return r;
         const igMediaId = await publishImage({

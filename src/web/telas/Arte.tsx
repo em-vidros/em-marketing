@@ -4,10 +4,11 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type MouseEve
 import type { Edicao } from "../../v2/artes";
 import { FORMATOS } from "../../v2/camadas";
 import { apiArtes, ErroDeApi, useApi, type ArteDaApi } from "../api";
+import { apagarComDesfazer } from "../componentes/apagarArte";
 import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Falha } from "../componentes/Falha";
 import { Dica } from "../componentes/menu/Teclas";
-import { aoClicarLink } from "../rota";
+import { aoClicarLink, navegar } from "../rota";
 import type { AtalhoId } from "../teclado/atalhos";
 import { useAtalhosDoEditor } from "./arte/atalhosDoEditor";
 import { BarraDeContexto } from "./arte/BarraDeContexto";
@@ -204,6 +205,7 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
   const [cena, setCena] = useState<{ tipo: "parada" } | { tipo: "gerando" } | { tipo: "erro"; mensagem: string }>({ tipo: "parada" });
   const { gravacao, agendar, gravarAgora } = useGravacao(arte, setArte);
   const editor = useEditor({ inicial: { camadas: inicial.camadas, ajustes: inicial.ajustes }, formato: arte.formato, gravar: agendar });
+  const [apagando, setApagando] = useState<{ tipo: "parado" } | { tipo: "apagando" } | { tipo: "erro"; mensagem: string }>({ tipo: "parado" });
   const tela = useRef<ControleDaTela>(null);
   const focarPalco = () => tela.current?.focar();
   const titulo = tituloDa({ ...arte, camadas: editor.camadas });
@@ -217,6 +219,18 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
       setCena({ tipo: "parada" });
     } catch (e) {
       setCena({ tipo: "erro", mensagem: (e as Error).message });
+    }
+  }
+
+  /** Grava o que está pendente, para o desfazer devolver a arte como estava, apaga e volta para a Biblioteca. O desfazer reabre a arte aqui. */
+  async function apagar() {
+    setApagando({ tipo: "apagando" });
+    await gravarAgora();
+    try {
+      await apagarComDesfazer(arte.id, (volta) => navegar(`/artes/${volta.id}`));
+      navegar("/biblioteca");
+    } catch (e) {
+      setApagando({ tipo: "erro", mensagem: (e as Error).message });
     }
   }
 
@@ -257,6 +271,14 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
         <div className="flex flex-none items-center gap-2.5">
           <button
             type="button"
+            onClick={() => void apagar()}
+            disabled={apagando.tipo === "apagando" || cena.tipo === "gerando"}
+            className="pressiona cursor-pointer rounded-full px-3.5 py-2 text-sm font-medium text-tinta-2 hover:bg-hover disabled:cursor-default disabled:opacity-50"
+          >
+            {apagando.tipo === "apagando" ? "Apagando…" : "Apagar"}
+          </button>
+          <button
+            type="button"
             onClick={gerarNovaCena}
             disabled={cena.tipo === "gerando"}
             className="pressiona cursor-pointer rounded-full bg-linha px-4 py-2 text-sm font-medium hover:bg-linha-forte disabled:cursor-default disabled:opacity-50"
@@ -278,6 +300,7 @@ function Editor({ inicial, abrirMenu }: { inicial: ArteDaApi; abrirMenu: () => v
         {gravacao.tipo === "conflito" && (
           <Falha texto="Suas últimas edições não foram salvas." erro={`${gravacao.mensagem} Recarregue para ver a versão dela.`} rotulo="Recarregar" tentar={() => location.reload()} />
         )}
+        {apagando.tipo === "erro" && <Falha texto="Não deu para apagar a arte." erro={apagando.mensagem} />}
         {cena.tipo === "erro" && <Falha texto="Não deu para gerar outra cena. A arte continua com a cena de antes." erro={cena.mensagem} />}
       </div>
       <p role="status" className="px-4 pt-3 text-[13px] text-tinta-3 empty:hidden sm:px-6">

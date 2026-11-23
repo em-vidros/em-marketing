@@ -77,3 +77,27 @@ export function lembreteDeGrafia(divergencias: readonly Divergencia[]): string {
   );
   return `SPELLING CHECK: a previous attempt got the text wrong (${erros.join("; ")}). Render every word exactly as given above, letter by letter, accents included, and nothing else.`;
 }
+
+/**
+ * Gera e confere o texto pintado contra `textos`. Se não bate, gera de novo uma vez só, com o lembrete da grafia,
+ * porque cada imagem custa dinheiro. Se a segunda também erra, fica a que errou menos, com o aviso do que saiu errado.
+ * Sem leitura (o modelo de visão falhou), a imagem segue com o aviso de que não foi conferida.
+ */
+export async function gerarConferida<T>(
+  gerar: (lembrete?: string) => Promise<T>,
+  ler: (gerada: T) => Promise<string[]>,
+  textos: readonly string[],
+): Promise<{ gerada: T; problemas: Problema[] }> {
+  const conferir = async (gerada: T) => {
+    const lidos = await ler(gerada).catch((erro: unknown) => (console.error("conferência do texto da arte:", erro), null));
+    return { gerada, divergencias: lidos && compararTexto(textos, lidos) };
+  };
+  const primeira = await conferir(await gerar());
+  if (!primeira.divergencias) return { gerada: primeira.gerada, problemas: [TEXTO_SEM_CONFERENCIA] };
+  if (!primeira.divergencias.length) return { gerada: primeira.gerada, problemas: [] };
+
+  const segunda = await conferir(await gerar(lembreteDeGrafia(primeira.divergencias)));
+  if (segunda.divergencias?.length === 0) return { gerada: segunda.gerada, problemas: [] };
+  const melhor = segunda.divergencias && segunda.divergencias.length < primeira.divergencias.length ? segunda : primeira;
+  return { gerada: melhor.gerada, problemas: [problemaDoTexto(melhor.divergencias!)] };
+}

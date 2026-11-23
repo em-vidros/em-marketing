@@ -1,7 +1,9 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Arquivos } from "./arquivos";
-import type { Banco } from "./banco";
-import { camadasIniciais, type Ajustes, type Camada, type Formato } from "./camadas";
+import { q, transacao, type Banco } from "./banco";
+import { camadasIniciais, type Ajustes, type Camada, type Formato, type Plano } from "./camadas";
+import { camadasDaArte, pedidoEmTexto, temaDaCena, type PedidoDeArte } from "./campos";
+import { fotoEmCirculo } from "./foto";
 import type { Ia } from "./ia";
 import { escolherReferencias, listarReferencias } from "./referencias";
 import { areasDosElementos, camadasDosElementos, remendar } from "./separar";
@@ -69,27 +71,76 @@ export async function pegarArte(banco: Banco, id: string): Promise<Arte | null> 
   return arte ?? null;
 }
 
+/** O pedido não dá para atender como veio: a mensagem é para a pessoa ler. */
+export class PedidoInvalido extends Error {}
+
+interface NovaArte {
+  /** O texto que fica em `artes.pedido`. */
+  pedido: string;
+  /** O que o planejador lê para escrever o prompt da cena. */
+  paraOPlano: string;
+  formato: Formato;
+  criadaPor: string;
+  /** As camadas de partida, depois que a cena existe. */
+  camadas: (plano: Plano) => Camada[] | Promise<Camada[]>;
+}
+
 /** Escolhe as referências, pede o plano, gera a cena e grava a arte com as camadas de partida. */
-export async function criarArte({ banco, ia, arquivos }: Estudio, pedido: { texto: string; formato: Formato; criadaPor: string }): Promise<Arte> {
+async function gerarArte({ banco, ia, arquivos }: Estudio, nova: NovaArte): Promise<Arte> {
   const ativas = await listarReferencias(banco);
   const recentes = await banco.select({ referencias: artes.referencias }).from(artes).orderBy(desc(artes.criadaEm)).limit(ARTES_QUE_A_ROTACAO_OLHA);
   const escolhidas = escolherReferencias({ ativas, recentes: recentes.map((a) => a.referencias) }).slice(0, REFERENCIAS_POR_ARTE);
   const leituras = escolhidas.map((r) => r.leitura);
-  const plano = await ia.planejarArte(pedido.texto, pedido.formato, leituras);
-  const cena = await arquivos.salvar(await ia.gerarCena(plano.cena, pedido.formato), "jpg");
+  const plano = await ia.planejarArte(nova.paraOPlano, nova.formato, leituras);
+  const cena = await arquivos.salvar(await ia.gerarCena(plano.cena, nova.formato), "jpg");
   const [arte] = await banco
     .insert(artes)
     .values({
-      pedido: pedido.texto,
-      formato: pedido.formato,
+      pedido: nova.pedido,
+      formato: nova.formato,
       cena,
       promptDaCena: plano.cena,
       referencias: escolhidas.map((r) => r.id),
-      camadas: camadasIniciais(pedido.formato, plano),
-      criadaPor: pedido.criadaPor,
+      camadas: await nova.camadas(plano),
+      criadaPor: nova.criadaPor,
     })
     .returning();
   return arte!;
+}
+
+/** Escolhe as referências, pede o plano, gera a cena e grava a arte com as camadas de partida. */
+export const criarArte = (estudio: Estudio, pedido: { texto: string; formato: Formato; criadaPor: string }): Promise<Arte> =>
+  gerarArte(estudio, {
+    pedido: pedido.texto,
+    paraOPlano: pedido.texto,
+    formato: pedido.formato,
+    criadaPor: pedido.criadaPor,
+    camadas: (plano) => camadasIniciais(pedido.formato, plano),
+  });
+
+/**
+ * Um convite ou uma arte de aniversário: o modelo de imagem gera só a cena, e cada campo entra como camada de texto,
+ * com o texto como a pessoa escreveu. É o mesmo caminho de criarArte, com outras camadas de partida.
+ */
+export async function criarArteComCampos(estudio: Estudio, { formato, criadaPor, ...pedido }: PedidoDeArte & { formato: Formato; criadaPor: string }): Promise<Arte> {
+  const origem = pedido.tipo === "aniversario" ? pedido.campos.foto : undefined;
+  // A foto é conferida e recortada antes de gastar a geração: uma que sumiu ou não abre não pode deixar a arte pela metade.
+  const foto = origem ? await circuloDaFoto(estudio.arquivos, origem) : undefined;
+  return gerarArte(estudio, {
+    pedido: pedidoEmTexto(pedido),
+    paraOPlano: temaDaCena(pedido),
+    formato,
+    criadaPor,
+    camadas: async (plano) => camadasDaArte(pedido, formato, { fundoEscuro: plano.fundoEscuro, foto: foto && (await estudio.arquivos.salvar(foto, "png")) }),
+  });
+}
+
+async function circuloDaFoto(arquivos: Arquivos, chave: string): Promise<Uint8Array> {
+  const bytes = await arquivos.ler(chave);
+  if (!bytes) throw new PedidoInvalido("A foto não está mais no armazenamento. Envie de novo.");
+  return fotoEmCirculo(bytes).catch(() => {
+    throw new PedidoInvalido("Não deu para ler a foto. Confira se o arquivo não está corrompido.");
+  });
 }
 
 /**
@@ -157,4 +208,29 @@ export async function novaCena({ banco, ia, arquivos }: Estudio, id: string): Pr
   const cena = await arquivos.salvar(await ia.gerarCena(atual.promptDaCena, atual.formato), "jpg");
   const [arte] = await banco.update(artes).set({ cena, atualizadaEm: new Date() }).where(eq(artes.id, id)).returning();
   return arte!;
+}
+
+/**
+ * Apaga a arte e devolve a linha inteira, que POST /api/artes/:id/restaurar aceita de volta. Uma arte agendada ou publicada
+ * fica: a fila e o calendário apontam para ela. Os arquivos da cena e das imagens ficam no armazenamento, para o desfazer.
+ */
+export async function apagarArte(banco: Banco, id: string): Promise<{ arte: Arte } | { ocupada: string } | null> {
+  const arte = await pegarArte(banco, id);
+  if (!arte) return null;
+  // Dentro da transação só `q` fala com o banco: uma consulta do drizzle esperaria a transação acabar.
+  return transacao(async () => {
+    // A mesma trava da fila: agendar e apagar a mesma arte ao mesmo tempo não se cruzam.
+    await q`SELECT pg_advisory_xact_lock(4208)`;
+    const emUso = await q`SELECT 1 FROM queue WHERE arte_id = ${id} AND status IN ('pending', 'publishing')
+      UNION ALL SELECT 1 FROM publicacoes WHERE arte_id = ${id} LIMIT 1`;
+    if (emUso.length) return { ocupada: "Esta arte está agendada ou já foi publicada. Cancele o agendamento antes de apagar." };
+    const apagadas = await q`DELETE FROM artes WHERE id = ${id}::uuid RETURNING id`;
+    return apagadas.length ? { arte } : null;
+  });
+}
+
+/** Desfaz apagarArte. Restaurar duas vezes dá no mesmo: a arte que já voltou não é gravada de novo. */
+export async function restaurarArte(banco: Banco, arte: Arte): Promise<Arte> {
+  await banco.insert(artes).values(arte).onConflictDoNothing();
+  return (await pegarArte(banco, arte.id))!;
 }

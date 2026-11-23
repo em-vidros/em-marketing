@@ -1,9 +1,11 @@
 import { gravarArquivo } from "../../armazem";
-import { compararTexto, lembreteDeGrafia, problemaDoTexto, TEXTO_SEM_CONFERENCIA } from "./conferencia";
+import { tokens } from "../brand";
+import { gerarConferida } from "./conferencia";
 import { generateArt, lerTextoDaArte, type Formato } from "./generate";
 import { aplicarLogo } from "./logo";
 import { validarArte } from "./validate";
 import type { Problema } from "../brand/validate";
+import type { Publico } from "../publico";
 
 export const PILARES = ["PROVA", "AUTORIDADE", "GENTE", "MARCA"] as const;
 export type Pilar = (typeof PILARES)[number];
@@ -11,6 +13,8 @@ export type Pilar = (typeof PILARES)[number];
 export interface Brief {
   /** §12.1 — todo post pertence a exatamente um pilar. */
   pilar: Pilar;
+  /** §1.2 — para quem o post fala. A chamada da headline e da legenda segue o público. Brief antigo não tem. */
+  publico?: Publico;
   tema: string;
   angulo?: string;
   data?: string;
@@ -19,8 +23,6 @@ export interface Brief {
    * EM Vidros? Se sim, ela exige foto real e não pode ser gerada.
    */
   precisaFotoReal?: boolean;
-  /** §1.2: B2B (vidraceiro, serralheiro, construtora, arquiteto) ou B2C (consumidor final). Os briefs antigos não têm. */
-  publico?: "B2B" | "B2C";
 }
 
 /**
@@ -44,10 +46,19 @@ export interface ArtVariant {
   path: string;
   /** Gate visual (§4, §6) — medido no JPEG final, ver art/validate.ts. */
   problemas: Problema[];
+  /** As versões de antes dos ajustes, a mais recente por último. Voltar tira a última daqui. */
+  anteriores?: VersaoAnterior[];
 }
 
-/** De onde vem a cara da arte: uma referência da Biblioteca, o visual padrão da casa, ou a arte de feed que a story adapta. */
-export type Visual = { tipo: "referencia"; leitura: string } | { tipo: "pedido" } | { tipo: "casa" } | { tipo: "adaptacao" };
+/** Uma versão da arte antes de um ajuste, com a story que valia para ela. */
+export interface VersaoAnterior {
+  path: string;
+  problemas: Problema[];
+  storyPath: string | null;
+}
+
+/** De onde vem a cara da arte: uma referência da Biblioteca, uma imagem do pedido ou o visual padrão da casa. */
+export type Visual = { tipo: "referencia"; leitura: string } | { tipo: "pedido" } | { tipo: "casa" };
 
 /**
  * O que a marca não aceita em nenhuma arte. Os posts reais da @emvidros usam vidro 3D, brilho,
@@ -64,12 +75,14 @@ HARD CONSTRAINTS (brand policy; violating any of these makes the image unusable)
 - The reference images are EM Vidros-approved pieces. Follow their look, never their text or logo.
 `.trim();
 
-/** §6.2: a story tem topo de 250 px e base de 320 px cobertos pela interface do Instagram. */
+/** §6.2: o topo e a base da story ficam cobertos pela interface do Instagram. */
+const { topPx: TOPO, bottomPx: BASE } = tokens.formats.stories.safeZones;
+
 const FORMATOS_DO_PROMPT: Record<Formato, { descricao: string; tela: string }> = {
   feed: { descricao: "post (4:5 portrait, 1080x1350, 80px margins on all sides)", tela: "1080x1350" },
   stories: {
-    descricao: "story (9:16 vertical, 1080x1920; keep the top 250px and the bottom 320px free of any critical element; 80px side margins)",
-    tela: "1080x1920, above the bottom 320px",
+    descricao: `story (9:16 vertical, 1080x1920; keep the top ${TOPO}px and the bottom ${BASE}px free of any critical element; 80px side margins)`,
+    tela: `1080x1920, above the bottom ${BASE}px`,
   },
 };
 
@@ -134,8 +147,6 @@ function linguagemVisual(visual: Visual): string {
       return "VISUAL LANGUAGE: match the visual language of the first image (palette, composition, typography, finish). The client attached it to this request to show the look they want. Never copy its text, subject, layout details or logo.";
     case "casa":
       return "VISUAL LANGUAGE: the EM Vidros house look. Teal family (#2F646A, #63B5AF) with white and off-white #F0EFEA, one clear focal element, a bold geometric sans headline with strong weight contrast, generous margins and a clean, premium advertising-agency finish.";
-    case "adaptacao":
-      return "VISUAL LANGUAGE: the supplied image is the approved feed artwork. Keep its exact visual concept, colours, hero element, typography and mood. This is its 9:16 Stories adaptation, recomposed for vertical, not cropped. Leave out its logo; the official logo is added afterwards.";
   }
 }
 
@@ -146,26 +157,6 @@ export interface IaDaArte {
 }
 
 const IA_DA_OPENAI: IaDaArte = { gerar: generateArt, lerTexto: lerTextoDaArte };
-
-/**
- * Gera a arte e confere o texto pintado nela contra `textos`. Se não bate, gera de novo uma vez só, porque cada imagem
- * custa cerca de US$ 0,06. Se a segunda também erra, fica a que errou menos, com o aviso do que saiu errado.
- * Sem leitura (o modelo de visão falhou), a arte segue com o aviso de que não foi conferida.
- */
-async function gerarConferida(ia: IaDaArte, pedido: Parameters<typeof generateArt>[0], textos: string[]): Promise<{ gerada: Buffer; problemas: Problema[] }> {
-  const conferir = async (gerada: Buffer) => {
-    const lidos = await ia.lerTexto(gerada).catch((erro: unknown) => (console.error("conferência do texto da arte:", erro), null));
-    return { gerada, divergencias: lidos && compararTexto(textos, lidos) };
-  };
-  const primeira = await conferir(await ia.gerar(pedido));
-  if (!primeira.divergencias) return { gerada: primeira.gerada, problemas: [TEXTO_SEM_CONFERENCIA] };
-  if (!primeira.divergencias.length) return { gerada: primeira.gerada, problemas: [] };
-
-  const segunda = await conferir(await ia.gerar({ ...pedido, prompt: `${pedido.prompt}\n\n${lembreteDeGrafia(primeira.divergencias)}` }));
-  if (segunda.divergencias?.length === 0) return { gerada: segunda.gerada, problemas: [] };
-  const melhor = segunda.divergencias && segunda.divergencias.length < primeira.divergencias.length ? segunda : primeira;
-  return { gerada: melhor.gerada, problemas: [problemaDoTexto(melhor.divergencias!)] };
-}
 
 /**
  * US-3: gera 3 variações em paralelo, cada uma ancorada numa imagem diferente, da Biblioteca ou do pedido.
@@ -204,11 +195,8 @@ export async function generate3Arts(
       const visual: Visual = !ancora ? { tipo: "casa" } : ancora.origem === "biblioteca" ? { tipo: "referencia", leitura: ancora.leitura } : { tipo: "pedido" };
       const prompt = buildPrompt({ formato, brief, headline, apoio, visual, anexos: anexos.length, direcao });
       // A conferência lê a arte antes do logo: o logo colado não é texto pedido.
-      const { gerada, problemas: doTexto } = await gerarConferida(
-        ia,
-        { prompt, formato, referencias: [...(ancora ? [ancora.imagem] : []), ...anexos] },
-        textosDaArte(formato, headline, apoio),
-      );
+      const pedido = { prompt, formato, referencias: [...(ancora ? [ancora.imagem] : []), ...anexos] };
+      const { gerada, problemas: doTexto } = await gerarConferida(comLembrete(ia, pedido), ia.lerTexto, textosDaArte(formato, headline, apoio));
 
       const jpeg = await aplicarLogo(gerada, formato);
       const path = await gravarArquivo("arts", `post${postId}-${formato}-v${variant}-${semente}.jpg`, jpeg, "image/jpeg");
@@ -222,30 +210,61 @@ export async function generate3Arts(
   );
 }
 
-/** Fluxo "Os dois": deriva a versão Stories do conceito escolhido, com a arte escolhida como base. `ia` só muda nos testes. */
+/**
+ * A story da arte escolhida, numa geração só: o modelo recebe a arte de feed e a recompõe em 9:16, com a mesma cena e o
+ * mesmo texto. Sem o pedido explícito de sangrar até a borda, o modelo cola o quadro do feed no meio, com faixas.
+ */
+export function promptDaStory(opts: { brief: Brief; headline: string; apoio?: string }): string {
+  const fim = 1920 - BASE;
+  return `Recompose the attached image as its native Instagram Story. The attached image is an approved Instagram feed post (4:5) by "EM Vidros", a Brazilian flat-glass and aluminium distributor. Subject: ${opts.brief.tema}${opts.brief.angulo ? `, angle: ${opts.brief.angulo}` : ""}.
+
+OUTPUT: a 9:16 vertical story, 1080x1920, designed for vertical from the start.
+
+SAME PIECE: keep the same scene, the same hero element, the same colours, light, typography style and mood. Someone who saw the feed post must recognise it at once as the same campaign.
+
+FULL BLEED: the scene fills the whole 9:16 canvas, edge to edge. Extend the background and the scene upward and downward and rearrange the elements for the tall canvas. Do NOT paste the feed image inside the story. No frame within a frame, no border, no bars or bands above or below, no letterbox, no blurred copy of the post behind it, no card, no rounded rectangle.
+
+SAFE AREAS: Instagram covers the top ${TOPO}px and the bottom ${BASE}px. Nothing written and no key element there; they hold only background. All text sits between y=${TOPO} and y=${fim}, with 80px side margins.
+
+TEXT IN THE ART (the same words as the feed post; render EXACTLY, in Brazilian Portuguese, no spelling changes, no emoji, nothing else written):
+Headline: "${opts.headline}"
+${opts.apoio ? `Support line: "${opts.apoio}"` : ""}
+
+LOGO AREA: keep the right side just above the bottom ${BASE}px (about 260x220px, ending at y=${fim}) clean and calm, because the official logo goes there. Leave out the logo of the feed post.
+
+${NEGATIVOS_IA}`.replace(/\n{3,}/g, "\n\n");
+}
+
+/** Os textos da story derivada: os mesmos da arte de feed. */
+export const textosDaStory = (headline: string, apoio?: string): string[] => [headline, ...(apoio ? [apoio] : [])];
+
+/**
+ * Fluxo "Os dois": a story de verdade da arte escolhida, recomposta em 9:16 a partir dela e conferida como as artes novas.
+ * `apoio` é a linha de apoio do feed, para a story levar o mesmo texto. `ia` só muda nos testes.
+ */
 export async function deriveStory(
   opts: {
     postId: number;
     brief: Brief;
     headline: string;
+    apoio?: string;
     chosen: ArtVariant;
   },
   ia: IaDaArte = IA_DA_OPENAI,
 ): Promise<{ path: string; problemas: Problema[] }> {
-  const { gerada, problemas: doTexto } = await gerarConferida(
-    ia,
-    {
-      prompt: buildPrompt({ formato: "stories", brief: opts.brief, headline: opts.headline, visual: { tipo: "adaptacao" } }),
-      formato: "stories",
-      base: opts.chosen.path,
-    },
-    textosDaArte("stories", opts.headline),
-  );
+  const pedido = { prompt: promptDaStory(opts), formato: "stories" as const, base: opts.chosen.path };
+  const { gerada, problemas: doTexto } = await gerarConferida(comLembrete(ia, pedido), ia.lerTexto, textosDaStory(opts.headline, opts.apoio));
   const jpeg = await aplicarLogo(gerada, "stories");
   const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived-${Math.floor(Date.now() / 1000)}.jpg`, jpeg, "image/jpeg");
 
   return { path, problemas: [...doTexto, ...(await validarArte(jpeg, "stories", { paleta: !opts.chosen.ancora && !opts.chosen.referencia }))] };
 }
+
+/** Gera o pedido, e na refação o mesmo pedido com o lembrete da grafia no fim do prompt. */
+const comLembrete =
+  (ia: IaDaArte, pedido: Parameters<typeof generateArt>[0]) =>
+  (lembrete?: string) =>
+    ia.gerar(lembrete ? { ...pedido, prompt: `${pedido.prompt}\n\n${lembrete}` } : pedido);
 
 const semImagem = (r: ReferenciaParaGerar): Ancora =>
   r.origem === "biblioteca" ? { origem: r.origem, id: r.id, arquivo: r.arquivo, leitura: r.leitura } : { origem: r.origem, arquivo: r.arquivo };

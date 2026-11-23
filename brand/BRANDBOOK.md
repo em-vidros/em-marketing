@@ -347,7 +347,7 @@ Poppins tem altura de x alta, o que cansa em blocos longos. Duas compensações 
 
 **Feed 1080 × 1350** — margem de **80 px** em todos os lados. Nada de conteúdo fora dessa caixa.
 
-**Story 1080 × 1920** — margem lateral de 80 px; **superior de 250 px** e **inferior de 320 px** (zonas cobertas pela interface do Instagram).
+**Story 1080 × 1920** — margem lateral de 80 px; **superior de 250 px** e **inferior de 340 px** (zonas cobertas pela interface do Instagram).
 
 ## 6.3 Grade
 
@@ -558,6 +558,16 @@ Usar o nome certo do produto é a forma mais barata de demonstrar competência.
 `Fale com a unidade mais próxima.` · `Peça o orçamento pelo 0800 150 0103.` · `Confira a espessura certa para o seu projeto.` · `Estamos contratando — link na bio.` · `Salve para consultar depois.`
 
 Nunca dois CTAs no mesmo post. Nunca CTA em post institucional ou de data comemorativa.
+
+**O CTA segue o público (§1.2).** A EM Vidros vende para vidraçarias. Arquiteto e consumidor final não compram dela, e o CTA deles leva à vidraçaria parceira.
+
+| Público | CTA | Nunca |
+|---|---|---|
+| Vidraceiro | Direto à EM Vidros: `Fale com a unidade mais próxima.` · `Peça o orçamento pelo 0800 150 0103.` | |
+| Arquiteto | `Procure uma vidraçaria parceira EM Vidros.` | "compre com a gente", "fale com a EM", "fale com a unidade", "peça o orçamento pelo 0800" |
+| Consumidor final | `Procure uma vidraçaria parceira EM Vidros.` | o mesmo |
+
+O público padrão, quando o pedido não diz, é o vidraceiro. O pilar MARCA não leva CTA para nenhum público, e o GENTE leva só a vaga.
 
 ## 10.4 Banco de legendas — por pilar
 
@@ -837,7 +847,7 @@ Still parado vira apresentação de slides — still recebe aproximação sutil.
 
 Condicional e econômico. Cartela dura 2,25 – 3,2 s e entra **alguns quadros depois do corte**, nunca junto — a imagem respira primeiro. Fade curto de opacidade na entrada e na saída; sem subida, sem deslize.
 
-Tipografia segue o capítulo 5. Nenhuma cartela fora da zona segura (250 px no topo, 320 px na base).
+Tipografia segue o capítulo 5. Nenhuma cartela fora da zona segura (250 px no topo, 340 px na base).
 
 Vídeo de processo para produto normalmente dispensa legenda inteira.
 

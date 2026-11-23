@@ -61,7 +61,8 @@ export function useAbrirNoEditor() {
   return [estado, abrir] as const;
 }
 
-type Escolhida = { imagemId: number | null; url: string | null };
+/** GET /api/posts/:id/escolhida. `daEscolhida` são os ids da escolhida e das versões dela antes dos ajustes. */
+export type Escolhida = { imagemId: number | null; url: string | null; versoesAnteriores: number; daEscolhida?: (number | null)[] };
 
 /**
  * Qual variação o post tem escolhida agora. A saída de mostrar_artes é de antes da escolha, então a
@@ -94,6 +95,7 @@ export function EscolhaDeArtes({ parte, escolher }: { parte: ParteComArtes; esco
     if (local !== null) return a.variante === local;
     if (!doServidor) return a.variante === naSaida;
     // Saídas antigas não têm imagemId; aí a URL da mídia, que é a mesma enquanto o arquivo não muda, identifica a variação.
+    if (a.imagemId != null && doServidor.daEscolhida) return doServidor.daEscolhida.includes(a.imagemId);
     return a.imagemId != null && doServidor.imagemId !== null ? a.imagemId === doServidor.imagemId : a.url === doServidor.url;
   };
   const algumaEscolhida = artes.some(ehEscolhida);

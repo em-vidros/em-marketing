@@ -211,8 +211,10 @@ export type LerArtes = (ids: readonly string[]) => Promise<ReadonlyMap<string, R
 export const tituloDoPost = (headline: string | null, postId: number) => headline ?? `Post sem headline (${postId})`;
 
 const ARTE_SUMIDA = "Arte que não está mais no estúdio";
+const PECA_SUMIDA = "Peça pronta que não está mais na Biblioteca";
 
-type LinhaDaFonte = ColunasDoPost & ColunasDaFonte & { headline: string | null; pilar: Pilar | null };
+/** pilar já vem do post ou da peça pronta; peca_tema e peca_arquivo, só da peça pronta. */
+type LinhaDaFonte = ColunasDoPost & ColunasDaFonte & { headline: string | null; pilar: Pilar | null; peca_tema: string | null; peca_arquivo: string | null };
 
 type LinhaAgendado = LinhaDaFonte & {
   id: number;
@@ -233,7 +235,11 @@ type LinhaPublicado = LinhaDaFonte & {
 const idsDeArte = (linhas: readonly ColunasDaFonte[]) => [...new Set(linhas.flatMap((l) => (l.arte_id === null ? [] : [l.arte_id])))];
 
 const tituloDa = (r: LinhaDaFonte, artes: ReadonlyMap<string, ResumoDaArte>) =>
-  r.arte_id === null ? tituloDoPost(headlineDo(r.headline), r.post_id) : (artes.get(r.arte_id)?.titulo ?? ARTE_SUMIDA);
+  r.post_id !== null
+    ? tituloDoPost(headlineDo(r.headline), r.post_id)
+    : r.arte_id !== null
+      ? (artes.get(r.arte_id)?.titulo ?? ARTE_SUMIDA)
+      : (r.peca_tema ?? PECA_SUMIDA);
 
 const doAgendado = async (r: LinhaAgendado, artes: ReadonlyMap<string, ResumoDaArte>): Promise<ItemAgendado> => ({
   tipo: "agendado",
@@ -243,7 +249,7 @@ const doAgendado = async (r: LinhaAgendado, artes: ReadonlyMap<string, ResumoDaA
   midia: r.media_type,
   titulo: tituloDa(r, artes),
   pilar: r.pilar,
-  capa: r.arte_id === null ? await capaDo(r) : await urlDaMidia(r.jpeg_path),
+  capa: r.post_id !== null ? await capaDo(r) : await urlDaMidia(r.jpeg_path),
   status: r.status,
   erro: r.error,
 });
@@ -256,15 +262,15 @@ const doPublicado = async (r: LinhaPublicado, artes: ReadonlyMap<string, ResumoD
   midia: r.media_type,
   titulo: tituloDa(r, artes),
   pilar: r.pilar,
-  capa: r.arte_id === null ? await capaDo(r) : (artes.get(r.arte_id)?.capa ?? null),
+  capa: r.post_id !== null ? await capaDo(r) : r.arte_id !== null ? (artes.get(r.arte_id)?.capa ?? null) : r.peca_arquivo && (await urlDaMidia(r.peca_arquivo)),
   link: r.permalink,
 });
 
 /** A linha da fila como o calendário a mostra; null se não existe, já saiu ou foi cancelada. */
 export async function agendadoPorId(filaId: number, lerArtes: LerArtes): Promise<ItemAgendado | null> {
   const r = await primeira(
-    q<LinhaAgendado>`SELECT q.id, q.post_id, q.arte_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, p.pilar, p.arts, p.chosen
-      FROM queue q LEFT JOIN posts p ON p.id = q.post_id WHERE q.status IN ('pending', 'publishing', 'failed') AND q.id = ${filaId}`,
+    q<LinhaAgendado>`SELECT q.id, q.post_id, q.arte_id, q.peca_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, COALESCE(p.pilar, pp.pilar) AS pilar, p.arts, p.chosen, pp.tema AS peca_tema, pp.arquivo AS peca_arquivo
+      FROM queue q LEFT JOIN posts p ON p.id = q.post_id LEFT JOIN pecas_prontas pp ON pp.id::text = q.peca_id WHERE q.status IN ('pending', 'publishing', 'failed') AND q.id = ${filaId}`,
   );
   return r ? doAgendado(r, await lerArtes(idsDeArte([r]))) : null;
 }
@@ -283,11 +289,12 @@ export async function itensDoCalendario(userId: string, de: Dia, ate: Dia, lerAr
   ).map(daPauta);
   const datas = (await datasEntre(de, ate)).map(({ dia, data }): ItemData => ({ ...data, tipo: "data", dia: dia as Dia }));
 
-  const agendados = await q<LinhaAgendado>`SELECT q.id, q.post_id, q.arte_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, p.pilar, p.arts, p.chosen
-    FROM queue q LEFT JOIN posts p ON p.id = q.post_id
+  const agendados = await q<LinhaAgendado>`SELECT q.id, q.post_id, q.arte_id, q.peca_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, COALESCE(p.pilar, pp.pilar) AS pilar, p.arts, p.chosen, pp.tema AS peca_tema, pp.arquivo AS peca_arquivo
+    FROM queue q LEFT JOIN posts p ON p.id = q.post_id LEFT JOIN pecas_prontas pp ON pp.id::text = q.peca_id
     WHERE q.status IN ('pending', 'publishing', 'failed') AND q.publish_at >= ${inicio} AND q.publish_at < ${fim} ORDER BY q.publish_at`;
-  const publicados = await q<LinhaPublicado>`SELECT u.id, u.post_id, u.arte_id, u.media_type, u.permalink, u.published_at, p.headline, p.pilar, p.arts, p.chosen
-    FROM publicacoes u LEFT JOIN posts p ON p.id = u.post_id
+  const publicados = await q<LinhaPublicado>`SELECT u.id, u.post_id, u.arte_id, u.peca_id, u.media_type, u.permalink, u.published_at, p.headline, COALESCE(p.pilar, pp.pilar) AS pilar, p.arts, p.chosen,
+      pp.tema AS peca_tema, pp.arquivo AS peca_arquivo
+    FROM publicacoes u LEFT JOIN posts p ON p.id = u.post_id LEFT JOIN pecas_prontas pp ON pp.id::text = u.peca_id
     WHERE u.published_at >= ${inicio} AND u.published_at < ${fim} ORDER BY u.published_at`;
   const artes = await lerArtes(idsDeArte([...agendados, ...publicados]));
 

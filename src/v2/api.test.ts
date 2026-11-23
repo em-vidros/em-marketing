@@ -18,8 +18,10 @@ const cenaFalsa = (formato: Formato) =>
 
 let leiturasRecebidas: string[][] = [];
 let imagensLidas = 0;
+let pecasLidas = 0;
 const iaFalsa: Ia = {
   lerReferencia: async () => (imagensLidas++, { leitura: "Par de fontes bold e fina, ilustração chapada, foco no canto esquerdo.", pilares: ["AUTORIDADE", "MARCA"] }),
+  lerPecaPronta: async () => (pecasLidas++, { texto: "Café da manhã\ncom vidraceiros\n28 de novembro, 7h", tema: "convite para o café da manhã com vidraceiros", pilar: "GENTE" }),
   planejarArte: async (_pedido, _formato, leituras) => {
     leiturasRecebidas.push(leituras);
     return { cena: "flat matte glass texture", titulo: "Vidro temperado aguenta o dia a dia", apoio: "Box sob medida em 7 dias", display: false, fundoEscuro: false };

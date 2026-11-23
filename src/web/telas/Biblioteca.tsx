@@ -5,9 +5,13 @@ import { BotaoMenu } from "../componentes/BotaoMenu";
 import { Capa } from "../componentes/Capa";
 import { Falha } from "../componentes/Falha";
 import { ImagensGeradas } from "../componentes/ImagensGeradas";
+import { NovaArte } from "../componentes/NovaArte";
 import { devolverFoco, PainelLateral } from "../componentes/PainelLateral";
 import { Check } from "../componentes/Passos";
-import { Referencias } from "../componentes/Referencias";
+import { DetalheDaPecaPronta, PecasProntas, usePecasProntas } from "../componentes/PecasProntas";
+import { Referencias, type EnvioDeReferencias } from "../componentes/Referencias";
+import { useImagensSoltas } from "../componentes/referencias/soltas";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/shadcn/ui/dialog";
 import { Troca } from "../componentes/Troca";
 import { dia, FORMATO, PILARES, STATUS_POST } from "../componentes/peca";
 import { Segmentado } from "../componentes/Segmentado";
@@ -88,7 +92,15 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
   const [pilar, setPilar] = useState<Pilar | null>(null);
   const [status, setStatus] = useState<StatusPost | null>(null);
   const [aberta, setAberta] = useState<number | null>(null);
+  const [prontaAberta, setProntaAberta] = useState<string | null>(null);
+  const [criando, setCriando] = useState(false);
   const origem = useRef<HTMLElement | null>(null);
+  const pecasProntas = usePecasProntas();
+  const referencias = useRef<EnvioDeReferencias>(null);
+  // Colar ou soltar vale na tela inteira; a pessoa diz no envio se a imagem é referência ou peça pronta.
+  const [pendentes, setPendentes] = useState<File[] | null>(null);
+  const soltando = useImagensSoltas(setPendentes, !pendentes);
+  const prontaSelecionada = pecasProntas.lista.find((p) => p.id === prontaAberta) ?? null;
 
   const pecas = carga.estado === "pronto" ? carga.dados : [];
   const buscaAdiada = useDeferredValue(busca);
@@ -99,12 +111,35 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
 
   function abrir(id: number, de: HTMLElement) {
     origem.current = de;
+    setProntaAberta(null);
+    setCriando(false);
     setAberta((atual) => (atual === id ? null : id));
+  }
+  function abrirPronta(id: string, de: HTMLElement) {
+    origem.current = de;
+    setAberta(null);
+    setCriando(false);
+    setProntaAberta((atual) => (atual === id ? null : id));
   }
   const fechar = useCallback(() => {
     setAberta(null);
+    setProntaAberta(null);
     devolverFoco(origem.current);
   }, []);
+  function guardarComo(destino: "referencia" | "peca") {
+    if (pendentes) (destino === "peca" ? pecasProntas.receber : (a: File[]) => referencias.current?.receber(a))(pendentes);
+    setPendentes(null);
+  }
+  const fecharCriacao = useCallback(() => {
+    setCriando(false);
+    devolverFoco(origem.current);
+  }, []);
+  function abrirCriacao(de: HTMLElement) {
+    origem.current = de;
+    setAberta(null);
+    setProntaAberta(null);
+    setCriando((aberto) => !aberto);
+  }
   function limpar() {
     setBusca("");
     setPilar(null);
@@ -118,6 +153,14 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
           <header className="flex flex-wrap items-center gap-2.5">
             <BotaoMenu abrir={abrirMenu} />
             <h1 className="mr-auto text-2xl/tight font-semibold tracking-[-0.02em]">Biblioteca</h1>
+            <button
+              type="button"
+              aria-expanded={criando}
+              onClick={(e) => abrirCriacao(e.currentTarget)}
+              className="pressiona cursor-pointer rounded-full bg-tinta px-4 py-2 text-sm font-medium text-sobre-tinta"
+            >
+              Nova arte
+            </button>
             <label htmlFor="busca" className="sr-only">
               Buscar peças
             </label>
@@ -133,7 +176,9 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
             <Segmentado tipo="alternar" rotulo="Visualização" opcoes={VISTAS} valor={vista} aoMudar={setVista} />
           </header>
 
-          <Referencias />
+          <Referencias ref={referencias} soltando={soltando} />
+
+          <PecasProntas estado={pecasProntas} soltando={soltando} aberta={prontaAberta} abrir={abrirPronta} />
 
           <ImagensGeradas busca={buscaAdiada} />
 
@@ -241,10 +286,51 @@ export function Biblioteca({ abrirMenu }: { abrirMenu: () => void }) {
           )}
         </div>
       </main>
-      <PainelLateral aberto={!!selecionada} rotulo="Peça" fechar={fechar} className="flex flex-col">
+      <PainelLateral aberto={!!selecionada || !!prontaSelecionada} rotulo={prontaSelecionada ? "Peça pronta" : "Peça"} fechar={fechar} className="flex flex-col">
         {selecionada && <Detalhe peca={selecionada} fechar={fechar} />}
+        {prontaSelecionada && (
+          <DetalheDaPecaPronta
+            key={prontaSelecionada.id}
+            peca={prontaSelecionada}
+            fechar={fechar}
+            remover={() => {
+              void pecasProntas.remover(prontaSelecionada);
+              fechar();
+            }}
+          />
+        )}
       </PainelLateral>
+      <PainelLateral aberto={criando} rotulo="Nova arte" fechar={fecharCriacao} className="flex flex-col">
+        <NovaArte fechar={fecharCriacao} />
+      </PainelLateral>
+      <EscolhaDoEnvio quantas={pendentes?.length ?? 0} escolher={guardarComo} cancelar={() => setPendentes(null)} />
     </div>
+  );
+}
+
+/** A imagem colada ou solta na Biblioteca: guia o estilo das artes ou sai no feed como está. */
+function EscolhaDoEnvio({ quantas, escolher, cancelar }: { quantas: number; escolher: (destino: "referencia" | "peca") => void; cancelar: () => void }) {
+  const opcao =
+    "pressiona flex w-full cursor-pointer flex-col items-start gap-0.5 rounded-item border border-linha-forte px-3.5 py-3 text-left hover:bg-hover focus-visible:outline-2 focus-visible:outline-tinta";
+  return (
+    <Dialog open={quantas > 0} onOpenChange={(aberto) => !aberto && cancelar()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{quantas === 1 ? "Como guardar esta imagem?" : `Como guardar estas ${quantas} imagens?`}</DialogTitle>
+          <DialogDescription>Para trocar depois, remova e suba de novo.</DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-2">
+          <button type="button" autoFocus onClick={() => escolher("referencia")} className={opcao}>
+            <span className="font-medium">Referência</span>
+            <span className="text-[13px] text-tinta-3">Guia o estilo das artes geradas. Nunca é publicada.</span>
+          </button>
+          <button type="button" onClick={() => escolher("peca")} className={opcao}>
+            <span className="font-medium">Peça pronta</span>
+            <span className="text-[13px] text-tinta-3">Vai para o feed ou o story como está, com legenda. Nunca guia a geração.</span>
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

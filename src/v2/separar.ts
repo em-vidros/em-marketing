@@ -77,16 +77,18 @@ const pesoMaisPerto = (fonte: Fonte, peso: number): Peso =>
 
 const prender = (v: number, minimo: number, maximo: number) => Math.round(Math.min(maximo, Math.max(minimo, v)));
 
+/** A caixa com folga em volta, presa dentro da arte. */
+export function comFolga(e: Area, formato: Formato, folga = FOLGA): Area {
+  const { largura: W, altura: H } = FORMATOS[formato];
+  const x = prender(e.x - folga, 0, W);
+  const y = prender(e.y - folga, 0, H);
+  return { x, y, largura: prender(e.x + e.largura + folga, x, W) - x, altura: prender(e.y + e.altura + folga, y, H) - y };
+}
+
 /** As áreas que o modelo de imagem apaga, com folga e presas dentro da arte. */
 export function areasDosElementos({ textos, logo }: Elementos, formato: Formato): Area[] {
-  const { largura: W, altura: H } = FORMATOS[formato];
-  const area = (e: Area, folga: number): Area => {
-    const x = prender(e.x - folga, 0, W);
-    const y = prender(e.y - folga, 0, H);
-    return { x, y, largura: prender(e.x + e.largura + folga, x, W) - x, altura: prender(e.y + e.altura + folga, y, H) - y };
-  };
-  const areas = textos.map((t) => area(t, FOLGA));
-  if (logo) areas.push(area(logo, logo.selo ? FOLGA_DO_SELO : FOLGA));
+  const areas = textos.map((t) => comFolga(t, formato));
+  if (logo) areas.push(comFolga(logo, formato, logo.selo ? FOLGA_DO_SELO : FOLGA));
   return areas.filter((a) => a.largura > 0 && a.altura > 0);
 }
 
@@ -146,10 +148,11 @@ const cinza = (largura: number, altura: number) => ({ raw: { width: largura, hei
 const RECUO_DO_REMENDO = 8;
 
 /**
- * Cola na original só as áreas que o modelo apagou, com a borda suavizada. O modelo redesenha a imagem inteira,
+ * Cola na original só as áreas que o modelo refez, com a borda suavizada. O modelo redesenha a imagem inteira,
  * e fora das áreas ele também muda coisas, como um número desenhado numa ilustração.
+ * `comTexto`: a área ganha texto novo, que pode ser escuro, então o teste do buraco preto não vale.
  */
-export async function remendar(original: Uint8Array, apagada: Uint8Array, areas: Area[], formato: Formato): Promise<Uint8Array> {
+export async function remendar(original: Uint8Array, apagada: Uint8Array, areas: Area[], formato: Formato, { comTexto = false } = {}): Promise<Uint8Array> {
   const { largura: W, altura: H } = FORMATOS[formato];
   const furo = Buffer.alloc(W * H);
   for (const a of areas) {
@@ -172,7 +175,7 @@ export async function remendar(original: Uint8Array, apagada: Uint8Array, areas:
       if (preto(antes, i, 3)) pretosAntes++;
     }
   // O modelo às vezes devolve a área transparente ou pintada de preto. Gravada, a cena fica com um buraco preto no lugar do texto.
-  if (dentro > 0 && (vazios / dentro > 0.01 || (pretosAgora - pretosAntes) / dentro > 0.3))
+  if (dentro > 0 && (vazios / dentro > 0.01 || (!comTexto && (pretosAgora - pretosAntes) / dentro > 0.3)))
     throw new Error("O modelo de imagem devolveu a área do texto vazia, sem o fundo. Tente de novo.");
   const borda = await sharp(furo, cinza(W, H)).blur(3).toColourspace("b-w").raw().toBuffer();
   // O alfa sai num passo só dele: no mesmo pipeline do joinChannel, o sharp perde o canal novo.

@@ -6,10 +6,12 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { apiImagensDoPedido, pararResposta, useApi } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
-import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
+import { antesDeAprovar, aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
 import { Pensando } from "../componentes/ia/Pensando";
+import { ArteDaConversa, ehArteDaConversa } from "../componentes/ArteDaConversa";
+import { ArteCriada, ehArteCriada } from "../componentes/ArteCriada";
 import { EscolhaDeArtes, ehParteComArtes } from "../componentes/EscolhaDeArtes";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
@@ -372,10 +374,15 @@ function Chat({
   // Responder duas vezes ao mesmo pedido publicaria duas vezes: clique, A e R passam por aqui.
   const respondidas = useRef(new Set<string>());
   const [, renderizar] = useReducer((n: number) => n + 1, 0);
-  const responder = (approvalId: string, aprovado: boolean) => {
+  const responder = async (approvalId: string, aprovado: boolean) => {
     if (respondidas.current.has(approvalId)) return;
     respondidas.current.add(approvalId);
     renderizar();
+    if (aprovado && !(await (antesDeAprovar.get(approvalId)?.() ?? true))) {
+      respondidas.current.delete(approvalId);
+      renderizar();
+      return;
+    }
     void chat.addToolApprovalResponse({ id: approvalId, approved: aprovado });
   };
   const pendentes = aprovacoesPendentes(chat.messages, respondidas.current);
@@ -385,7 +392,7 @@ function Chat({
   const decidirFocado = (aprovado: boolean) => () => {
     const id = document.activeElement?.closest<HTMLElement>("[data-aprovacao]")?.dataset.aprovacao;
     if (!id || !pendentes.includes(id)) return false;
-    responder(id, aprovado);
+    void responder(id, aprovado);
   };
   useAtalho("aprovar", decidirFocado(true));
   useAtalho("recusar", decidirFocado(false));
@@ -559,6 +566,7 @@ function Chat({
                           parte={t.parte}
                           noAr={respondendo && m === ultima}
                           escolher={!respondendo && m === ultima ? (n) => enviar(`Quero a variação ${n}.`, { comEscolha: false }) : null}
+                          versao={`${chat.messages.length}-${respondendo}`}
                           painel={painel}
                           abrir={abrir}
                           responder={responder}
@@ -628,8 +636,11 @@ function ParteDoChefe({
   responder,
   respondidas,
   escolher,
+  versao,
 }: {
   parte: Parte;
+  /** Muda a cada mensagem e a cada fim de resposta: o cartão do ajuste relê o estado do post nessa hora. */
+  versao: string;
   /** Manda a variação escolhida; null quando a conversa já passou das artes desta parte. */
   escolher: ((variante: number) => void) | null;
   /** A mensagem desta parte ainda está chegando. */
@@ -645,6 +656,8 @@ function ParteDoChefe({
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
   if (ehParteComArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
+  if (ehArteDaConversa(parte)) return <ArteDaConversa parte={parte} versao={versao} />;
+  if (ehArteCriada(parte)) return <ArteCriada parte={parte} />;
   if (ehDelegacao(parte)) {
     const quem = botDaDelegacao(parte as ParteDelegacao);
     return quem && <CartaoTarefa parte={parte as ParteDelegacao} bot={quem} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
@@ -654,12 +667,14 @@ function ParteDoChefe({
   return null;
 }
 
-/** A story e a foto real que o Chefe chama direto aparecem no passo; as variações têm o cartão de escolha. */
-const imagemDoPasso = (p: Passo) =>
-  p.ferramenta === "derivar_story" ? <ArtesDoPasso passo={p} proporcao="aspect-[9/16]" /> : p.ferramenta === "usar_foto" ? <ArtesDoPasso passo={p} /> : null;
+/** A foto real que o Chefe usa direto aparece no passo. A story tem o cartão de ArteDaConversa. */
+const imagemDoPasso = (p: Passo) => (p.ferramenta === "usar_foto" ? <ArtesDoPasso passo={p} /> : null);
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
-const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehParteComArtes(p);
+const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehParteComArtes(p) && !(ehArteDaConversa(p) && temArte(p)) && !ehArteCriada(p);
+
+/** O ajuste e a story viram cartão só quando trazem a imagem; enquanto rodam ou se falham, ficam na lista de passos. */
+const temArte = (p: Parte) => "state" in p && p.state === "output-available" && typeof p.output === "object" && p.output !== null && "url" in p.output && !!p.output.url;
 
 /** As chaves das imagens coladas que vieram com a mensagem. */
 const coladasDa = (m: Mensagem) => m.parts.flatMap((p) => (p.type === "data-referencias" ? p.data.coladas : []));

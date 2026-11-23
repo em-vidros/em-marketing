@@ -2,6 +2,7 @@ import { zodTextFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import { PILARES, type Brief } from "../domain/art/pipeline";
 import { CONVERSA } from "../domain/brand";
+import { montarBrief as briefComPublico, PUBLICOS } from "../domain/publico";
 import { MODELO_DE_TEXTO, openai } from "../openai";
 import { REGRA_DA_IMAGEM, REGRA_DO_PEDIDO, REGRA_DOS_PILARES } from "./bots";
 import { contextoDeData } from "./hoje";
@@ -12,7 +13,7 @@ const BriefLido = z.object({
   tema: z.string(),
   angulo: z.string().nullable(),
   data: z.string().nullable(),
-  publico: z.enum(["B2B", "B2C"]),
+  publico: z.enum(PUBLICOS).nullable(),
   precisa_foto_real: z.boolean(),
   formato: z.enum(["feed", "stories", "ambos"]),
   direcao: z.string().max(1500).nullable(),
@@ -28,7 +29,7 @@ const REGRAS = [
   REGRA_DOS_PILARES,
   REGRA_DA_IMAGEM,
   "Quando precisa_foto_real for true, escreva em alternativa_tipografica um tema e um ângulo tipográficos, que não mostrem produto, obra nem pessoas, para o caso de o banco de fotos não ter foto que sirva. Quando for false, alternativa_tipografica é null.",
-  "Público (§1.2): B2B é o padrão (vidraceiro, serralheiro, marmorista, construtora, arquiteto, projetista), que responde a competência e especificação. Use B2C quando o pedido fala com o consumidor final decidindo box, janela, guarda-corpo ou espelho, que precisa de tradução sem simplificação.",
+  "Público (§1.2): vidraceiro, arquiteto ou consumidor. Tire do pedido; se o pedido não diz, publico é null e o post sai para o vidraceiro. Arquiteto e consumidor são levados a uma vidraçaria parceira, nunca à EM Vidros.",
   "Formato: o que o pedido disser (feed, stories ou ambos). Sem formato no pedido, feed.",
   "Estilo: quando o pedido pede um estilo de arte (mais gráfico, com ilustração, minimalista, colagem, outro clima), escreva em direcao uma direção de arte concreta, como um diretor de arte: composição, elementos, tipografia, textura e luz. Sem estilo pedido, direcao é null e a arte sai no estilo da casa.",
   REGRA_DO_PEDIDO,
@@ -57,14 +58,14 @@ export async function montarBrief(pedido: string, agora = Date.now()): Promise<B
   });
   const lido = resposta.output_parsed;
   if (!lido) throw new Error("O modelo não devolveu o brief do post.");
-  const brief: Brief = {
+  const brief: Brief = briefComPublico({
     pilar: lido.pilar,
     tema: lido.tema,
     ...(lido.angulo && { angulo: lido.angulo }),
     ...(lido.data && { data: lido.data }),
-    publico: lido.publico,
+    ...(lido.publico && { publico: lido.publico }),
     precisaFotoReal: lido.precisa_foto_real,
-  };
+  });
   const alt = lido.precisa_foto_real ? lido.alternativa_tipografica : null;
   return {
     brief,
