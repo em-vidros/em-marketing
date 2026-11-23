@@ -92,6 +92,10 @@ _Evite_: inspiração, modelo, template
 O texto curto que descreve o que uma referência ensina, como o par de fontes, o tipo de ilustração e a composição. Um bot escreve e qualquer pessoa pode corrigir.
 _Evite_: análise, descrição, prompt
 
+**Imagem do pedido**:
+Uma imagem que a pessoa cola, anexa ou solta no chat junto de um pedido. Guia só a próxima geração de artes e entra na Biblioteca de referências só quando alguém guarda.
+_Evite_: anexo, upload, imagem colada
+
 **Biblioteca de referências**:
 O conjunto único de referências da empresa, compartilhado por todos. Começa com os posts reais da @emvidros e cresce com o que a equipe sobe ou marca.
 _Evite_: galeria, moodboard

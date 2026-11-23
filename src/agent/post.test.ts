@@ -16,7 +16,12 @@ import {
 } from "./post";
 
 const brief: Brief = { pilar: "AUTORIDADE", tema: "temperado x comum", precisaFotoReal: false };
-const arte = (variant: number): ArtVariant => ({ variant, referencia: `ref-${variant}`, path: `v${variant}.jpg`, problemas: [] });
+const arte = (variant: number): ArtVariant => ({
+  variant,
+  ancora: { origem: "biblioteca", id: `ref-${variant}`, arquivo: `ref-${variant}.png`, leitura: "leitura" },
+  path: `v${variant}.jpg`,
+  problemas: [],
+});
 const foto: FotoReal = { variant: 1, foto: true, path: "foto.jpg", problemas: [] };
 const headline = { headline: "O temperado quebra em grãos.", apoio: "" };
 
@@ -142,19 +147,22 @@ describe("persistência por conversa", () => {
     }
   });
 
-  test("um post gravado antes das referências, com style, volta no formato novo e a foto real continua foto", async () => {
+  test("um post gravado antes das referências no chat volta sem âncora, para a linha de referências usadas não aparecer, e a foto real continua foto", async () => {
     await abrirConversa("t-antigo", "post");
     const { postId } = await criarPost("t-antigo", brief, "feed");
     const antigas = [
       { variant: 1, style: "teal-chamada", path: "v1.jpg", problemas: [] },
       { variant: 2, style: "foto-real", path: "f.jpg", problemas: [] },
+      { variant: 3, referencia: "id-sem-imagem", path: "v3.jpg", problemas: [] },
     ];
     await q`UPDATE posts SET headline = ${JSON.stringify(headline)}, arts = ${JSON.stringify(antigas)}, chosen = 2 WHERE id = ${postId}`;
-    expect(await postDaConversa("t-antigo")).toMatchObject({
+    const post = await postDaConversa("t-antigo");
+    expect(post).toMatchObject({
       etapa: "escolhida",
       peca: { origem: "foto", arte: { variant: 2, foto: true } },
-      opcoes: [{ variant: 1, referencia: null }, { variant: 2, foto: true }],
+      opcoes: [{ variant: 1, path: "v1.jpg" }, { variant: 2, foto: true }, { variant: 3, path: "v3.jpg" }],
     });
+    expect(post?.etapa === "escolhida" && post.opcoes.map((a) => Object.keys(a).filter((k) => k === "ancora" || k === "referencia"))).toEqual([[], [], []]);
   });
 
   test("conversas diferentes têm posts diferentes", async () => {

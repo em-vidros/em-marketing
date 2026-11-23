@@ -63,7 +63,7 @@ test("a referência subida chega à geração em JPEG de até 1024 px, com o tra
 
   try {
     const carregadas = await referenciasParaGerar(estudio, { pilar: "PROVA" });
-    expect(carregadas.map((r) => [r.id, r.leitura])).toEqual([
+    expect(carregadas.map((r) => (r.origem === "biblioteca" ? [r.id, r.leitura] : r.arquivo))).toEqual([
       [nova, "nova"],
       [velha, "velha"],
       [usada, "usada"],
@@ -95,8 +95,31 @@ test("uma referência sem arquivo e outra que não abre ficam de fora, e as pró
 
   try {
     const carregadas = await referenciasParaGerar(estudio, { pilar: "PROVA" });
-    expect(carregadas.map((r) => r.id).toSorted()).toEqual(boas.toSorted());
+    expect(carregadas.map((r) => (r.origem === "biblioteca" ? r.id : r.arquivo)).toSorted()).toEqual(boas.toSorted());
   } finally {
     await q`DELETE FROM posts WHERE id = ${post!.id}`;
   }
+});
+
+test("a escolha do pedido vem antes da rotação: as marcadas na ordem da pessoa, depois as coladas, e a rotação completa até 3", async () => {
+  const estudio = estudioDeTeste();
+  await estudio.banco.delete(referencias);
+
+  const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: "#2F646A" } }).png().toBuffer();
+  const subir = async (leitura: string, dia: number) => {
+    const arquivo = await estudio.arquivos.salvar(png, "png");
+    const [criada] = await estudio.banco.insert(referencias).values({ arquivo, leitura, criadaPor: "u-ana", criadaEm: new Date(Date.UTC(2026, 10, dia)) }).returning();
+    return criada!.id;
+  };
+  const [velha, marcada, nova] = [await subir("velha", 1), await subir("marcada", 2), await subir("nova", 3)];
+  const colada = await estudio.arquivos.salvar(png, "png");
+  const origem = (r: Awaited<ReturnType<typeof referenciasParaGerar>>[number]) => (r.origem === "biblioteca" ? r.id : r.arquivo);
+
+  const umaDeCada = await referenciasParaGerar(estudio, { pilar: "PROVA", escolha: { marcadas: [marcada], coladas: [colada] } });
+  const soColada = await referenciasParaGerar(estudio, { pilar: "PROVA", escolha: { marcadas: [], coladas: [colada] } });
+  const alemDeTres = await referenciasParaGerar(estudio, { pilar: "PROVA", escolha: { marcadas: [nova, velha, marcada], coladas: [colada] }, n: 4 });
+
+  expect(umaDeCada.map(origem)).toEqual([marcada, colada, expect.stringMatching(new RegExp(`^(${velha}|${nova})$`))]);
+  expect(soColada.map(origem)).toEqual([colada, nova, expect.any(String)]);
+  expect(alemDeTres.map(origem)).toEqual([nova, velha, marcada, colada]);
 });

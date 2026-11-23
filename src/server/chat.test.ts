@@ -7,6 +7,10 @@ import type { BotId } from "../agent/bots";
 import { criarPost, gravarPost, transicionar, type EtapaPost, type Evento } from "../agent/post";
 import { primeira } from "../db";
 import { q } from "../v2/banco";
+import { rmSync } from "node:fs";
+import sharp from "sharp";
+import { postDaConversa } from "../agent/post";
+import type { CarregarReferencias } from "../v2/referencias";
 import { rotaDeChat } from "./chat";
 
 type Chunk = Awaited<ReturnType<MockLanguageModelV4["doStream"]>>["stream"] extends ReadableStream<infer C> ? C : never;
@@ -35,7 +39,7 @@ const chefeQueAgenda = () => {
 
 const PRONTO_PARA_AGENDAR: Evento[] = [
   { tipo: "headline", headline: { headline: "O temperado quebra em grãos.", apoio: "" } },
-  { tipo: "artes", artes: [{ variant: 1, referencia: null, path: "v1.jpg", problemas: [] }] },
+  { tipo: "artes", artes: [{ variant: 1, ancora: null, path: "v1.jpg", problemas: [] }] },
   { tipo: "escolha", variante: 1 },
   { tipo: "legenda", legenda: "Legenda." },
 ];
@@ -237,6 +241,91 @@ describe("parar", () => {
       ["assistant", "Ok."],
     ]);
     expect((await mensagensDaConversa(id))[1]?.parts.find(isToolUIPart)).toMatchObject({ state: "output-error", errorText: "Parado pelo usuário antes de terminar." });
+  });
+});
+
+describe("referências do pedido", () => {
+  const chamar = (toolName: string, input: object = {}) =>
+    turnoDoModelo([{ type: "tool-call", toolCallId: `${toolName}-${crypto.randomUUID()}`, toolName, input: JSON.stringify(input) }], "tool-calls");
+
+  /** O modelo de imagem responde pela rede falsa: a geração roda inteira sem chamar a OpenAI. */
+  async function semOpenAI() {
+    const cena = (await sharp({ create: { width: 1088, height: 1360, channels: 3, background: "#2F646A" } }).png().toBuffer()).toString("base64");
+    const original = globalThis.fetch;
+    return spyOn(globalThis, "fetch").mockImplementation((async (entrada: RequestInfo | URL, init?: RequestInit) =>
+      String(entrada instanceof Request ? entrada.url : entrada).includes("/images/")
+        ? Response.json({ data: [{ b64_json: cena }] })
+        : original(entrada, init)) as typeof fetch);
+  }
+
+  test("a escolha do pedido chega à geração delegada pelo Chefe na ordem da pessoa, sobrevive a uma pergunta e não vale para a geração seguinte", async () => {
+    const roteiro = [
+      () => responde("Feed ou stories?"),
+      () => chamar("delegar_post", { pedido: "Gere as 3 artes no feed." }),
+      () => chamar("gerar_3_artes"),
+      () => responde("Gerei as 3."),
+      () => chamar("mostrar_artes"),
+      () => responde("Qual você quer?"),
+      () => chamar("delegar_post", { pedido: "Gere de novo." }),
+      () => chamar("gerar_3_artes"),
+      () => responde("Gerei de novo."),
+      () => responde("Pronto."),
+    ];
+    const modelo = new MockLanguageModelV4({ doStream: async () => roteiro.shift()!() });
+    const jpeg = new Uint8Array(await sharp({ create: { width: 8, height: 8, channels: 3, background: "#F0EFEA" } }).jpeg().toBuffer());
+    const pedidas: unknown[] = [];
+    const carregarReferencias: CarregarReferencias = async ({ escolha }) => {
+      pedidas.push(escolha);
+      return [
+        ...(escolha?.marcadas ?? []).map((id) => ({ origem: "biblioteca" as const, id, arquivo: `${id}.png`, leitura: `leitura ${id}`, imagem: jpeg })),
+        ...(escolha?.coladas ?? []).map((arquivo) => ({ origem: "pedido" as const, arquivo, imagem: jpeg })),
+      ];
+    };
+    const rota = rotaDeChat({ resolverModelo: () => modelo, carregarReferencias });
+    const id = await conversaComPost("chefe", PRONTO_PARA_AGENDAR.slice(0, 1));
+    const [a, b, colada] = [crypto.randomUUID(), crypto.randomUUID(), `${crypto.randomUUID()}.png`];
+    const rede = await semOpenAI();
+    const geradas: string[] = [];
+    const guardar = (p: EtapaPost | null) => (p?.etapa === "artes" && geradas.push(...p.artes.map((x) => x.path)), p);
+
+    try {
+      await postar(rota, id, {
+        id: "u1",
+        role: "user",
+        parts: [
+          { type: "text", text: "Post do Dia do Vidraceiro." },
+          { type: "data-referencias", data: { marcadas: [a, b], coladas: [colada] } },
+        ],
+      });
+      await postar(rota, id, doUsuario("u2", "Feed."));
+      const primeira = guardar(await postDaConversa(id));
+      await postar(rota, id, doUsuario("u3", "Gera de novo."));
+      const segunda = guardar(await postDaConversa(id));
+
+      const ancoras = (p: EtapaPost | null) => (p?.etapa === "artes" ? p.artes.map((x) => ("foto" in x ? null : x.ancora)) : null);
+      expect(pedidas).toEqual([{ marcadas: [a, b], coladas: [colada] }, undefined]);
+      expect(ancoras(primeira)).toEqual([
+        { origem: "biblioteca", id: a, arquivo: `${a}.png`, leitura: `leitura ${a}` },
+        { origem: "biblioteca", id: b, arquivo: `${b}.png`, leitura: `leitura ${b}` },
+        { origem: "pedido", arquivo: colada },
+      ]);
+      expect(ancoras(segunda)).toEqual([null, null, null]);
+      const mostradas = (await mensagensDaConversa(id)).flatMap((m) => m.parts).find((p) => p.type === "tool-mostrar_artes");
+      expect(mostradas).toMatchObject({ output: { artes: ancoras(primeira)!.map((ancora) => ({ ancora })) } });
+    } finally {
+      rede.mockRestore();
+      for (const path of geradas) rmSync(path, { force: true });
+    }
+  });
+
+  test("uma escolha com formato errado é recusada antes do turno", async () => {
+    const rota = rotaDeChat({ resolverModelo: () => new MockLanguageModelV4({ doStream: async () => responde("Ok.") }) });
+    const res = await pedir(rota, `escolha-${crypto.randomUUID()}`, {
+      id: "u1",
+      role: "user",
+      parts: [{ type: "text", text: "Oi" }, { type: "data-referencias", data: { marcadas: [], coladas: ["../../etc/passwd"] } }],
+    });
+    expect(res.status).toBe(400);
   });
 });
 

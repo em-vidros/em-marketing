@@ -12,6 +12,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
+import { escolhaDoCliente, escolhaPendente, marcarUsada, notaDaEscolha, type ReferenciasDoTurno } from "../agent/pedido";
 import type { CarregarReferencias } from "../v2/referencias";
 import { configDoBot, situacaoDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
@@ -120,7 +121,9 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferenci
 
     const validada = await safeValidateUIMessages({ messages: messages.slice(-1) });
     if (!validada.success) return erro(400, validada.error.message);
-    const [ultima] = validada.data as [UIMessage];
+    const lida = escolhaDoCliente(validada.data[0] as UIMessage);
+    if (!lida.ok) return erro(400, lida.erro);
+    const ultima = lida.mensagem;
 
     const situacao = await situacaoDoBot(botId);
     if (situacao === null) return erro(400, "Este bot não existe.");
@@ -139,10 +142,17 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferenci
         return erro(juntada.status, juntada.erro);
       }
       const { historico } = juntada;
-      const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico), {
+      const pendente = escolhaPendente(historico);
+      const escolhidas = pendente ? pendente.escolha.marcadas.length + pendente.escolha.coladas.length : 0;
+      let usada = false;
+      const referencias: ReferenciasDoTurno | undefined = carregarReferencias && {
+        carregar: (pilar) => carregarReferencias({ pilar, escolha: pendente?.escolha, n: Math.max(3, escolhidas) }),
+        usar: () => void (usada = true),
+      };
+      const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico, { convertDataPart: notaDaEscolha }), {
         resolverModelo,
         segredoAprovacao,
-        carregarReferencias,
+        referencias,
         abortSignal: turno.sinal,
         autor: usuario.email,
       });
@@ -156,7 +166,8 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferenci
         onEnd: async ({ messages, isAborted }) => {
           try {
             const salvas = messages.filter((m) => m.parts.length > 0);
-            await gravarMensagens(conversa.id, isAborted ? salvas.map(fecharToolsParadas) : salvas);
+            const fechadas = isAborted ? salvas.map(fecharToolsParadas) : salvas;
+            await gravarMensagens(conversa.id, usada && pendente ? marcarUsada(fechadas, pendente.mensagemId) : fechadas);
           } finally {
             await turno.terminar();
           }

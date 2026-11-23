@@ -17,8 +17,9 @@ const cenaFalsa = (formato: Formato) =>
   sharp({ create: { width: FORMATOS[formato].largura, height: FORMATOS[formato].altura, channels: 3, background: "#E4E1D8" } }).jpeg().toBuffer();
 
 let leiturasRecebidas: string[][] = [];
+let imagensLidas = 0;
 const iaFalsa: Ia = {
-  lerReferencia: async () => ({ leitura: "Par de fontes bold e fina, ilustração chapada, foco no canto esquerdo.", pilares: ["AUTORIDADE", "MARCA"] }),
+  lerReferencia: async () => (imagensLidas++, { leitura: "Par de fontes bold e fina, ilustração chapada, foco no canto esquerdo.", pilares: ["AUTORIDADE", "MARCA"] }),
   planejarArte: async (_pedido, _formato, leituras) => {
     leiturasRecebidas.push(leituras);
     return { cena: "flat matte glass texture", titulo: "Vidro temperado aguenta o dia a dia", apoio: "Box sob medida em 7 dias", display: false, fundoEscuro: false };
@@ -46,6 +47,7 @@ let api: ReturnType<typeof criarApi>;
 
 beforeEach(async () => {
   leiturasRecebidas = [];
+  imagensLidas = 0;
   separacoes = { leituras: 0, areas: [] };
   // O banco é o do preload, de todos os arquivos de teste; cada caso começa sem referências nem artes.
   await banco().delete(referencias);
@@ -91,6 +93,55 @@ describe("biblioteca de referências", () => {
     const r = await pedir("/api/referencias", { method: "POST", body: form });
     expect(r.status).toBe(400);
     expect(await r.json()).toEqual({ erro: "A referência precisa ser PNG, JPEG ou WebP." });
+  });
+});
+
+describe("imagem colada no chat", () => {
+  const subir = (arquivo: File) => {
+    const form = new FormData();
+    form.set("arquivo", arquivo);
+    return pedir("/api/arquivos", { method: "POST", body: form });
+  };
+  const colar = async () => (await (await subir(new File([await cenaFalsa("feed")], "colada.jpg", { type: "image/jpeg" }))).json()).chave as string;
+  const arquivosDaBiblioteca = async () => ((await (await pedir("/api/referencias")).json()) as { arquivo: string }[]).map((r) => r.arquivo);
+
+  test("sobe sem a IA ler e sem entrar na Biblioteca; recusa o que não é PNG, JPEG ou WebP, o que passa de 10 MB e o que não abre", async () => {
+    const chave = await colar();
+    const grande = new File([new Uint8Array(10 * 1024 * 1024 + 1)], "grande.png", { type: "image/png" });
+    const recusas = await Promise.all([
+      subir(new File(["%PDF"], "planta.pdf", { type: "application/pdf" })),
+      subir(grande),
+      subir(new File(["não é imagem"], "quebrada.png", { type: "image/png" })),
+    ]);
+
+    expect((await pedir(`/api/arquivos/${chave}`)).status).toBe(200);
+    expect(imagensLidas).toBe(0);
+    expect(await arquivosDaBiblioteca()).toEqual([]);
+    expect(await Promise.all(recusas.map(async (r) => [r.status, (await r.json()).erro]))).toEqual([
+      [400, "A imagem precisa ser PNG, JPEG ou WebP."],
+      [400, "A imagem passa de 10 MB."],
+      [400, "Não deu para ler essa imagem. Confira se o arquivo não está corrompido."],
+    ]);
+  });
+
+  test("guardar na Biblioteca usa o mesmo arquivo; guardar de novo devolve a mesma referência, e depois de desfazer ela volta sem a IA ler outra vez", async () => {
+    const chave = await colar();
+    const guardar = async () => (await pedir(`/api/arquivos/${chave}/referencia`, { method: "POST" })).json() as Promise<{ id: string; arquivo: string }>;
+
+    const guardada = await guardar();
+    const deNovo = await guardar();
+    const naBiblioteca = await arquivosDaBiblioteca();
+    await pedir(`/api/referencias/${guardada.id}`, { method: "DELETE" });
+    const depoisDeDesfazer = await arquivosDaBiblioteca();
+    const deVolta = await guardar();
+
+    expect(guardada.arquivo).toBe(chave);
+    expect(deNovo.id).toBe(guardada.id);
+    expect(naBiblioteca).toEqual([chave]);
+    expect(depoisDeDesfazer).toEqual([]);
+    expect(deVolta.id).toBe(guardada.id);
+    expect(imagensLidas).toBe(1);
+    expect((await pedir(`/api/arquivos/${crypto.randomUUID()}.png/referencia`, { method: "POST" })).status).toBe(404);
   });
 });
 
