@@ -58,7 +58,7 @@ export type Livre = Exclude<
 
 /** A descrição de cada tool na tela de configuração. */
 export const FERRAMENTAS = {
-  montar_brief: "Monta o brief de um post: pilar, tema, ângulo, data e se precisa de foto real.",
+  montar_brief: "Monta o brief de um post: pilar, público, tema, ângulo, data e se precisa de foto real.",
   definir_formato: "Escolhe o formato do post: feed, stories ou os dois.",
   definir_headline: "Escreve e valida a headline do post.",
   gerar_3_artes: "Gera 3 artes do post para a pessoa escolher.",
@@ -179,6 +179,7 @@ export const BOTS: Record<BotFixo, Bot> = {
       TOM,
       "Fluxo: pedido, brief estruturado (confirme antes de gastar geração), formato (feed, stories ou os dois), headline, 3 artes, escolha, legenda (só feed) e versão stories (só no formato ambos).",
       "Se o usuário já disse o formato, não pergunte de novo; só confirme no brief.",
+      "No brief, defina o público: vidraceiro, arquiteto ou consumidor. Tire do pedido; se o pedido não diz, deixe o público de fora e ele sai vidraceiro. Diga o público ao mostrar o brief, para a pessoa trocar se quiser. Arquiteto e consumidor são levados a uma vidraçaria parceira, nunca à EM Vidros.",
     ),
     regras: juntar(
         "Publicar e agendar são do Chefe, com aprovação humana. Quando o usuário escolher o formato, chame definir_formato. Depois de gerar_3_artes, chame mostrar_artes para o usuário ver as 3 opções; quando ele escolher uma variação, chame escolher_arte. Em tarefa delegada a escolha não é sua: pare depois de gerar as artes e diga ao Chefe que elas esperam a escolha do usuário; o Chefe mostra as opções.",
@@ -221,7 +222,7 @@ export const BOTS: Record<BotFixo, Bot> = {
     descricao: "Escreve e revisa legenda contra o capítulo 16.",
     modelo: "openai:gpt-6-luna",
     papel: juntar(TOM, "Você escreve e revisa legendas. Ao revisar um texto que o usuário colou, explique cada problema com a correção."),
-    regras: juntar("Para escrever, chame redigir_legenda com pilar e tema. Para revisar, chame validar_texto.", PILARES, PROBLEMAS),
+    regras: juntar("Para escrever, chame redigir_legenda com pilar, público e tema. Para revisar, chame validar_texto.", PILARES, PROBLEMAS),
     contexto: () => `\n--- BRANDBOOK (voz e legenda) ---\n${VOZ()}\n\n${capitulos(16)}`,
     tools: ["redigir_legenda", "validar_texto"],
     sugestoes: ["Revise esta legenda", "Legenda de PROVA para box temperado em Imperatriz"],

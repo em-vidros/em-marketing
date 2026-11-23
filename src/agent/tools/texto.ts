@@ -4,19 +4,21 @@ import { PILARES } from "../../domain/art/pipeline";
 import { escreverLegenda } from "../../domain/caption";
 import { temErro, validarLegenda, validarTextoDaArte } from "../../domain/brand/validate";
 import { validarRoteiro } from "../../domain/reel";
+import { montarBrief, PUBLICOS } from "../../domain/publico";
 
 const pilar = z.enum(PILARES);
+const publico = z.enum(PUBLICOS).optional().describe("§1.2, para quem o texto fala: vidraceiro, arquiteto ou consumidor. A chamada segue esse público.");
 
 export const toolsDeTexto = {
   validar_texto: tool({
     description: "Confere um texto contra o checklist do capítulo 16. Legenda de publicação ou texto que vai dentro da arte.",
     inputSchema: z.discriminatedUnion("tipo", [
-      z.object({ tipo: z.literal("legenda"), texto: z.string(), pilar: pilar.optional() }),
+      z.object({ tipo: z.literal("legenda"), texto: z.string(), pilar: pilar.optional(), publico }),
       z.object({ tipo: z.literal("arte"), headline: z.string(), apoio: z.string().optional() }),
     ]),
     execute: async (input) => {
       const problemas =
-        input.tipo === "legenda" ? validarLegenda(input.texto, { pilar: input.pilar }) : validarTextoDaArte(input.headline, input.apoio);
+        input.tipo === "legenda" ? validarLegenda(input.texto, { pilar: input.pilar, publico: input.publico }) : validarTextoDaArte(input.headline, input.apoio);
       return { problemas, aprovado: !temErro(problemas) };
     },
   }),
@@ -25,12 +27,13 @@ export const toolsDeTexto = {
     description: "Escreve uma legenda avulsa a partir de um brief, fora do fluxo de post. Valida contra o capítulo 16 e reescreve uma vez se houver erro.",
     inputSchema: z.object({
       pilar,
+      publico,
       tema: z.string(),
       angulo: z.string().optional(),
       headline: z.string().optional().describe("texto da arte, se já existir"),
     }),
     execute: async ({ headline, ...brief }) => {
-      const { legenda, problemas } = await escreverLegenda(brief, headline ?? "");
+      const { legenda, problemas } = await escreverLegenda(montarBrief(brief), headline ?? "");
       return { legenda, problemas, aprovado: !temErro(problemas) };
     },
   }),

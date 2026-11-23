@@ -6,6 +6,7 @@ import { PIXELS_MAXIMOS } from "../../v2/arquivos";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief, type Pilar, type ReferenciaParaGerar } from "../../domain/art/pipeline";
 import { temErro } from "../../domain/brand/validate";
+import { montarBrief, PUBLICOS } from "../../domain/publico";
 import { buscarFotos, pegarFoto, prepararFoto } from "../../domain/fotos";
 import { publishImage } from "../../domain/instagram";
 import {
@@ -93,6 +94,10 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
       description: "Registra o brief estruturado de um post novo e o devolve para o usuário confirmar.",
       inputSchema: z.object({
         pilar: z.enum(PILARES).describe("§12.1, a que pilar de conteúdo o post pertence"),
+        publico: z
+          .enum(PUBLICOS)
+          .optional()
+          .describe("§1.2, para quem o post fala: vidraceiro, arquiteto ou consumidor. Omita só se o pedido não diz; sai vidraceiro. A chamada da headline e da legenda segue esse público."),
         tema: z.string(),
         angulo: z.string().optional(),
         data: z.string().optional(),
@@ -102,7 +107,7 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
         formato: formato.optional().describe("só se o usuário já disse"),
       }),
       execute: async ({ precisa_foto_real, formato, ...resto }) => {
-        const brief: Brief = { ...resto, precisaFotoReal: precisa_foto_real };
+        const brief = montarBrief({ ...resto, precisaFotoReal: precisa_foto_real });
         const post = await criarPost(conversaId, brief, formato ?? null);
         const candidatas = brief.precisaFotoReal ? await emOrdem(await buscarFotos(`${brief.tema} ${brief.angulo ?? ""}`), fotoPublica) : [];
         return { ok: true as const, postId: post.postId, brief, formato: formato ?? null, fotosCandidatas: candidatas, proximoPasso: proximoPasso(post) };

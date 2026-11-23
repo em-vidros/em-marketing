@@ -5,6 +5,7 @@ import { generateArt, lerTextoDaArte, type Formato } from "./generate";
 import { aplicarLogo } from "./logo";
 import { validarArte } from "./validate";
 import type { Problema } from "../brand/validate";
+import type { Publico } from "../publico";
 
 export const PILARES = ["PROVA", "AUTORIDADE", "GENTE", "MARCA"] as const;
 export type Pilar = (typeof PILARES)[number];
@@ -12,6 +13,8 @@ export type Pilar = (typeof PILARES)[number];
 export interface Brief {
   /** §12.1 — todo post pertence a exatamente um pilar. */
   pilar: Pilar;
+  /** §1.2 — para quem o post fala. A chamada da headline e da legenda segue o público. Brief antigo não tem. */
+  publico?: Publico;
   tema: string;
   angulo?: string;
   data?: string;
