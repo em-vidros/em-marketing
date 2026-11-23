@@ -21,7 +21,7 @@ export async function generateArt(opts: {
   prompt: string;
   formato: Formato;
   base?: string;
-  /** Posts reais da EM Vidros ou imagens que o usuário mandou, como referência de estilo. Vão depois do logo. */
+  /** A referência da Biblioteca e depois as imagens que o usuário mandou. Vão depois da base. */
   referencias?: Uint8Array[];
 }): Promise<Buffer> {
   const f = FORMATS[opts.formato];

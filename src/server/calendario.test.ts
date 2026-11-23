@@ -36,7 +36,7 @@ const json = async <T>(res: Response | Promise<Response>) => (await (await res).
 
 const calendario = (cookie: string, de: string, ate: string) => json<ItemCalendario[]>(pedir(`/api/calendario?de=${de}&ate=${ate}`, cookie));
 
-const arte = { variant: 1, style: "tecnico-poppins", path: "/tmp/em-marketing-cal-v1.jpg", problemas: [] };
+const arte = { variant: 1, referencia: null, path: "/tmp/em-marketing-cal-v1.jpg", problemas: [] };
 
 /** Um post de feed numa conversa, levado pelos eventos dados. Sem a escolha da arte, não está pronto. */
 async function postNaEtapa(...eventos: Evento[]): Promise<{ conversaId: string; postId: number }> {

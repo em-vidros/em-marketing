@@ -12,7 +12,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
-import type { Inspiracoes } from "../agent/tools";
+import type { CarregarReferencias } from "../v2/referencias";
 import { configDoBot, situacaoDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
 import {
@@ -28,7 +28,7 @@ import type { Usuario } from "./auth";
 export interface OpcoesChat {
   resolverModelo?: ResolverModelo;
   segredoAprovacao?: string;
-  inspiracoes?: Inspiracoes;
+  carregarReferencias?: CarregarReferencias;
 }
 
 /** O corpo do DefaultChatTransport do useChat, mais o botId que o front manda em `body`. */
@@ -112,7 +112,7 @@ function fecharToolsParadas(m: UIMessage): UIMessage {
   return { ...m, parts };
 }
 
-export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: OpcoesChat) {
+export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferencias }: OpcoesChat) {
   return async (req: Request, usuario: Usuario): Promise<Response> => {
     const corpo = Corpo.safeParse(await req.json().catch(() => null));
     if (!corpo.success) return erro(400, z.prettifyError(corpo.error));
@@ -142,7 +142,7 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, inspiracoes }: Op
       const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico), {
         resolverModelo,
         segredoAprovacao,
-        inspiracoes,
+        carregarReferencias,
         abortSignal: turno.sinal,
         autor: usuario.email,
       });

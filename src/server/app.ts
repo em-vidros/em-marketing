@@ -3,7 +3,7 @@ import { purgarConversasApagadas } from "../agent/conversas";
 import { tickDaFila } from "../domain/scheduler";
 import { rotaMcp } from "../mcp/servidor";
 import { criarApi } from "../v2/api";
-import { leiturasParaInspirar } from "../v2/referencias";
+import { referenciasParaGerar } from "../v2/referencias";
 import { modosDeEntrar, usuarioDa } from "./auth";
 import { iniciar } from "./iniciar";
 import { rotas } from "./rotas";
@@ -36,7 +36,7 @@ export async function rotasDoApp() {
   const { estudio, segredoAprovacao } = await iniciar();
   const api = criarApi(estudio, usuarioDa);
   const apiNova = (req: Request) => api.fetch(req);
-  const base = rotas({ segredoAprovacao, inspiracoes: () => leiturasParaInspirar(estudio.banco), estudio });
+  const base = rotas({ segredoAprovacao, carregarReferencias: (pedido) => referenciasParaGerar(estudio, pedido), estudio });
 
   return {
     ...base,

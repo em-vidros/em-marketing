@@ -226,7 +226,7 @@ describe("Biblioteca de imagens", () => {
       emOrdem([1, 2, 3], async (variant) => {
         const path = join(dir, `g${n}-v${variant}.jpg`);
         await Bun.write(path, `jpeg ${n}.${variant}`);
-        return { variant, style: "tecnico-poppins", path, problemas: [] };
+        return { variant, referencia: null, path, problemas: [] };
       });
     const headline = { headline: "Bisotê feito aqui.", apoio: "" };
     const antes = await geracao(1);

@@ -59,7 +59,6 @@
   ],
   "scripts": {
     "start": "bun src/server/index.ts",
-    "spike": "bun scripts/spike-arte.ts",
     "assets": "bun scripts/sync-assets.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",

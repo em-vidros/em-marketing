@@ -1,0 +1,1 @@
+ALTER TABLE "referencias" ADD COLUMN "pilares" text[] DEFAULT '{}'::text[] NOT NULL;

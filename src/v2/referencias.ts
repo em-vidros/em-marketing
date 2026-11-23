@@ -1,11 +1,27 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import type { Banco } from "./banco";
+import sharp from "sharp";
+import { z } from "zod";
+import type { Pilar, ReferenciaParaGerar } from "../domain/art/pipeline";
+import type { Arquivos } from "./arquivos";
+import { q, type Banco } from "./banco";
 import { referencias, type Referencia } from "./schema";
+
+/** Lê as referências de uma geração de post. A tool gerar_3_artes recebe isto de fora, e os testes trocam. */
+export type CarregarReferencias = (o: { pilar: Pilar; marcadas?: readonly string[] }) => Promise<ReferenciaParaGerar[]>;
+
+/** O criada_por das referências que vieram dos posts reais da @emvidros, e não de alguém da equipe. */
+export const CRIADA_PELA_CASA = "casa";
+
+/** Quantas gerações de post a rotação olha para não repetir referência. */
+const GERACOES_QUE_A_ROTACAO_OLHA = 5;
+
+/** O que importa de posts.arts para a rotação. Linhas de antes das referências não têm `referencia`. */
+const UsadasNaGeracao = z.array(z.object({ referencia: z.string().nullish() }));
 
 export const listarReferencias = (banco: Banco) =>
   banco.select().from(referencias).where(isNull(referencias.removidaEm)).orderBy(desc(referencias.criadaEm));
 
-export async function criarReferencia(banco: Banco, nova: { arquivo: string; leitura: string; criadaPor: string }): Promise<Referencia> {
+export async function criarReferencia(banco: Banco, nova: { arquivo: string; leitura: string; pilares: Pilar[]; criadaPor: string }): Promise<Referencia> {
   const [criada] = await banco.insert(referencias).values(nova).returning();
   return criada!;
 }
@@ -32,29 +48,82 @@ export async function restaurarReferencia(banco: Banco, id: string): Promise<Ref
   return restaurada ?? null;
 }
 
-/** As leituras de até `n` referências sorteadas, para o gerador do Chefe seguir os princípios delas. */
-export async function leiturasParaInspirar(banco: Banco, n = 3): Promise<string[]> {
-  const ativas = await listarReferencias(banco);
-  return escolherReferencias(
-    ativas.map((r) => r.id),
-    [],
-    n,
-  ).map((id) => ativas.find((r) => r.id === id)!.leitura);
-}
+type Ativa = Pick<Referencia, "id" | "pilares" | "criadaEm" | "criadaPor">;
 
 /**
- * Escolhe `n` referências para uma arte nova, fugindo das que as últimas artes usaram.
- * `recentes` vem da arte mais nova para a mais velha. Sem referências livres suficientes,
- * completa com as usadas há mais tempo.
+ * As referências de uma geração de post, na ordem da escolha, com a imagem em JPEG de até 1024 px.
+ * Uma referência sem arquivo ou que não abre fica de fora, e a próxima da fila entra no lugar dela.
  */
-export function escolherReferencias(ativas: string[], recentes: string[][], n: number, sortear: () => number = Math.random): string[] {
+export async function referenciasParaGerar(
+  { banco, arquivos }: { banco: Banco; arquivos: Arquivos },
+  o: { pilar: Pilar; marcadas?: readonly string[]; n?: number },
+): Promise<ReferenciaParaGerar[]> {
+  const n = o.n ?? 3;
+  const ativas = await listarReferencias(banco);
+  const fila = escolherReferencias({ ativas, recentes: await referenciasDasUltimasGeracoes(), marcadas: o.marcadas, pilar: o.pilar });
+
+  const carregadas: ReferenciaParaGerar[] = [];
+  for (const r of fila) {
+    if (carregadas.length === n) break;
+    try {
+      const bytes = await arquivos.ler(r.arquivo);
+      if (!bytes) throw new Error(`arquivo ${r.arquivo} não existe`);
+      carregadas.push({ id: r.id, leitura: r.leitura, imagem: await comoJpeg(bytes) });
+    } catch (erro) {
+      console.error(`referenciasParaGerar: a referência ${r.id} ficou de fora`, erro);
+    }
+  }
+  return carregadas;
+}
+
+async function referenciasDasUltimasGeracoes(): Promise<string[][]> {
+  const linhas = await q<{ arts: string }>`SELECT arts FROM posts WHERE arts IS NOT NULL ORDER BY id DESC LIMIT ${GERACOES_QUE_A_ROTACAO_OLHA}`;
+  return linhas.map((l) => {
+    const lidas = UsadasNaGeracao.safeParse(JSON.parse(l.arts));
+    return lidas.success ? lidas.data.flatMap((a) => a.referencia ?? []) : [];
+  });
+}
+
+/** O JPEG não tem transparência: sem o fundo off-white da marca, a área transparente de um PNG sairia preta. */
+const comoJpeg = (bytes: Uint8Array) => sharp(bytes).rotate().resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).flatten({ background: "#F0EFEA" }).jpeg({ quality: 85 }).toBuffer();
+
+/**
+ * Põe as referências na ordem de uso de uma geração nova: as marcadas pela pessoa; sem marcadas, a mais nova que a
+ * equipe subiu; depois as livres do pilar, as outras livres e, por fim, as usadas há mais tempo.
+ * Livre é a que nenhuma das gerações em `recentes` usou. `recentes` vem da geração mais nova para a mais velha.
+ * Referência sem pilar serve a todos. As da casa nunca ocupam o lugar da mais nova: sem nada da equipe, só há rotação.
+ */
+export function escolherReferencias<R extends Ativa>(o: {
+  ativas: readonly R[];
+  marcadas?: readonly string[];
+  recentes: readonly (readonly string[])[];
+  pilar?: Pilar;
+  sortear?: () => number;
+}): R[] {
+  const { ativas, recentes, pilar, sortear = Math.random } = o;
+  const porId = new Map(ativas.map((r) => [r.id, r]));
+  const marcadas = (o.marcadas ?? []).flatMap((id) => porId.get(id) ?? []);
+  const maisNovaDaEquipe = ativas
+    .filter((r) => r.criadaPor !== CRIADA_PELA_CASA)
+    .toSorted((a, b) => b.criadaEm.getTime() - a.criadaEm.getTime())
+    .slice(0, 1);
+  const fixas = marcadas.length > 0 ? marcadas : maisNovaDaEquipe;
+
   const ultimoUso = new Map<string, number>();
   recentes.forEach((usadas, idade) => usadas.forEach((id) => ultimoUso.has(id) || ultimoUso.set(id, idade)));
-  const livres = ativas.filter((id) => !ultimoUso.has(id));
-  const embaralhadas = livres
-    .map((id) => ({ id, ordem: sortear() }))
+  const usadasDaMaisVelha = [...ultimoUso].sort(([, a], [, b]) => b - a).flatMap(([id]) => porId.get(id) ?? []);
+
+  const livres = ativas.filter((r) => !ultimoUso.has(r.id));
+  const ehDoPilar = (r: R) => pilar !== undefined && (r.pilares.length === 0 || r.pilares.includes(pilar));
+  const livresDoPilar = embaralhar(livres.filter(ehDoPilar), sortear);
+  const outrasLivres = embaralhar(livres.filter((r) => !ehDoPilar(r)), sortear);
+
+  return [...new Set([...fixas, ...livresDoPilar, ...outrasLivres, ...usadasDaMaisVelha])];
+}
+
+function embaralhar<R>(referencias: readonly R[], sortear: () => number): R[] {
+  return referencias
+    .map((r) => ({ r, ordem: sortear() }))
     .sort((a, b) => a.ordem - b.ordem)
-    .map(({ id }) => id);
-  const usadasDaMaisVelha = ativas.filter((id) => ultimoUso.has(id)).sort((a, b) => ultimoUso.get(b)! - ultimoUso.get(a)!);
-  return [...embaralhadas, ...usadasDaMaisVelha].slice(0, n);
+    .map(({ r }) => r);
 }

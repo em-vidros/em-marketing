@@ -9,6 +9,6 @@ Até novembro de 2026, uma referência subida na Biblioteca chegava ao modelo de
 
 ## Consequências
 
-- Quem escolhe as referências escolhe o estilo. Sem escolha da pessoa, entram a mais recente e uma rotação que prefere o pilar do post.
-- Os arquivos `styles/*.md` guardam só as regras comuns: formato, área do logo e proibições. Eles não definem mais a cara da arte.
+- Quem escolhe as referências escolhe o estilo. Sem escolha da pessoa, entram a mais recente que a equipe subiu e uma rotação que prefere o pilar do post. Os posts da casa entram só pela rotação, nunca no lugar da mais recente.
+- A pasta `styles/` saiu. As regras comuns a toda arte, como formato, área do logo e proibições, ficam no molde do prompt em `src/domain/art/pipeline.ts`, e nada ali define a cara da arte.
 - A referência traz texto e logo pintados, então o prompt continua proibindo copiar os dois.

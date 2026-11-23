@@ -1,6 +1,7 @@
 import { guardarImagens, primeira, utcDe, type ImagemNova } from "../db";
 import { q } from "../v2/banco";
 import type { ArtVariant, Brief } from "../domain/art/pipeline";
+import type { Problema } from "../domain/brand/validate";
 
 /**
  * Máquina de estados do post de uma conversa. As invariantes do fluxo moram
@@ -10,7 +11,16 @@ import type { ArtVariant, Brief } from "../domain/art/pipeline";
 
 export type Formato = "feed" | "stories" | "ambos";
 export type MediaType = "IMAGE" | "STORIES";
-export type Arte = ArtVariant;
+
+/** Uma foto real do banco (§8.2) no lugar das variações geradas. */
+export interface FotoReal {
+  variant: number;
+  foto: true;
+  path: string;
+  problemas: Problema[];
+}
+
+export type Arte = ArtVariant | FotoReal;
 
 export interface Headline {
   headline: string;
@@ -18,7 +28,7 @@ export interface Headline {
 }
 
 /** A peça escolhida veio da geração (tem headline) ou do banco de fotos reais (§8.2, não tem). */
-export type Peca = { origem: "gerada"; headline: Headline; arte: Arte } | { origem: "foto"; arte: Arte };
+export type Peca = { origem: "gerada"; headline: Headline; arte: ArtVariant } | { origem: "foto"; arte: Arte };
 
 interface Base {
   postId: number;
@@ -46,9 +56,9 @@ export type Etapa = EtapaPost["etapa"];
 export type Evento =
   | { tipo: "formato"; formato: Formato }
   | { tipo: "headline"; headline: Headline }
-  | { tipo: "artes"; artes: Arte[] }
+  | { tipo: "artes"; artes: ArtVariant[] }
   | { tipo: "escolha"; variante: number }
-  | { tipo: "foto"; arte: Arte; storyPath: string | null }
+  | { tipo: "foto"; arte: FotoReal; storyPath: string | null }
   | { tipo: "story"; path: string }
   | { tipo: "legenda"; legenda: string };
 
@@ -175,7 +185,7 @@ export function transicionar(post: EtapaPost | null, evento: Evento): Permissao<
       const headline = "peca" in p ? (p.peca.origem === "gerada" ? p.peca.headline : null) : p.headline;
       const arte = opcoes.find((a) => a.variant === evento.variante);
       if (!arte) return { ok: false, motivo: `Não existe a variação v${evento.variante}. As opções são ${opcoes.map((a) => `v${a.variant}`).join(", ")}.` };
-      if (!headline) return { ok: false, motivo: "A arte deste post é uma foto real do banco; não há variações para escolher." };
+      if (!headline || "foto" in arte) return { ok: false, motivo: "A arte deste post é uma foto real do banco; não há variações para escolher." };
       const { postId, brief, formato } = p;
       const mesma = "peca" in p && p.peca.arte.variant === arte.variant;
       const peca: Peca = { origem: "gerada", headline, arte };
@@ -251,11 +261,11 @@ function lerLinha(row: PostRow): EtapaPost {
   if (!row.formato) return { ...base, etapa: "brief" };
   const formato = row.formato;
   const headline: Headline | null = row.headline ? JSON.parse(row.headline) : null;
-  const artes: Arte[] = row.arts ? JSON.parse(row.arts) : [];
+  const artes = artesGravadas(row.arts);
   const arte = row.chosen ? artes.find((a) => a.variant === row.chosen) : undefined;
 
   if (arte) {
-    const peca: Peca = arte.style === "foto-real" || !headline ? { origem: "foto", arte } : { origem: "gerada", headline, arte };
+    const peca: Peca = "foto" in arte || !headline ? { origem: "foto", arte } : { origem: "gerada", headline, arte };
     const comPeca: ComPeca = { ...base, formato, peca, opcoes: artes, storyPath: row.story_path };
     if (row.legenda) return { ...comPeca, etapa: "legenda", legenda: row.legenda };
     return { ...comPeca, etapa: "escolhida" };
@@ -263,6 +273,20 @@ function lerLinha(row: PostRow): EtapaPost {
   if (headline && artes.length) return { ...base, etapa: "artes", formato, headline, artes };
   if (headline) return { ...base, etapa: "headline", formato, headline };
   return { ...base, etapa: "formato", formato };
+}
+
+/** posts.arts de antes das referências da Biblioteca: `style` no lugar de `referencia`, e "foto-real" marcava a foto do banco. */
+type ArteAntiga = { variant: number; style: string; path: string; problemas: Problema[] };
+
+function artesGravadas(arts: string | null): Arte[] {
+  const gravadas: (Arte | ArteAntiga)[] = arts ? JSON.parse(arts) : [];
+  return gravadas.map(arteAtual);
+}
+
+function arteAtual(gravada: Arte | ArteAntiga): Arte {
+  if (!("style" in gravada)) return gravada;
+  const { style, ...resto } = gravada;
+  return style === "foto-real" ? { ...resto, foto: true } : { ...resto, referencia: null };
 }
 
 const STATUS: Record<Etapa, string> = {
@@ -331,11 +355,10 @@ export async function gravarPost(post: EtapaPost): Promise<void> {
     WHERE id = ${post.postId}`;
   const daArte = (a: Arte): ImagemNova => ({
     path: a.path,
-    tipo: a.style === "foto-real" ? "foto" : "variacao",
+    tipo: "foto" in a ? "foto" : "variacao",
     variante: a.variant,
-    estilo: a.style,
     formato: formato === "stories" ? "stories" : "feed",
   });
-  const story: ImagemNova[] = storyPath ? [{ path: storyPath, tipo: "story", variante: null, estilo: null, formato: "stories" }] : [];
+  const story: ImagemNova[] = storyPath ? [{ path: storyPath, tipo: "story", variante: null, formato: "stories" }] : [];
   await guardarImagens(post.postId, [...(artes ?? []).map(daArte), ...story]);
 }
