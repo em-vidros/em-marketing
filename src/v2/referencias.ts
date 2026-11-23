@@ -33,29 +33,55 @@ export async function restaurarReferencia(banco: Banco, id: string): Promise<Ref
   return restaurada ?? null;
 }
 
-/** As leituras de até `n` referências sorteadas, para o gerador do Chefe seguir os princípios delas. */
+type Ativa = { id: string; pilares: readonly Pilar[]; criadaEm: Date };
+
+/** As leituras de até `n` referências, para o gerador do Chefe seguir os princípios delas. */
 export async function leiturasParaInspirar(banco: Banco, n = 3): Promise<string[]> {
   const ativas = await listarReferencias(banco);
-  return escolherReferencias(
-    ativas.map((r) => r.id),
-    [],
-    n,
-  ).map((id) => ativas.find((r) => r.id === id)!.leitura);
+  const escolhidas = escolherReferencias({ ativas, recentes: [], n });
+  return ativas.filter((r) => escolhidas.includes(r.id)).map((r) => r.leitura);
 }
 
 /**
- * Escolhe `n` referências para uma arte nova, fugindo das que as últimas artes usaram.
- * `recentes` vem da arte mais nova para a mais velha. Sem referências livres suficientes,
- * completa com as usadas há mais tempo.
+ * Escolhe `n` referências para uma geração nova, nesta ordem: as marcadas pela pessoa; sem marcadas, a mais nova;
+ * depois as livres do pilar, as outras livres e, por fim, as usadas há mais tempo.
+ * Livre é a que nenhuma das gerações em `recentes` usou. `recentes` vem da geração mais nova para a mais velha.
  */
-export function escolherReferencias(ativas: string[], recentes: string[][], n: number, sortear: () => number = Math.random): string[] {
+export function escolherReferencias(o: {
+  ativas: readonly Ativa[];
+  marcadas?: readonly string[];
+  recentes: readonly (readonly string[])[];
+  pilar?: Pilar;
+  n: number;
+  sortear?: () => number;
+}): string[] {
+  const { ativas, recentes, pilar, n, sortear = Math.random } = o;
+  const idsAtivos = new Set(ativas.map((r) => r.id));
+  const marcadas = (o.marcadas ?? []).filter((id) => idsAtivos.has(id));
+  const maisNova = ativas
+    .toSorted((a, b) => b.criadaEm.getTime() - a.criadaEm.getTime())
+    .slice(0, 1)
+    .map((r) => r.id);
+  const fixas = marcadas.length > 0 ? marcadas : maisNova;
+
   const ultimoUso = new Map<string, number>();
   recentes.forEach((usadas, idade) => usadas.forEach((id) => ultimoUso.has(id) || ultimoUso.set(id, idade)));
-  const livres = ativas.filter((id) => !ultimoUso.has(id));
-  const embaralhadas = livres
-    .map((id) => ({ id, ordem: sortear() }))
+  const usadasDaMaisVelha = [...ultimoUso]
+    .filter(([id]) => idsAtivos.has(id))
+    .sort(([, a], [, b]) => b - a)
+    .map(([id]) => id);
+
+  const livres = ativas.filter((r) => !ultimoUso.has(r.id));
+  const ehDoPilar = (r: Ativa) => pilar !== undefined && r.pilares.includes(pilar);
+  const livresDoPilar = embaralhar(livres.filter(ehDoPilar), sortear);
+  const outrasLivres = embaralhar(livres.filter((r) => !ehDoPilar(r)), sortear);
+
+  return [...new Set([...fixas, ...livresDoPilar, ...outrasLivres, ...usadasDaMaisVelha])].slice(0, n);
+}
+
+function embaralhar(referencias: readonly Ativa[], sortear: () => number): string[] {
+  return referencias
+    .map((r) => ({ id: r.id, ordem: sortear() }))
     .sort((a, b) => a.ordem - b.ordem)
     .map(({ id }) => id);
-  const usadasDaMaisVelha = ativas.filter((id) => ultimoUso.has(id)).sort((a, b) => ultimoUso.get(b)! - ultimoUso.get(a)!);
-  return [...embaralhadas, ...usadasDaMaisVelha].slice(0, n);
 }

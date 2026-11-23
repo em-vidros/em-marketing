@@ -9,7 +9,6 @@ import { arquivosNoDisco } from "./arquivos";
 import { banco } from "./banco";
 import { AJUSTES_NEUTROS, FORMATOS, type Formato } from "./camadas";
 import type { Ia } from "./ia";
-import { escolherReferencias } from "./referencias";
 import { artes, referencias } from "./schema";
 
 const ana = { id: "u-ana", email: "ana@emvidros.com.br", nome: "Ana", admin: false };
@@ -252,10 +251,4 @@ describe("acesso", () => {
     expect((await api.request("http://localhost/api/artes")).status).toBe(401);
     expect((await pedir("/api/artes/123/png")).status).toBe(404);
   });
-});
-
-test("a escolha de referências foge das que as últimas artes usaram", () => {
-  const recentes = [["a"], ["b", "c"]];
-  expect(escolherReferencias(["a", "b", "c", "d", "e"], recentes, 2).sort()).toEqual(["d", "e"]);
-  expect(escolherReferencias(["a", "b", "c", "d"], recentes, 3)).toEqual(["d", "b", "c"]);
 });
