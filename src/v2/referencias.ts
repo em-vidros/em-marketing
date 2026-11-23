@@ -50,25 +50,30 @@ export async function restaurarReferencia(banco: Banco, id: string): Promise<Ref
 
 type Ativa = Pick<Referencia, "id" | "pilares" | "criadaEm" | "criadaPor">;
 
-/** As referências de uma geração de post, na ordem da escolha, com a imagem em JPEG de até 1024 px. */
+/**
+ * As referências de uma geração de post, na ordem da escolha, com a imagem em JPEG de até 1024 px.
+ * Uma referência sem arquivo ou que não abre fica de fora, e a próxima da fila entra no lugar dela.
+ */
 export async function referenciasParaGerar(
   { banco, arquivos }: { banco: Banco; arquivos: Arquivos },
   o: { pilar: Pilar; marcadas?: readonly string[]; n?: number },
 ): Promise<ReferenciaParaGerar[]> {
+  const n = o.n ?? 3;
   const ativas = await listarReferencias(banco);
-  const recentes = await referenciasDasUltimasGeracoes();
-  const escolhidas = escolherReferencias({ ativas, recentes, marcadas: o.marcadas, pilar: o.pilar }).slice(0, o.n ?? 3);
+  const fila = escolherReferencias({ ativas, recentes: await referenciasDasUltimasGeracoes(), marcadas: o.marcadas, pilar: o.pilar });
 
-  const carregadas = await Promise.all(
-    escolhidas
-      .flatMap((id) => ativas.filter((r) => r.id === id))
-      .map(async (r) => {
-        const bytes = await arquivos.ler(r.arquivo);
-        return bytes ? [{ id: r.id, leitura: r.leitura, imagem: await comoJpeg(bytes) }] : [];
-      }),
-  );
-
-  return carregadas.flat();
+  const carregadas: ReferenciaParaGerar[] = [];
+  for (const r of fila) {
+    if (carregadas.length === n) break;
+    try {
+      const bytes = await arquivos.ler(r.arquivo);
+      if (!bytes) throw new Error(`arquivo ${r.arquivo} não existe`);
+      carregadas.push({ id: r.id, leitura: r.leitura, imagem: await comoJpeg(bytes) });
+    } catch (erro) {
+      console.error(`referenciasParaGerar: a referência ${r.id} ficou de fora`, erro);
+    }
+  }
+  return carregadas;
 }
 
 async function referenciasDasUltimasGeracoes(): Promise<string[][]> {
@@ -87,41 +92,37 @@ const comoJpeg = (bytes: Uint8Array) => sharp(bytes).rotate().resize(1024, 1024,
  * Livre é a que nenhuma das gerações em `recentes` usou. `recentes` vem da geração mais nova para a mais velha.
  * Referência sem pilar serve a todos. As da casa nunca ocupam o lugar da mais nova: sem nada da equipe, só há rotação.
  */
-export function escolherReferencias(o: {
-  ativas: readonly Ativa[];
+export function escolherReferencias<R extends Ativa>(o: {
+  ativas: readonly R[];
   marcadas?: readonly string[];
   recentes: readonly (readonly string[])[];
   pilar?: Pilar;
   sortear?: () => number;
-}): string[] {
+}): R[] {
   const { ativas, recentes, pilar, sortear = Math.random } = o;
-  const idsAtivos = new Set(ativas.map((r) => r.id));
-  const marcadas = (o.marcadas ?? []).filter((id) => idsAtivos.has(id));
+  const porId = new Map(ativas.map((r) => [r.id, r]));
+  const marcadas = (o.marcadas ?? []).flatMap((id) => porId.get(id) ?? []);
   const maisNovaDaEquipe = ativas
     .filter((r) => r.criadaPor !== CRIADA_PELA_CASA)
     .toSorted((a, b) => b.criadaEm.getTime() - a.criadaEm.getTime())
-    .slice(0, 1)
-    .map((r) => r.id);
+    .slice(0, 1);
   const fixas = marcadas.length > 0 ? marcadas : maisNovaDaEquipe;
 
   const ultimoUso = new Map<string, number>();
   recentes.forEach((usadas, idade) => usadas.forEach((id) => ultimoUso.has(id) || ultimoUso.set(id, idade)));
-  const usadasDaMaisVelha = [...ultimoUso]
-    .filter(([id]) => idsAtivos.has(id))
-    .sort(([, a], [, b]) => b - a)
-    .map(([id]) => id);
+  const usadasDaMaisVelha = [...ultimoUso].sort(([, a], [, b]) => b - a).flatMap(([id]) => porId.get(id) ?? []);
 
   const livres = ativas.filter((r) => !ultimoUso.has(r.id));
-  const ehDoPilar = (r: Ativa) => pilar !== undefined && (r.pilares.length === 0 || r.pilares.includes(pilar));
+  const ehDoPilar = (r: R) => pilar !== undefined && (r.pilares.length === 0 || r.pilares.includes(pilar));
   const livresDoPilar = embaralhar(livres.filter(ehDoPilar), sortear);
   const outrasLivres = embaralhar(livres.filter((r) => !ehDoPilar(r)), sortear);
 
   return [...new Set([...fixas, ...livresDoPilar, ...outrasLivres, ...usadasDaMaisVelha])];
 }
 
-function embaralhar(referencias: readonly Ativa[], sortear: () => number): string[] {
+function embaralhar<R>(referencias: readonly R[], sortear: () => number): R[] {
   return referencias
-    .map((r) => ({ id: r.id, ordem: sortear() }))
+    .map((r) => ({ r, ordem: sortear() }))
     .sort((a, b) => a.ordem - b.ordem)
-    .map(({ id }) => id);
+    .map(({ r }) => r);
 }
