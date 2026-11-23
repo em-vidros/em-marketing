@@ -171,7 +171,7 @@ describe("persistência por conversa", () => {
     const vermelha = await sharp({ create: { width: 1080, height: 1920, channels: 3, background: "#D02020" } }).jpeg().toBuffer();
     const paletaNaStory = async (chosen: Arte) => {
       if ("foto" in chosen) throw new Error("a story deriva só de arte gerada");
-      const story = await deriveStory({ postId, brief, headline: headline.headline, chosen }, async () => vermelha);
+      const story = await deriveStory({ postId, brief, headline: headline.headline, chosen }, { gerar: async () => vermelha, lerTexto: async () => [headline.headline] });
       rmSync(story.path, { force: true });
       return story.problemas.some((p) => p.regra === "§4.1 paleta");
     };

@@ -1,5 +1,6 @@
 import { gravarArquivo } from "../../armazem";
-import { generateArt, type Formato } from "./generate";
+import { compararTexto, lembreteDeGrafia, problemaDoTexto, TEXTO_SEM_CONFERENCIA } from "./conferencia";
+import { generateArt, lerTextoDaArte, type Formato } from "./generate";
 import { aplicarLogo } from "./logo";
 import { validarArte } from "./validate";
 import type { Problema } from "../brand/validate";
@@ -89,6 +90,9 @@ LOGO AREA: keep the bottom-right corner (about 260x220px of the final {TELA} can
 
 {NEGATIVOS}`;
 
+/** O texto que o prompt manda pintar na arte, na ordem do prompt. É o que a conferência procura na arte pronta. */
+export const textosDaArte = (formato: Formato, headline: string, apoio?: string): string[] => [headline, ...(formato === "feed" && apoio ? [apoio] : [])];
+
 export function buildPrompt(opts: {
   formato: Formato;
   brief: Brief;
@@ -101,6 +105,7 @@ export function buildPrompt(opts: {
   direcao?: string;
 }): string {
   const { formato, brief, visual, anexos = 0 } = opts;
+  const [, apoio] = textosDaArte(formato, opts.headline, opts.apoio);
   const partes: Record<string, string> = {
     FORMATO: FORMATOS_DO_PROMPT[formato].descricao,
     TEMA: `${brief.tema}${brief.angulo ? `, angle: ${brief.angulo}` : ""}${brief.data ? ` (date: ${brief.data})` : ""} [content pillar: ${brief.pilar}]`,
@@ -110,7 +115,7 @@ export function buildPrompt(opts: {
       ? `ART DIRECTION FROM THE CLIENT (this overrides the visual language above wherever they conflict; keep the colour family and professional agency quality):\n${opts.direcao}`
       : "",
     HEADLINE: opts.headline,
-    APOIO: formato === "feed" && opts.apoio ? `Support line: "${opts.apoio}"` : "",
+    APOIO: apoio ? `Support line: "${apoio}"` : "",
     TELA: FORMATOS_DO_PROMPT[formato].tela,
     NEGATIVOS: NEGATIVOS_IA,
   };
@@ -132,9 +137,37 @@ function linguagemVisual(visual: Visual): string {
   }
 }
 
+/** Os modelos que o pipeline chama. Os testes trocam os dois juntos, para nenhum teste chegar à OpenAI. */
+export interface IaDaArte {
+  gerar: typeof generateArt;
+  lerTexto: (jpeg: Uint8Array) => Promise<string[]>;
+}
+
+const IA_DA_OPENAI: IaDaArte = { gerar: generateArt, lerTexto: lerTextoDaArte };
+
+/**
+ * Gera a arte e confere o texto pintado nela contra `textos`. Se não bate, gera de novo uma vez só, porque cada imagem
+ * custa cerca de US$ 0,06. Se a segunda também erra, fica a que errou menos, com o aviso do que saiu errado.
+ * Sem leitura (o modelo de visão falhou), a arte segue com o aviso de que não foi conferida.
+ */
+async function gerarConferida(ia: IaDaArte, pedido: Parameters<typeof generateArt>[0], textos: string[]): Promise<{ gerada: Buffer; problemas: Problema[] }> {
+  const conferir = async (gerada: Buffer) => {
+    const lidos = await ia.lerTexto(gerada).catch((erro: unknown) => (console.error("conferência do texto da arte:", erro), null));
+    return { gerada, divergencias: lidos && compararTexto(textos, lidos) };
+  };
+  const primeira = await conferir(await ia.gerar(pedido));
+  if (!primeira.divergencias) return { gerada: primeira.gerada, problemas: [TEXTO_SEM_CONFERENCIA] };
+  if (!primeira.divergencias.length) return { gerada: primeira.gerada, problemas: [] };
+
+  const segunda = await conferir(await ia.gerar({ ...pedido, prompt: `${pedido.prompt}\n\n${lembreteDeGrafia(primeira.divergencias)}` }));
+  if (segunda.divergencias?.length === 0) return { gerada: segunda.gerada, problemas: [] };
+  const melhor = segunda.divergencias && segunda.divergencias.length < primeira.divergencias.length ? segunda : primeira;
+  return { gerada: melhor.gerada, problemas: [problemaDoTexto(melhor.divergencias!)] };
+}
+
 /**
  * US-3: gera 3 variações em paralelo, cada uma ancorada numa imagem diferente, da Biblioteca ou do pedido.
- * Sem âncora, a variação sai no visual padrão da casa. `gerar` só muda nos testes.
+ * Sem âncora, a variação sai no visual padrão da casa. `ia` só muda nos testes.
  */
 export async function generate3Arts(
   opts: {
@@ -150,7 +183,7 @@ export async function generate3Arts(
     /** Imagens extras do pedido (links colados, escolhas além da terceira). Vão nas 3 variações, depois da âncora. */
     anexos: readonly Uint8Array[];
   },
-  gerar = generateArt,
+  ia: IaDaArte = IA_DA_OPENAI,
 ): Promise<ArtVariant[]> {
   if (opts.brief.precisaFotoReal)
     throw new Error(
@@ -166,19 +199,24 @@ export async function generate3Arts(
       const ancora = referencias.length > 0 ? referencias[i % referencias.length] : undefined;
       const visual: Visual = !ancora ? { tipo: "casa" } : ancora.origem === "biblioteca" ? { tipo: "referencia", leitura: ancora.leitura } : { tipo: "pedido" };
       const prompt = buildPrompt({ formato, brief, headline, apoio, visual, anexos: anexos.length, direcao });
-      const gerada = await gerar({ prompt, formato, referencias: [...(ancora ? [ancora.imagem] : []), ...anexos] });
+      // A conferência lê a arte antes do logo: o logo colado não é texto pedido.
+      const { gerada, problemas: doTexto } = await gerarConferida(
+        ia,
+        { prompt, formato, referencias: [...(ancora ? [ancora.imagem] : []), ...anexos] },
+        textosDaArte(formato, headline, apoio),
+      );
 
       const jpeg = await aplicarLogo(gerada, formato);
       const path = await gravarArquivo("arts", `post${postId}-${formato}-v${variant}-${semente}.jpg`, jpeg, "image/jpeg");
       // A paleta só se mede no visual da casa: a referência e a direção do usuário trazem as cores delas, muitas vezes de foto.
-      const problemas = await validarArte(jpeg, formato, { paleta: !ancora && !direcao });
+      const problemas = [...doTexto, ...(await validarArte(jpeg, formato, { paleta: !ancora && !direcao }))];
 
       return { variant, ancora: ancora ? semImagem(ancora) : null, path, problemas };
     }),
   );
 }
 
-/** Fluxo "Os dois": deriva a versão Stories do conceito escolhido, com a arte escolhida como base. `gerar` só muda nos testes. */
+/** Fluxo "Os dois": deriva a versão Stories do conceito escolhido, com a arte escolhida como base. `ia` só muda nos testes. */
 export async function deriveStory(
   opts: {
     postId: number;
@@ -186,17 +224,21 @@ export async function deriveStory(
     headline: string;
     chosen: ArtVariant;
   },
-  gerar = generateArt,
+  ia: IaDaArte = IA_DA_OPENAI,
 ): Promise<{ path: string; problemas: Problema[] }> {
-  const gerada = await gerar({
-    prompt: buildPrompt({ formato: "stories", brief: opts.brief, headline: opts.headline, visual: { tipo: "adaptacao" } }),
-    formato: "stories",
-    base: opts.chosen.path,
-  });
+  const { gerada, problemas: doTexto } = await gerarConferida(
+    ia,
+    {
+      prompt: buildPrompt({ formato: "stories", brief: opts.brief, headline: opts.headline, visual: { tipo: "adaptacao" } }),
+      formato: "stories",
+      base: opts.chosen.path,
+    },
+    textosDaArte("stories", opts.headline),
+  );
   const jpeg = await aplicarLogo(gerada, "stories");
   const path = await gravarArquivo("arts", `post${opts.postId}-stories-derived-${Math.floor(Date.now() / 1000)}.jpg`, jpeg, "image/jpeg");
 
-  return { path, problemas: await validarArte(jpeg, "stories", { paleta: !opts.chosen.ancora && !opts.chosen.referencia }) };
+  return { path, problemas: [...doTexto, ...(await validarArte(jpeg, "stories", { paleta: !opts.chosen.ancora && !opts.chosen.referencia }))] };
 }
 
 const semImagem = (r: ReferenciaParaGerar): Ancora =>

@@ -1,6 +1,7 @@
 import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useState } from "react";
+import { REGRA_DO_TEXTO } from "../../domain/art/conferencia";
 import { useApi } from "../api";
 import { navegar } from "../rota";
 import type { Parte } from "../tipos";
@@ -97,18 +98,25 @@ export function EscolhaDeArtes({ parte, escolher }: { parte: ParteMostrarArtes; 
                 </button>
               )}
             </div>
+            {a.problemas
+              .filter((p) => p.regra === REGRA_DO_TEXTO)
+              .map((p) => (
+                <p key={p.detalhe} className="text-xs/snug text-pretty text-esperando-texto [overflow-wrap:anywhere]">
+                  {p.detalhe}
+                </p>
+              ))}
             {ehEscolhida(a) ? (
-              <span className="grid h-9 place-items-center rounded-full bg-ativo text-[13px] font-medium">Escolhida</span>
+              <span className="mt-auto grid h-9 place-items-center rounded-full bg-ativo text-[13px] font-medium">Escolhida</span>
             ) : escolher ? (
               <button
                 type="button"
                 onClick={() => (marcar(a.variante), escolher(a.variante))}
-                className="pressiona h-9 cursor-pointer rounded-full border border-linha-forte text-[13px] font-medium hover:bg-hover"
+                className="pressiona mt-auto h-9 cursor-pointer rounded-full border border-linha-forte text-[13px] font-medium hover:bg-hover"
               >
                 {algumaEscolhida ? `Trocar pela ${a.variante}` : `Usar a ${a.variante}`}
               </button>
             ) : (
-              <span className="text-center text-xs text-tinta-3">Variação {a.variante}</span>
+              <span className="mt-auto text-center text-xs text-tinta-3">Variação {a.variante}</span>
             )}
           </li>
         ))}
