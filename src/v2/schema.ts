@@ -46,7 +46,26 @@ export const movimentosDoSaldo = pgTable("movimentos_do_saldo", {
   removidoEm: timestamp({ withTimezone: true }),
 });
 
+/**
+ * Uma arte que a equipe subiu já finalizada, para publicar como está. Fica separada de `referencias`
+ * para que nenhuma consulta de estilo a alcance. `arquivo` é o JPEG no armazém (src/armazem.ts), o mesmo
+ * que a fila publica. texto, tema e pilar são a leitura que a IA faz ao receber; o Chefe acha a peça por ela.
+ */
+export const pecasProntas = pgTable("pecas_prontas", {
+  id: uuid().primaryKey().defaultRandom(),
+  arquivo: text().notNull(),
+  formato: text().$type<Formato>().notNull(),
+  texto: text().notNull(),
+  tema: text().notNull(),
+  pilar: text().$type<Pilar>().notNull(),
+  legenda: text(),
+  criadaPor: text().notNull(),
+  criadaEm: timestamp({ withTimezone: true }).notNull().defaultNow(),
+  removidaEm: timestamp({ withTimezone: true }),
+});
+
 export type Referencia = typeof referencias.$inferSelect;
+export type PecaPronta = typeof pecasProntas.$inferSelect;
 export type Arte = typeof artes.$inferSelect;
 
 // Tabelas do better-auth (login com Google). Os nomes e campos são os que o adaptador do drizzle espera.

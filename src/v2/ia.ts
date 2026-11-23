@@ -11,6 +11,8 @@ import { Elementos, type Area } from "./separar";
 /** Tudo o que o backend novo pede a um modelo. Os testes trocam por uma versão falsa. */
 export interface Ia {
   lerReferencia(imagem: Uint8Array, tipo: string): Promise<LeituraDaReferencia>;
+  /** Cataloga uma peça pronta: o texto pintado nela, o tema e o pilar. */
+  lerPecaPronta(imagem: Uint8Array, tipo: string): Promise<LeituraDaPeca>;
   planejarArte(pedido: string, formato: Formato, leituras: string[]): Promise<Plano>;
   /** Devolve a cena já no tamanho final do formato, em JPEG. */
   gerarCena(prompt: string, formato: Formato): Promise<Uint8Array>;
@@ -22,6 +24,9 @@ export interface Ia {
 
 export const LeituraDaReferencia = z.object({ leitura: z.string(), pilares: z.array(z.enum(PILARES)) });
 export type LeituraDaReferencia = z.infer<typeof LeituraDaReferencia>;
+
+export const LeituraDaPeca = z.object({ texto: z.string(), tema: z.string(), pilar: z.enum(PILARES) });
+export type LeituraDaPeca = z.infer<typeof LeituraDaPeca>;
 
 /** Tamanho pedido ao modelo de imagem: mesma proporção do formato, lados múltiplos de 16. */
 const TAMANHO_DA_GERACAO: Record<Formato, `${number}x${number}`> = { feed: "1024x1280", story: "1008x1792" };
@@ -42,6 +47,17 @@ Em pilares, diga para quais pilares de conteúdo a peça serve. Pode ser mais de
 - AUTORIDADE: tipos de vidro, espessura, norma, erro comum de especificação, manutenção, aplicação por ambiente.
 - GENTE: bastidor, rota de entrega, equipe, vaga, aniversário de colaborador, treinamento.
 - MARCA: aniversário da empresa, data do setor, data cívica ou religiosa da região, campanha institucional, comunicado.
+`.trim();
+
+const INSTRUCOES_DA_PECA = `
+Você cataloga uma arte de Instagram que a equipe da EM Vidros, uma vidraçaria, fez fora do app e vai publicar como está. A equipe e o Chefe acham a peça por esta leitura, então seja concreto.
+- texto: o texto pintado na arte, copiado exatamente, com acento e maiúscula, cada bloco numa linha. Sem o logo. Vazio se não houver texto.
+- tema: do que a peça fala, em uma frase curta em português do Brasil, com o assunto, a ocasião e a data se aparecerem. Exemplo: "convite para o café da manhã com vidraceiros em 28 de novembro".
+- pilar: o pilar de conteúdo que a peça cumpre, um só:
+  - PROVA: obra entregue, produto, pronta entrega, capacidade da fábrica, antes e depois, detalhe de acabamento.
+  - AUTORIDADE: tipos de vidro, espessura, norma, erro comum de especificação, manutenção, aplicação por ambiente.
+  - GENTE: bastidor, rota de entrega, equipe, vaga, aniversário de colaborador, treinamento, evento com clientes.
+  - MARCA: aniversário da empresa, data do setor, data cívica ou religiosa da região, campanha institucional, comunicado.
 `.trim();
 
 const INSTRUCOES_DO_PLANO = `
@@ -95,6 +111,24 @@ export function iaDaOpenAI(chave: () => Promise<string | undefined>): Ia {
       });
       if (!resposta.output_parsed) throw new Error("O modelo não devolveu a leitura da referência.");
       return { leitura: resposta.output_parsed.leitura.trim(), pilares: resposta.output_parsed.pilares };
+    },
+
+    async lerPecaPronta(imagem, tipo) {
+      const resposta = await (await cliente()).responses.parse({
+        model: MODELO_DE_TEXTO,
+        reasoning: { effort: "low" },
+        instructions: INSTRUCOES_DA_PECA,
+        input: [
+          {
+            role: "user",
+            content: [{ type: "input_image", detail: "high", image_url: `data:${tipo};base64,${Buffer.from(imagem).toString("base64")}` }],
+          },
+        ],
+        text: { format: zodTextFormat(LeituraDaPeca, "leitura") },
+      });
+      if (!resposta.output_parsed) throw new Error("O modelo não devolveu a leitura da peça pronta.");
+      const { texto, tema, pilar } = resposta.output_parsed;
+      return { texto: texto.trim(), tema: tema.trim(), pilar };
     },
 
     async planejarArte(pedido, formato, leituras) {

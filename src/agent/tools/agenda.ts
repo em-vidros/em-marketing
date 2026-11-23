@@ -51,7 +51,7 @@ export const toolsDeAgenda = {
         id: i.id,
         mediaType: i.media_type,
         publishAt: i.publish_at,
-        tema: (JSON.parse(i.brief ?? "{}").tema as string | undefined) ?? null,
+        tema: (JSON.parse(i.brief ?? "{}").tema as string | undefined) ?? i.peca_tema,
       })),
     }),
   }),

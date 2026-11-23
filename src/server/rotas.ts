@@ -283,8 +283,9 @@ const FonteDoAgendamento = z.discriminatedUnion(
   [
     z.object({ tipo: z.literal("post"), postId: z.number({ error: "postId precisa ser um número." }).int("postId precisa ser inteiro.") }),
     z.object({ tipo: z.literal("arte"), arteId: z.uuid({ error: "arteId precisa ser um uuid." }) }),
+    z.object({ tipo: z.literal("peca"), pecaId: z.uuid({ error: "pecaId precisa ser um uuid." }) }),
   ],
-  { error: 'fonte precisa ser {tipo: "post", postId} ou {tipo: "arte", arteId}.' },
+  { error: 'fonte precisa ser {tipo: "post", postId}, {tipo: "arte", arteId} ou {tipo: "peca", pecaId}.' },
 );
 
 /** POST /api/fila. Sem legenda, o feed de um post leva a legenda do post; legenda vazia sai sem. */
@@ -601,7 +602,7 @@ export function rotas({ estudio, ...opcoes }: OpcoesDasRotas) {
         return Response.json({ imagemId: path && (await idDaImagem(path)), url: path && (await urlDaMidia(path)) });
       }),
     },
-    "/api/prontos": { GET: comSessao(async () => Response.json(await prontos((await listarArtes(estudio.banco)).map(resumoDaArte)))) },
+    "/api/prontos": { GET: comSessao(async () => Response.json(await prontos((await listarArtes(estudio.banco)).map(resumoDaArte), estudio.banco))) },
     "/api/fila": {
       POST: comSessao(async (req) => {
         const corpo = await lerCorpo(req, NovoAgendamento);

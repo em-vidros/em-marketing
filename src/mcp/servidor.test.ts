@@ -80,7 +80,7 @@ describe("MCP do em-marketing", () => {
 
   test("tools/list traz as ferramentas só de leitura", async () => {
     const corpo = (await (await pedir("tools/list")).json()) as { result: { tools: { name: string; annotations: { readOnlyHint: boolean } }[] } };
-    expect(corpo.result.tools.map((t) => t.name).sort()).toEqual(["listar_agenda", "listar_artes", "listar_pautas", "listar_pecas", "listar_publicacoes", "resumo_do_mes"]);
+    expect(corpo.result.tools.map((t) => t.name).sort()).toEqual(["listar_agenda", "listar_artes", "listar_pautas", "listar_pecas", "listar_pecas_prontas", "listar_publicacoes", "resumo_do_mes"]);
     expect(corpo.result.tools.every((t) => t.annotations.readOnlyHint)).toBe(true);
   });
 

@@ -3,7 +3,6 @@ import sharp from "sharp";
 import { z } from "zod";
 import { emOrdem, idDaImagem, urlDaMidia } from "../../db";
 import { PIXELS_MAXIMOS } from "../../v2/arquivos";
-import { q } from "../../v2/banco";
 import { definirHeadline, escreverLegenda } from "../../domain/caption";
 import { deriveStory, generate3Arts, PILARES, type Brief, type Pilar, type ReferenciaParaGerar } from "../../domain/art/pipeline";
 import { temErro } from "../../domain/brand/validate";
@@ -23,7 +22,8 @@ import {
   type EtapaPost,
   type FotoReal,
 } from "../post";
-import { agendarPost } from "../fila";
+import { agendarPecaPronta, agendarPost, pecaProntaParaPublicar } from "../fila";
+import { banco, q } from "../../v2/banco";
 import { fotoPublica } from "./fotos";
 import type { ReferenciasDoTurno } from "../pedido";
 
@@ -60,6 +60,11 @@ async function referenciasOuNenhuma(referencias: ReferenciasDoTurno | undefined,
 }
 
 const mediaType = z.enum(["IMAGE", "STORIES"]);
+
+const pecaProntaId = z
+  .uuid()
+  .optional()
+  .describe("O id de uma peça pronta de listar_pecas_prontas. Omita para o post desta conversa. media_type segue o formato da peça: feed é IMAGE, story é STORIES.");
 
 /** Grava o evento e devolve o estado novo, ou a recusa da máquina de estados. */
 async function aplicar(conversaId: string, evento: Evento) {
@@ -246,12 +251,19 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
     }),
 
     agendar_publicacao: tool({
-      description: "Agenda a publicação no Instagram.",
+      description:
+        "Agenda a publicação no Instagram. Sem peca_pronta_id, agenda o post desta conversa. Com peca_pronta_id, agenda aquela peça pronta da Biblioteca como está, com a legenda guardada nela, que a pessoa revisa no cartão de aprovação.",
       inputSchema: z.object({
         publish_at: z.iso.datetime({ offset: true }).describe("ISO 8601 com o offset de America/Sao_Paulo"),
         media_type: mediaType,
+        peca_pronta_id: pecaProntaId,
       }),
-      execute: async ({ publish_at, media_type }) => {
+      execute: async ({ publish_at, media_type, peca_pronta_id }) => {
+        if (peca_pronta_id) {
+          const r = await agendarPecaPronta(banco(), peca_pronta_id, media_type, Date.parse(publish_at));
+          if (!r.ok) return { ok: false as const, motivo: r.motivo };
+          return { ok: true as const, pecaProntaId: peca_pronta_id, mediaType: media_type, publishAt: publish_at };
+        }
         const r = await agendarPost(await atual(), media_type, Date.parse(publish_at));
         if (!r.ok) return { ok: false as const, motivo: r.motivo };
         return { ok: true as const, postId: r.postId, mediaType: media_type, publishAt: publish_at };
@@ -259,9 +271,17 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
     }),
 
     publicar_agora: tool({
-      description: "Publica imediatamente no Instagram.",
-      inputSchema: z.object({ media_type: mediaType }),
-      execute: async ({ media_type }) => {
+      description:
+        "Publica imediatamente no Instagram. Sem peca_pronta_id, publica o post desta conversa. Com peca_pronta_id, publica aquela peça pronta da Biblioteca como está, com a legenda guardada nela.",
+      inputSchema: z.object({ media_type: mediaType, peca_pronta_id: pecaProntaId }),
+      execute: async ({ media_type, peca_pronta_id }) => {
+        if (peca_pronta_id) {
+          const p = await pecaProntaParaPublicar(banco(), peca_pronta_id, media_type);
+          if (!p.ok) return { ok: false as const, motivo: p.motivo };
+          const { fonte, jpegPath, legenda } = p.peca;
+          const igMediaId = await publishImage({ fonte, jpegPath, mediaType: media_type, caption: legenda ?? undefined });
+          return { ok: true as const, pecaProntaId: peca_pronta_id, mediaType: media_type, igMediaId };
+        }
         const r = midiaParaPublicar(await atual(), media_type);
         if (!r.ok) return r;
         const igMediaId = await publishImage({

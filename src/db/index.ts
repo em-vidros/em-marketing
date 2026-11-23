@@ -147,6 +147,17 @@ export async function criarTabelas(): Promise<void> {
     )`;
     await q`CREATE UNIQUE INDEX IF NOT EXISTS publicacoes_ig_media_id ON publicacoes(ig_media_id)`;
 
+    // A peça pronta (pecas_prontas, de src/v2) é a terceira fonte. O CHECK troca "post ou arte" por
+    // "exatamente uma das três"; queue_check e publicacoes_check são os nomes que o Postgres deu ao CHECK sem nome.
+    await q`ALTER TABLE queue ADD COLUMN IF NOT EXISTS peca_id text`;
+    await q`ALTER TABLE publicacoes ADD COLUMN IF NOT EXISTS peca_id text`;
+    await q`ALTER TABLE queue DROP CONSTRAINT IF EXISTS queue_check`;
+    await q`ALTER TABLE publicacoes DROP CONSTRAINT IF EXISTS publicacoes_check`;
+    if (!(await primeira(q`SELECT 1 FROM pg_constraint WHERE conname = 'queue_uma_fonte'`)))
+      await q`ALTER TABLE queue ADD CONSTRAINT queue_uma_fonte CHECK (num_nonnulls(post_id, arte_id, peca_id) = 1)`;
+    if (!(await primeira(q`SELECT 1 FROM pg_constraint WHERE conname = 'publicacoes_uma_fonte'`)))
+      await q`ALTER TABLE publicacoes ADD CONSTRAINT publicacoes_uma_fonte CHECK (num_nonnulls(post_id, arte_id, peca_id) = 1)`;
+
     // Banco de fotos reais (§8.2). A política proíbe gerar produto, obra, fábrica e
     // pessoas; sem um lugar para as fotos de verdade, a proibição vira paralisia e
     // o caminho de menor resistência volta a ser gerar por IA.
@@ -311,16 +322,21 @@ export type StatusPost = "draft" | "generated" | "chosen" | "scheduled" | "publi
 export type Formato = "feed" | "stories" | "ambos";
 export type TipoMidia = "IMAGE" | "STORIES";
 
-/** De onde sai o que a fila publica: um post do fluxo antigo ou uma arte do estúdio (src/v2). */
-export type Fonte = { tipo: "post"; postId: number } | { tipo: "arte"; arteId: string };
+/** De onde sai o que a fila publica: um post do fluxo antigo, uma arte do estúdio ou uma peça pronta (src/v2). */
+export type Fonte = { tipo: "post"; postId: number } | { tipo: "arte"; arteId: string } | { tipo: "peca"; pecaId: string };
 
-/** post_id e arte_id de uma linha de queue ou publicacoes: o CHECK da tabela garante exatamente uma. */
-export type ColunasDaFonte = { post_id: number; arte_id: null } | { post_id: null; arte_id: string };
+/** post_id, arte_id e peca_id de uma linha de queue ou publicacoes: o CHECK da tabela garante exatamente uma. */
+export type ColunasDaFonte =
+  | { post_id: number; arte_id: null; peca_id: null }
+  | { post_id: null; arte_id: string; peca_id: null }
+  | { post_id: null; arte_id: null; peca_id: string };
 
-/** Os valores de post_id e arte_id, nesta ordem, para gravar. */
-export const colunasDaFonte = (f: Fonte): [number | null, string | null] => (f.tipo === "post" ? [f.postId, null] : [null, f.arteId]);
+/** Os valores de post_id, arte_id e peca_id, nesta ordem, para gravar. */
+export const colunasDaFonte = (f: Fonte): [number | null, string | null, string | null] =>
+  f.tipo === "post" ? [f.postId, null, null] : f.tipo === "arte" ? [null, f.arteId, null] : [null, null, f.pecaId];
 
-export const fonteDa = (r: ColunasDaFonte): Fonte => (r.arte_id === null ? { tipo: "post", postId: r.post_id } : { tipo: "arte", arteId: r.arte_id });
+export const fonteDa = (r: ColunasDaFonte): Fonte =>
+  r.post_id !== null ? { tipo: "post", postId: r.post_id } : r.arte_id !== null ? { tipo: "arte", arteId: r.arte_id } : { tipo: "peca", pecaId: r.peca_id };
 
 export interface ColunasDoPost {
   arts: string | null;
@@ -513,7 +529,7 @@ export interface Agendamento {
   capa: string | null;
 }
 
-/** Arte do estúdio não tem headline nem pilar aqui; a capa é o JPEG que vai sair. */
+/** Arte do estúdio não tem headline nem pilar aqui; a peça pronta mostra o tema e o pilar da leitura. Fora do post, a capa é o JPEG que vai sair. */
 export async function agendamentos(): Promise<Agendamento[]> {
   const linhas = await q<
     ColunasDoPost &
@@ -527,8 +543,9 @@ export async function agendamentos(): Promise<Agendamento[]> {
         headline: string | null;
         pilar: Pilar | null;
       }
-  >`SELECT q.id, q.post_id, q.arte_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path, p.headline, p.pilar, p.arts, p.chosen
-    FROM queue q LEFT JOIN posts p ON p.id = q.post_id
+  >`SELECT q.id, q.post_id, q.arte_id, q.peca_id, q.media_type, q.publish_at, q.status, q.error, q.jpeg_path,
+      COALESCE(p.headline, pp.tema) AS headline, COALESCE(p.pilar, pp.pilar) AS pilar, p.arts, p.chosen
+    FROM queue q LEFT JOIN posts p ON p.id = q.post_id LEFT JOIN pecas_prontas pp ON pp.id::text = q.peca_id
     WHERE q.status IN ('pending', 'publishing', 'failed') ORDER BY q.publish_at`;
   return emOrdem(linhas, async (r) => ({
     id: r.id,
@@ -539,7 +556,7 @@ export async function agendamentos(): Promise<Agendamento[]> {
     publicarEm: isoDoUtc(r.publish_at),
     status: r.status,
     erro: r.error,
-    capa: r.arte_id === null ? await capaDo(r) : await urlDaMidia(r.jpeg_path),
+    capa: r.post_id !== null ? await capaDo(r) : await urlDaMidia(r.jpeg_path),
   }));
 }
 
@@ -565,9 +582,12 @@ export async function publicacoesRecentes(limite = 50): Promise<Publicacao[]> {
         published_at: string;
         headline: string | null;
         pilar: Pilar | null;
+        peca_arquivo: string | null;
       }
-  >`SELECT u.id, u.post_id, u.arte_id, u.media_type, u.permalink, u.published_at, p.headline, p.pilar, p.arts, p.chosen
-    FROM publicacoes u LEFT JOIN posts p ON p.id = u.post_id ORDER BY u.published_at DESC LIMIT ${limite}`;
+  >`SELECT u.id, u.post_id, u.arte_id, u.peca_id, u.media_type, u.permalink, u.published_at,
+      COALESCE(p.headline, pp.tema) AS headline, COALESCE(p.pilar, pp.pilar) AS pilar, p.arts, p.chosen, pp.arquivo AS peca_arquivo
+    FROM publicacoes u LEFT JOIN posts p ON p.id = u.post_id LEFT JOIN pecas_prontas pp ON pp.id::text = u.peca_id
+    ORDER BY u.published_at DESC LIMIT ${limite}`;
   return emOrdem(linhas, async (r) => ({
     id: r.id,
     fonte: fonteDa(r),
@@ -576,7 +596,7 @@ export async function publicacoesRecentes(limite = 50): Promise<Publicacao[]> {
     tipo: r.media_type,
     permalink: r.permalink,
     publicadaEm: isoDoUtc(r.published_at),
-    capa: await capaDo(r),
+    capa: r.peca_arquivo ? await urlDaMidia(r.peca_arquivo) : await capaDo(r),
   }));
 }
 
@@ -691,24 +711,25 @@ export async function aprovacoesPendentes(userId: string): Promise<AprovacaoPend
   >`SELECT c.id, c.titulo, c.mensagens, p.headline, p.pilar, p.arts, p.chosen
     FROM conversas c LEFT JOIN posts p ON p.id = c.post_id
     WHERE c.user_id = ${userId} AND c.apagada_em IS NULL AND c.mensagens LIKE '%approval-requested%' ORDER BY c.updated_at DESC`;
-  type ParteLida = { type: string; state?: string; input?: { media_type?: TipoMidia; publish_at?: string } };
+  type ParteLida = { type: string; state?: string; input?: { media_type?: TipoMidia; publish_at?: string; peca_pronta_id?: string } };
   const porConversa = await emOrdem(linhas, async (r) => {
     const pedidos = (JSON.parse(r.mensagens) as { parts: ParteLida[] }[])
       .flatMap((m) => m.parts)
       .filter((p) => (p.type === "tool-publicar_agora" || p.type === "tool-agendar_publicacao") && p.state === "approval-requested");
-    const capa = pedidos.length ? await capaDo(r) : null;
-    return pedidos.map(
-      (p): AprovacaoPendente => ({
+    const capa = pedidos.some((p) => !p.input?.peca_pronta_id) ? await capaDo(r) : null;
+    return emOrdem(pedidos, async (p): Promise<AprovacaoPendente> => {
+      const base = {
         conversaId: r.id,
         titulo: r.titulo ?? "Conversa nova",
         acao: p.type.slice(5) as AprovacaoPendente["acao"],
         tipo: p.input?.media_type ?? null,
         publicarEm: p.input?.publish_at ?? null,
-        headline: headlineDo(r.headline),
-        pilar: r.pilar,
-        capa,
-      }),
-    );
+      };
+      const pecaId = p.input?.peca_pronta_id;
+      if (!pecaId) return { ...base, headline: headlineDo(r.headline), pilar: r.pilar, capa };
+      const peca = await primeira(q<{ tema: string; pilar: Pilar; arquivo: string }>`SELECT tema, pilar, arquivo FROM pecas_prontas WHERE id::text = ${pecaId}`);
+      return { ...base, headline: peca?.tema ?? null, pilar: peca?.pilar ?? null, capa: peca ? await urlDaMidia(peca.arquivo) : null };
+    });
   });
   return porConversa.flat();
 }

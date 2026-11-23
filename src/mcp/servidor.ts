@@ -1,4 +1,5 @@
-import { q } from "../v2/banco";
+import { banco, q } from "../v2/banco";
+import { listarPecasProntas } from "../v2/pecas-prontas";
 import { chamadorDe } from "./permissao";
 
 // O MCP que a Consulta do EM Hub usa para ler o em-marketing, montado em /api/mcp. Só lê. Fala
@@ -142,16 +143,26 @@ function textosDa(camadas: unknown): string[] {
   return lidas.flatMap((c) => (c && typeof c === "object" && c.tipo === "texto" && typeof c.texto === "string" ? [c.texto] : []));
 }
 
-/** queue e publicacoes apontam para uma peça do fluxo dos bots ou para uma arte do estúdio. */
-function origemDa(r: { post_id: number | null; headline: string | null; pilar: string | null; arte_pedido: string | null }) {
+/** queue e publicacoes apontam para uma peça do fluxo dos bots, uma arte do estúdio ou uma peça pronta. */
+function origemDa(r: LinhaDaFonte) {
   if (r.post_id !== null) return { origem: `peça ${r.post_id}`, titulo: headlineDo(r.headline).titulo, pilar: r.pilar };
+  if (r.peca_id !== null) return { origem: "peça pronta", titulo: r.peca_tema, pilar: r.peca_pilar };
   return { origem: "arte do estúdio", titulo: r.arte_pedido, pilar: null };
 }
 
 const totalDe = (linhas: readonly { total: number }[]) => linhas[0]?.total ?? 0;
 
 
-type LinhaDaFonte = { post_id: number | null; headline: string | null; pilar: string | null; arte_pedido: string | null; total: number };
+type LinhaDaFonte = {
+  post_id: number | null;
+  peca_id: string | null;
+  headline: string | null;
+  pilar: string | null;
+  arte_pedido: string | null;
+  peca_tema: string | null;
+  peca_pilar: string | null;
+  total: number;
+};
 
 async function listarAgenda(args: Args) {
   const { desde, antes } = janela(args);
@@ -159,11 +170,12 @@ async function listarAgenda(args: Args) {
   const de = desde && utcTexto(desde);
   const ate = antes && utcTexto(antes);
   const linhas = await q<LinhaDaFonte & { id: number; media_type: string; publish_at: string; status: string; error: string | null; legenda: string | null }>`
-    SELECT fila.id, fila.media_type, fila.publish_at, fila.status, fila.error, fila.legenda, fila.post_id,
-      p.headline, p.pilar, a.pedido AS arte_pedido, count(*) OVER ()::int AS total
+    SELECT fila.id, fila.media_type, fila.publish_at, fila.status, fila.error, fila.legenda, fila.post_id, fila.peca_id,
+      p.headline, p.pilar, a.pedido AS arte_pedido, pp.tema AS peca_tema, pp.pilar AS peca_pilar, count(*) OVER ()::int AS total
     FROM queue fila
     LEFT JOIN posts p ON p.id = fila.post_id
     LEFT JOIN artes a ON a.id::text = fila.arte_id
+    LEFT JOIN pecas_prontas pp ON pp.id::text = fila.peca_id
     WHERE fila.status IN ('pending', 'publishing', 'failed')
       AND (${de}::text IS NULL OR fila.publish_at >= ${de}::text)
       AND (${ate}::text IS NULL OR fila.publish_at < ${ate}::text)
@@ -226,11 +238,12 @@ async function listarPublicacoes(args: Args) {
   const de = desde && utcTexto(desde);
   const ate = antes && utcTexto(antes);
   const linhas = await q<LinhaDaFonte & { id: number; media_type: string; permalink: string | null; published_at: string }>`
-    SELECT u.id, u.media_type, u.permalink, u.published_at, u.post_id,
-      p.headline, p.pilar, a.pedido AS arte_pedido, count(*) OVER ()::int AS total
+    SELECT u.id, u.media_type, u.permalink, u.published_at, u.post_id, u.peca_id,
+      p.headline, p.pilar, a.pedido AS arte_pedido, pp.tema AS peca_tema, pp.pilar AS peca_pilar, count(*) OVER ()::int AS total
     FROM publicacoes u
     LEFT JOIN posts p ON p.id = u.post_id
     LEFT JOIN artes a ON a.id::text = u.arte_id
+    LEFT JOIN pecas_prontas pp ON pp.id::text = u.peca_id
     WHERE (${de}::text IS NULL OR u.published_at >= ${de}::text)
       AND (${ate}::text IS NULL OR u.published_at < ${ate}::text)
     ORDER BY u.published_at DESC, u.id DESC
@@ -282,6 +295,25 @@ async function listarArtes(args: Args) {
   };
 }
 
+/** A mesma lista que o Chefe lê (listarPecasProntas), com a janela pelo dia em que a peça subiu. */
+async function listarPecasProntasDoMcp(args: Args) {
+  const { desde, antes } = janela(args);
+  const limite = limitePedido(args.limite);
+  const naJanela = (await listarPecasProntas(banco())).filter((p) => (!desde || p.criadaEm >= desde) && (!antes || p.criadaEm < antes));
+  return {
+    total: naJanela.length,
+    itens: naJanela.slice(0, limite).map((p) => ({
+      id: p.id,
+      subida_em: horaLocal(p.criadaEm),
+      tema: p.tema,
+      texto: p.texto,
+      pilar: p.pilar,
+      formato: p.formato,
+      legenda: p.legenda,
+    })),
+  };
+}
+
 async function resumoDoMes(args: Args) {
   const pedido = args.mes;
   if (pedido !== undefined && pedido !== null && pedido !== "" && (typeof pedido !== "string" || !MES.test(pedido))) {
@@ -322,7 +354,7 @@ async function resumoDoMes(args: Args) {
 }
 
 const ORIGEM = {
-  origem: { type: "string", description: '"peça N" para as peças dos bots, "arte do estúdio" para as artes.' },
+  origem: { type: "string", description: '"peça N" para as peças dos bots, "arte do estúdio" para as artes, "peça pronta" para as artes que a equipe subiu prontas.' },
   titulo: { type: ["string", "null"] },
   pilar: { type: ["string", "null"] },
 };
@@ -377,6 +409,24 @@ const FERRAMENTAS: Record<string, { definicao: Record<string, unknown>; executar
         pilar: { type: ["string", "null"] },
         formato: { type: ["string", "null"] },
         status: { type: "string" },
+        legenda: { type: ["string", "null"] },
+      }),
+    },
+  },
+  listar_pecas_prontas: {
+    executar: listarPecasProntasDoMcp,
+    definicao: {
+      title: "Peças prontas",
+      description:
+        "Lista as peças prontas da Biblioteca, da mais nova para a mais antiga: artes que a equipe fez fora do app, como no Canva, e subiu para publicar como estão. Cada uma traz a leitura que a IA fez ao receber (o texto pintado, o tema e o pilar), o formato (feed ou story) e a legenda, se já tiver. A janela filtra pelo dia em que a peça subiu.",
+      inputSchema: JANELA,
+      outputSchema: lista({
+        id: { type: "string" },
+        subida_em: { type: "string" },
+        tema: { type: "string" },
+        texto: { type: "string" },
+        pilar: { type: "string" },
+        formato: { type: "string", enum: ["feed", "story"] },
         legenda: { type: ["string", "null"] },
       }),
     },
@@ -450,7 +500,7 @@ const FERRAMENTAS: Record<string, { definicao: Record<string, unknown>; executar
 const LISTA_DE_FERRAMENTAS = Object.entries(FERRAMENTAS).map(([name, { definicao }]) => ({ name, ...definicao, annotations: SO_LEITURA }));
 
 const instrucoes = () =>
-  `Dados do em-marketing, o App de marketing da EM Vidros: peças criadas com os bots, artes do estúdio, a agenda do Instagram, o que já saiu e as pautas do calendário. Hoje é ${hojeLocal()}. Datas e horas estão em America/Sao_Paulo, e de e ate são dias AAAA-MM-DD nesse fuso, os dois inclusivos. Para contar, use resumo_do_mes ou o campo total, nunca conte itens à mão. Responda só com o que as ferramentas devolverem e diga quando vierem vazias.`;
+  `Dados do em-marketing, o App de marketing da EM Vidros: peças criadas com os bots, artes do estúdio, peças prontas que a equipe subiu, a agenda do Instagram, o que já saiu e as pautas do calendário. Hoje é ${hojeLocal()}. Datas e horas estão em America/Sao_Paulo, e de e ate são dias AAAA-MM-DD nesse fuso, os dois inclusivos. Para contar, use resumo_do_mes ou o campo total, nunca conte itens à mão. Responda só com o que as ferramentas devolverem e diga quando vierem vazias.`;
 
 
 type Id = string | number;
