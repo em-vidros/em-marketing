@@ -52,7 +52,7 @@ Em pilares, diga para quais pilares de conteúdo a peça serve. Pode ser mais de
 const INSTRUCOES_DA_PECA = `
 Você cataloga uma arte de Instagram que a equipe da EM Vidros, uma vidraçaria, fez fora do app e vai publicar como está. A equipe e o Chefe acham a peça por esta leitura, então seja concreto.
 - texto: o texto pintado na arte, copiado exatamente, com acento e maiúscula, cada bloco numa linha. Sem o logo. Vazio se não houver texto.
-- tema: do que a peça fala, em uma frase curta em português do Brasil, com o assunto, a ocasião e a data se aparecerem. Exemplo: "convite para o café da manhã com vidraceiros em 28 de novembro".
+- tema: do que a peça fala, em uma frase curta em português do Brasil, com o assunto, a ocasião e a data se aparecerem. Comece com maiúscula. Exemplo: "Convite para o café da manhã com vidraceiros em 28 de novembro".
 - pilar: o pilar de conteúdo que a peça cumpre, um só:
   - PROVA: obra entregue, produto, pronta entrega, capacidade da fábrica, antes e depois, detalhe de acabamento.
   - AUTORIDADE: tipos de vidro, espessura, norma, erro comum de especificação, manutenção, aplicação por ambiente.

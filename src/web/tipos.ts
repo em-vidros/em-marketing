@@ -123,10 +123,14 @@ export interface Passo {
   saida: unknown;
 }
 
-/** O primeiro texto curto da entrada de uma tool ("feed", "2026-10"), ou null. */
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** O primeiro texto curto da entrada de uma tool ("feed", "2026-10"), ou null. Um id não diz nada à pessoa e fica de fora. */
 function detalheDe(entrada: unknown): string | null {
   if (!entrada || typeof entrada !== "object") return null;
-  const curto = Object.values(entrada).find((v): v is string | number => (typeof v === "string" && v.length <= 60) || typeof v === "number");
+  const curto = Object.values(entrada).find(
+    (v): v is string | number => (typeof v === "string" && v.length <= 60 && !UUID.test(v)) || typeof v === "number",
+  );
   return curto === undefined ? null : String(curto);
 }
 

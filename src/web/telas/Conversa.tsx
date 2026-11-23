@@ -6,7 +6,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useReducer, useRef, u
 import { apiImagensDoPedido, pararResposta, useApi } from "../api";
 import { Avatar } from "../componentes/Avatar";
 import { BotaoMenu } from "../componentes/BotaoMenu";
-import { aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
+import { antesDeAprovar, aprovacoesPendentes, CartaoAprovacao } from "../componentes/CartaoAprovacao";
 import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
 import { Pensando } from "../componentes/ia/Pensando";
@@ -372,10 +372,15 @@ function Chat({
   // Responder duas vezes ao mesmo pedido publicaria duas vezes: clique, A e R passam por aqui.
   const respondidas = useRef(new Set<string>());
   const [, renderizar] = useReducer((n: number) => n + 1, 0);
-  const responder = (approvalId: string, aprovado: boolean) => {
+  const responder = async (approvalId: string, aprovado: boolean) => {
     if (respondidas.current.has(approvalId)) return;
     respondidas.current.add(approvalId);
     renderizar();
+    if (aprovado && !(await (antesDeAprovar.get(approvalId)?.() ?? true))) {
+      respondidas.current.delete(approvalId);
+      renderizar();
+      return;
+    }
     void chat.addToolApprovalResponse({ id: approvalId, approved: aprovado });
   };
   const pendentes = aprovacoesPendentes(chat.messages, respondidas.current);
@@ -385,7 +390,7 @@ function Chat({
   const decidirFocado = (aprovado: boolean) => () => {
     const id = document.activeElement?.closest<HTMLElement>("[data-aprovacao]")?.dataset.aprovacao;
     if (!id || !pendentes.includes(id)) return false;
-    responder(id, aprovado);
+    void responder(id, aprovado);
   };
   useAtalho("aprovar", decidirFocado(true));
   useAtalho("recusar", decidirFocado(false));

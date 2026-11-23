@@ -1,9 +1,9 @@
-import { useRef, useState } from "react";
+import { useImperativeHandle, useRef, useState, type Ref } from "react";
 import { apiReferencias, useApi, type ReferenciaDaApi } from "../api";
 import { Falha } from "./Falha";
 import { mostrarAviso } from "./menu/Avisos";
 import { pilhaDeDesfazer } from "./menu/desfazer";
-import { imagensDe, useImagensSoltas } from "./referencias/soltas";
+import { imagensDe } from "./referencias/soltas";
 
 /** Os mesmos limites do POST /api/referencias, checados antes para o erro sair na hora. */
 const ACEITOS = ["image/png", "image/jpeg", "image/webp"];
@@ -14,11 +14,16 @@ interface Enviando {
   url: string;
 }
 
+/** Quem cola ou solta imagens na Biblioteca entrega aqui as que a pessoa marcou como referência. */
+export interface EnvioDeReferencias {
+  receber(arquivos: File[]): void;
+}
+
 /**
- * As imagens que inspiram a geração. Colar (⌘V) e soltar valem na tela inteira da Biblioteca,
- * para não exigir mirar numa caixa. A IA lê cada imagem ao receber; o Chefe usa essas leituras.
+ * As imagens que inspiram a geração. Colar (⌘V) e soltar valem na tela inteira da Biblioteca, que pergunta
+ * se a imagem é referência ou peça pronta. A IA lê cada imagem ao receber; o Chefe usa essas leituras.
  */
-export function Referencias() {
+export function Referencias({ ref, soltando }: { ref?: Ref<EnvioDeReferencias>; soltando: boolean }) {
   const [carga, recarregar] = useApi<ReferenciaDaApi[]>("/api/referencias");
   const [enviando, setEnviando] = useState<Enviando[]>([]);
   const [removidas, setRemovidas] = useState<ReadonlySet<string>>(new Set());
@@ -47,7 +52,7 @@ export function Referencias() {
         });
     }
   }
-  const soltando = useImagensSoltas((arquivos) => void receber(arquivos));
+  useImperativeHandle(ref, () => ({ receber: (arquivos) => void receber(arquivos) }));
 
   async function remover(r: ReferenciaDaApi) {
     setRemovidas((s) => new Set(s).add(r.id));

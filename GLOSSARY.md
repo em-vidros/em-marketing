@@ -79,7 +79,7 @@ Quem o post quer alcançar: vidraceiro, arquiteto ou consumidor. Arquiteto e con
 _Evite_: persona, audiência
 
 **Peça pronta**:
-Uma imagem que a equipe sobe já finalizada, como um convite, para publicar como está, sem geração. O Chefe agenda e publica igual a uma arte, com o mesmo cartão de aprovação.
+Uma imagem que a equipe sobe já finalizada, como um convite, para publicar como está, sem geração. O Chefe agenda e publica igual a uma arte, com o mesmo cartão de aprovação. Quem sobe escolhe entre referência e peça pronta, e uma nunca vira a outra. Ao receber, a IA lê o texto pintado, o tema e o pilar, e o Chefe acha a peça por essa leitura. A legenda sai do mesmo gerador dos posts.
 _Evite_: imagem pronta, arte pronta, upload
 
 ## Referências

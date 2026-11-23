@@ -8,7 +8,7 @@ import { legendaDaPeca, listarPecasProntas } from "../../v2/pecas-prontas";
 export const toolsDePecasProntas = {
   listar_pecas_prontas: tool({
     description:
-      "Lista as peças prontas da Biblioteca: artes que a equipe fez fora do app, como no Canva, e subiu para publicar como estão. Cada uma traz a leitura (o texto pintado, o tema e o pilar), o formato e a legenda, se já tiver. Ache a peça que a pessoa pediu pela leitura.",
+      "Lista as peças prontas da Biblioteca: artes que a equipe fez fora do app, como no Canva, e subiu para publicar como estão. Cada uma traz a leitura (o texto pintado, o tema e o pilar), o formato e a legenda, se já tiver. Ache a peça que a pessoa pediu pela leitura, ou pelo começo do id quando o pedido trouxer um.",
     inputSchema: z.object({}),
     execute: async () => ({
       pecas: (await listarPecasProntas(banco())).map((p) => ({

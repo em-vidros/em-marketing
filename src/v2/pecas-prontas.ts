@@ -120,10 +120,13 @@ export async function legendaDaPeca(
   return gravada ? { ok: true, peca: gravada, problemas } : { ok: false, motivo: "A peça foi removida enquanto a legenda era escrita." };
 }
 
-/** O pedido que a Biblioteca manda ao Chefe para publicar ou agendar a peça, com o id que a tool espera. */
+/**
+ * O pedido que a Biblioteca manda ao Chefe para publicar ou agendar a peça. O começo do id basta para o Chefe
+ * achar a peça em listar_pecas_prontas quando duas têm o mesmo tema, sem encher a mensagem.
+ */
 export function pedidoDaPeca(p: Pick<PecaPronta, "id" | "tema" | "formato">): string {
   const legenda = p.formato === "feed" ? "Escreva a legenda e me pergunte" : "Me pergunte";
-  return `Quero publicar a peça pronta "${p.tema}" (peca_pronta_id ${p.id}), do ${p.formato}. ${legenda} se publico agora ou quando agendar.`;
+  return `Quero publicar a peça pronta "${p.tema}" (id ${p.id.slice(0, 8)}), do ${p.formato}. ${legenda} se publico agora ou quando agendar.`;
 }
 
 /** Uma conversa nova com o Chefe para publicar a peça. A tela manda `pedido` como primeira mensagem. */
