@@ -4,8 +4,9 @@ import { Hono } from "hono";
 import sharp from "sharp";
 import { z } from "zod";
 import type { Usuario } from "../server/auth";
-import { criarArte, gravarEdicao, listarArtes, novaCena, pegarArte, separarElementos, separavel, type Estudio } from "./artes";
+import { apagarArte, criarArte, criarArteComCampos, gravarEdicao, listarArtes, novaCena, pegarArte, PedidoInvalido, restaurarArte, separarElementos, separavel, type Estudio } from "./artes";
 import { EXTENSOES, FORMATO_DA_EXTENSAO, PIXELS_MAXIMOS, ehChave, TIPO_DA_EXTENSAO, type Extensao } from "./arquivos";
+import { PedidoDeArte } from "./campos";
 import { Ajustes, Camadas, FORMATOS, type Formato } from "./camadas";
 import { catalogoDeFontes, fonteRecusada } from "./fontsource";
 import { criarReferencia, editarLeitura, guardarNaBiblioteca, listarReferencias, removerReferencia, restaurarReferencia } from "./referencias";
@@ -29,11 +30,29 @@ const TAMANHO_MAXIMO = 10 * 1024 * 1024;
 
 const Leitura = z.object({ leitura: z.string().trim().min(1, "A leitura não pode ficar vazia.").max(2000, "A leitura passa de 2.000 caracteres.") });
 const LegendaDaPeca = z.object({ legenda: z.string().max(2200, "A legenda passa de 2.200 caracteres, o limite do Instagram.") });
+const NomeDoFormato = z.enum(Object.keys(FORMATOS) as [Formato, ...Formato[]], "O formato é feed ou story.");
 const NovaArte = z.object({
   pedido: z.string().trim().min(3, "Descreva a arte em pelo menos 3 letras.").max(1000),
-  formato: z.enum(Object.keys(FORMATOS) as [Formato, ...Formato[]], "O formato é feed ou story."),
+  formato: NomeDoFormato,
 });
+/** Convite ou aniversário: o texto de cada campo entra na arte como camada, sem passar pelo modelo de imagem. */
+const NovaArteComCampos = z.intersection(PedidoDeArte, z.object({ formato: NomeDoFormato }));
 const Edicao = z.object({ camadas: Camadas, ajustes: Ajustes });
+
+/** O corpo de POST /api/artes/:id/restaurar: a resposta do DELETE da arte. */
+const ArteApagada = z.object({
+  id: z.uuid(),
+  pedido: z.string().max(1000),
+  formato: NomeDoFormato,
+  cena: z.string().refine(ehChave, "Arquivo de imagem inválido."),
+  promptDaCena: z.string(),
+  referencias: z.array(z.uuid()),
+  camadas: Camadas,
+  ajustes: Ajustes,
+  criadaPor: z.string().min(1),
+  criadaEm: z.coerce.date(),
+  atualizadaEm: z.coerce.date(),
+});
 
 type Ambiente = { Variables: { usuario: Usuario } };
 
@@ -77,8 +96,10 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
     return c.json(erro(`Algo falhou do nosso lado: ${e.message}`), 500);
   });
 
-  async function corpo<S extends z.ZodType>(req: Request, schema: S) {
-    const r = schema.safeParse(await req.json().catch(() => null));
+  async function corpo<S extends z.ZodType>(req: Request, escolher: S | ((bruto: unknown) => S)) {
+    const bruto = await req.json().catch(() => null);
+    const schema = typeof escolher === "function" ? escolher(bruto) : escolher;
+    const r = schema.safeParse(bruto);
     return r.success ? ({ ok: true, dados: r.data as z.output<S> } as const) : ({ ok: false, problema: r.error.issues[0]?.message ?? "Pedido inválido." } as const);
   }
 
@@ -197,16 +218,37 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
 
   api.get("/artes", async (c) => c.json(await listarArtes(banco)));
 
+  // Com `tipo`, é um convite ou uma arte de aniversário com os campos; sem, é um pedido em texto livre.
   api.post("/artes", async (c) => {
-    const r = await corpo(c.req.raw, NovaArte);
+    const r = await corpo(c.req.raw, (bruto) => (typeof bruto === "object" && bruto !== null && "tipo" in bruto ? NovaArteComCampos : NovaArte));
     if (!r.ok) return c.json(erro(r.problema), 400);
-    const arte = await criarArte(estudio, { texto: r.dados.pedido, formato: r.dados.formato, criadaPor: c.get("usuario").id });
-    return c.json(arte, 201);
+    const criadaPor = c.get("usuario").id;
+    try {
+      const arte = "tipo" in r.dados ? await criarArteComCampos(estudio, { ...r.dados, criadaPor }) : await criarArte(estudio, { texto: r.dados.pedido, formato: r.dados.formato, criadaPor });
+      return c.json(arte, 201);
+    } catch (e) {
+      if (e instanceof PedidoInvalido) return c.json(erro(e.message), 400);
+      throw e;
+    }
   });
 
   api.get("/artes/:id", async (c) => {
     const arte = await pegarArte(banco, c.req.param("id"));
     return arte ? c.json({ ...arte, separavel: separavel(arte) }) : c.json(erro("Não encontrado."), 404);
+  });
+
+  api.delete("/artes/:id", async (c) => {
+    const apagada = await apagarArte(banco, c.req.param("id"));
+    if (!apagada) return c.json(erro("Não encontrado."), 404);
+    return "ocupada" in apagada ? c.json(erro(apagada.ocupada), 409) : c.json(apagada.arte);
+  });
+
+  api.post("/artes/:id/restaurar", async (c) => {
+    const r = await corpo(c.req.raw, ArteApagada);
+    if (!r.ok) return c.json(erro(r.problema), 400);
+    if (r.dados.id !== c.req.param("id")) return c.json(erro("O corpo é de outra arte."), 400);
+    if (!(await arquivos.ler(r.dados.cena))) return c.json(erro("A imagem desta arte sumiu do armazenamento."), 410);
+    return c.json(await restaurarArte(banco, r.dados));
   });
 
   api.post("/artes/:id/separar", async (c) => {

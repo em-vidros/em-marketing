@@ -1,4 +1,6 @@
+import type { Estudio } from "../../v2/artes";
 import { toolsDeAgenda } from "./agenda";
+import { toolsDeArtesComTexto } from "./artesComTexto";
 import { toolsDeDelegacao, type RodarDelegado } from "./delegar";
 import type { BotId } from "../bots";
 import { toolsDeEquipe } from "./equipe";
@@ -20,14 +22,17 @@ export interface Turno {
   autor: string;
   rodar: RodarDelegado;
   referencias?: ReferenciasDoTurno;
+  /** O estúdio de artes, com o modelo de imagem. Sem ele, criar convite e aniversário recusam. */
+  estudio?: Estudio;
 }
 
 /**
  * Todas as tools. As de post leem e gravam o post da conversa; as de delegação rodam especialistas nela;
  * lembrar grava na memória do bot que está no turno.
  */
-export const catalogo = async ({ conversaId, botId, autor, rodar, referencias }: Turno) => ({
+export const catalogo = async ({ conversaId, botId, autor, rodar, referencias, estudio }: Turno) => ({
   ...toolsDePost(conversaId, referencias),
+  ...toolsDeArtesComTexto({ estudio, autor, referencias }),
   ...toolsDeFotos,
   ...toolsDeAgenda,
   ...toolsDePecasProntas,

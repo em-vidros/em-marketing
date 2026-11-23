@@ -11,6 +11,7 @@ import { CartaoTarefa, tarefaIdDa } from "../componentes/CartaoTarefa";
 import { Composer } from "../componentes/Composer";
 import { Pensando } from "../componentes/ia/Pensando";
 import { ArteDaConversa, ehArteDaConversa } from "../componentes/ArteDaConversa";
+import { ArteCriada, ehArteCriada } from "../componentes/ArteCriada";
 import { EscolhaDeArtes, ehMostrarArtes } from "../componentes/EscolhaDeArtes";
 import { Raciocinio } from "../componentes/ia/Raciocinio";
 import { Markdown } from "../componentes/Markdown";
@@ -656,6 +657,7 @@ function ParteDoChefe({
   }
   if (ehMostrarArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
   if (ehArteDaConversa(parte)) return <ArteDaConversa parte={parte} versao={versao} />;
+  if (ehArteCriada(parte)) return <ArteCriada parte={parte} />;
   if (ehDelegacao(parte)) {
     const quem = botDaDelegacao(parte as ParteDelegacao);
     return quem && <CartaoTarefa parte={parte as ParteDelegacao} bot={quem} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;
@@ -666,7 +668,7 @@ function ParteDoChefe({
 }
 
 /** As tools do Chefe que não têm cartão próprio viram passos. */
-const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p) && !(ehArteDaConversa(p) && temArte(p));
+const ehPassoSolto = (p: Parte) => !ehDelegacao(p) && !ehAprovacao(p) && !ehMostrarArtes(p) && !(ehArteDaConversa(p) && temArte(p)) && !ehArteCriada(p);
 
 /** O ajuste e a story viram cartão só quando trazem a imagem; enquanto rodam ou se falham, ficam na lista de passos. */
 const temArte = (p: Parte) => "state" in p && p.state === "output-available" && typeof p.output === "object" && p.output !== null && "url" in p.output && !!p.output.url;
