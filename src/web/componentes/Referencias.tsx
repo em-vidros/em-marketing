@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { apiReferencias, useApi, type ReferenciaDaApi } from "../api";
 import { Falha } from "./Falha";
 import { mostrarAviso } from "./menu/Avisos";
 import { pilhaDeDesfazer } from "./menu/desfazer";
+import { imagensDe, useImagensSoltas } from "./referencias/soltas";
 
 /** Os mesmos limites do POST /api/referencias, checados antes para o erro sair na hora. */
 const ACEITOS = ["image/png", "image/jpeg", "image/webp"];
@@ -13,9 +14,6 @@ interface Enviando {
   url: string;
 }
 
-const imagensDe = (lista: FileList | null | undefined) => [...(lista ?? [])].filter((f) => f.type.startsWith("image/"));
-const temArquivo = (e: DragEvent) => e.dataTransfer?.types.includes("Files") ?? false;
-
 /**
  * As imagens que inspiram a geração. Colar (⌘V) e soltar valem na tela inteira da Biblioteca,
  * para não exigir mirar numa caixa. A IA lê cada imagem ao receber; o Chefe usa essas leituras.
@@ -24,7 +22,6 @@ export function Referencias() {
   const [carga, recarregar] = useApi<ReferenciaDaApi[]>("/api/referencias");
   const [enviando, setEnviando] = useState<Enviando[]>([]);
   const [removidas, setRemovidas] = useState<ReadonlySet<string>>(new Set());
-  const [soltando, setSoltando] = useState(false);
   const seletor = useRef<HTMLInputElement>(null);
   const proximo = useRef(0);
 
@@ -50,49 +47,7 @@ export function Referencias() {
         });
     }
   }
-  const receberAtual = useRef(receber);
-  receberAtual.current = receber;
-
-  useEffect(() => {
-    let profundidade = 0;
-    const colar = (e: ClipboardEvent) => {
-      const imagens = imagensDe(e.clipboardData?.files);
-      if (!imagens.length) return;
-      e.preventDefault();
-      void receberAtual.current(imagens);
-    };
-    const entrar = (e: DragEvent) => {
-      if (!temArquivo(e)) return;
-      profundidade++;
-      setSoltando(true);
-    };
-    const sair = () => {
-      profundidade = Math.max(0, profundidade - 1);
-      if (!profundidade) setSoltando(false);
-    };
-    const sobre = (e: DragEvent) => {
-      if (temArquivo(e)) e.preventDefault();
-    };
-    const soltar = (e: DragEvent) => {
-      if (!temArquivo(e)) return;
-      e.preventDefault();
-      profundidade = 0;
-      setSoltando(false);
-      void receberAtual.current(imagensDe(e.dataTransfer?.files));
-    };
-    window.addEventListener("paste", colar);
-    window.addEventListener("dragenter", entrar);
-    window.addEventListener("dragleave", sair);
-    window.addEventListener("dragover", sobre);
-    window.addEventListener("drop", soltar);
-    return () => {
-      window.removeEventListener("paste", colar);
-      window.removeEventListener("dragenter", entrar);
-      window.removeEventListener("dragleave", sair);
-      window.removeEventListener("dragover", sobre);
-      window.removeEventListener("drop", soltar);
-    };
-  }, []);
+  const soltando = useImagensSoltas((arquivos) => void receber(arquivos));
 
   async function remover(r: ReferenciaDaApi) {
     setRemovidas((s) => new Set(s).add(r.id));

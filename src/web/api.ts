@@ -118,6 +118,17 @@ export const apiReferencias = {
   imagem: (r: ReferenciaDaApi) => `/api/arquivos/${r.arquivo}`,
 };
 
+/** A imagem do pedido: sobe sem a IA ler, e guardar na Biblioteca reusa o mesmo arquivo. */
+export const apiImagensDoPedido = {
+  subir: async (arquivo: File) => {
+    const form = new FormData();
+    form.set("arquivo", arquivo);
+    return (await pedir("/api/arquivos", { method: "POST", body: form })).json() as Promise<{ chave: string }>;
+  },
+  guardar: (chave: string) => comCorpo<ReferenciaDaApi>(`/api/arquivos/${chave}/referencia`, "POST"),
+  url: (chave: string) => `/api/arquivos/${chave}`,
+};
+
 export type Carga<T> = { estado: "carregando" } | { estado: "pronto"; dados: T } | { estado: "erro"; erro: ErroDeApi | Error };
 
 /**

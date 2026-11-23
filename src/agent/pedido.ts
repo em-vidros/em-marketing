@@ -3,10 +3,7 @@ import { z } from "zod";
 import type { Pilar, ReferenciaParaGerar } from "../domain/art/pipeline";
 import { ehChave } from "../v2/arquivos";
 import type { EscolhaDoPedido } from "../v2/referencias";
-
-/** Quantas referências da Biblioteca e quantas imagens coladas cabem num pedido. */
-export const MAXIMO_MARCADAS = 3;
-export const MAXIMO_COLADAS = 3;
+import { MAXIMO_COLADAS, MAXIMO_MARCADAS } from "./limitesDoPedido";
 
 /**
  * A parte `data-referencias` da mensagem da pessoa: o que ela marcou e colou no composer.
