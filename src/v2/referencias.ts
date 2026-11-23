@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNotNull, isNull } from "drizzle-orm";
 import sharp from "sharp";
 import { z } from "zod";
 import type { Ancora, Pilar, ReferenciaParaGerar } from "../domain/art/pipeline";
@@ -48,19 +48,41 @@ export async function editarLeitura(banco: Banco, id: string, leitura: string, q
 /**
  * Guarda na Biblioteca uma imagem que já está nos arquivos, como a colada num pedido do chat, com o mesmo arquivo.
  * Guardar de novo devolve a mesma referência, e uma que foi removida volta sem a IA ler a imagem outra vez.
- * Null quando o arquivo não existe.
+ * `criada` diz se este pedido pôs a referência na Biblioteca, para só ele oferecer o desfazer. Null quando o arquivo não existe.
  */
 export async function guardarNaBiblioteca(
   { banco, arquivos, ia }: { banco: Banco; arquivos: Arquivos; ia: Pick<Ia, "lerReferencia"> },
   arquivo: string,
   quem: string,
-): Promise<Referencia | null> {
+): Promise<{ referencia: Referencia; criada: boolean } | null> {
   const [existente] = await banco.select().from(referencias).where(eq(referencias.arquivo, arquivo)).orderBy(desc(referencias.criadaEm)).limit(1);
-  if (existente) return existente.removidaEm ? restaurarReferencia(banco, existente.id) : existente;
+  if (existente && !existente.removidaEm) return { referencia: existente, criada: false };
+  if (existente) {
+    const [restaurada] = await banco
+      .update(referencias)
+      .set({ removidaEm: null })
+      .where(and(eq(referencias.id, existente.id), isNotNull(referencias.removidaEm)))
+      .returning();
+    return restaurada ? { referencia: restaurada, criada: true } : ativaDoArquivo(banco, arquivo);
+  }
   const bytes = await arquivos.ler(arquivo);
   if (!bytes) return null;
   const { leitura, pilares } = await ia.lerReferencia(bytes, TIPO_DA_EXTENSAO[arquivo.split(".").pop() as Extensao]);
-  return criarReferencia(banco, { arquivo, leitura, pilares, criadaPor: quem });
+  // Outro clique pode ter guardado o mesmo arquivo enquanto a IA lia; o índice referencias_arquivo_ativa recusa a segunda.
+  const [criada] = await banco
+    .insert(referencias)
+    .values({ arquivo, leitura, pilares, criadaPor: quem })
+    .onConflictDoNothing({ target: referencias.arquivo, where: isNull(referencias.removidaEm) })
+    .returning();
+  return criada ? { referencia: criada, criada: true } : ativaDoArquivo(banco, arquivo);
+}
+
+async function ativaDoArquivo(banco: Banco, arquivo: string) {
+  const [ativa] = await banco
+    .select()
+    .from(referencias)
+    .where(and(eq(referencias.arquivo, arquivo), isNull(referencias.removidaEm)));
+  return ativa ? { referencia: ativa, criada: false } : null;
 }
 
 /** Remover só marca a data, para o desfazer trazer de volta. Remover de novo não muda a data. */

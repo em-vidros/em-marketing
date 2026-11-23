@@ -27,6 +27,8 @@ async function guardar(chave: string) {
   try {
     const r = await apiImagensDoPedido.guardar(chave);
     await recarregarBiblioteca();
+    // Outra pessoa, ou outro clique, guardou antes: a imagem aparece como já na Biblioteca, sem Desfazer.
+    if (!r.criada) return mudar(chave, null);
     const desfazer = pilhaDeDesfazer.empilhar(async () => {
       // Volta a Guardar na hora; a lista da Biblioteca chega depois.
       mudar(chave, { tipo: "tirada" });

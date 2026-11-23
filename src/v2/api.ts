@@ -130,7 +130,7 @@ export function criarApi(estudio: Estudio, usuarioDa: (req: Request) => Promise<
   api.post("/arquivos/:chave/referencia", async (c) => {
     const chave = c.req.param("chave");
     const guardada = ehChave(chave) ? await guardarNaBiblioteca(estudio, chave, c.get("usuario").id) : null;
-    return guardada ? c.json(guardada) : c.json(erro("Não encontrado."), 404);
+    return guardada ? c.json({ ...guardada.referencia, criada: guardada.criada }, guardada.criada ? 201 : 200) : c.json(erro("Não encontrado."), 404);
   });
 
   api.get("/arquivos/:chave", async (c) => {

@@ -140,7 +140,7 @@ describe("imagem colada no chat", () => {
 
   test("guardar na Biblioteca usa o mesmo arquivo; guardar de novo devolve a mesma referência, e depois de desfazer ela volta sem a IA ler outra vez", async () => {
     const chave = await colar();
-    const guardar = async () => (await pedir(`/api/arquivos/${chave}/referencia`, { method: "POST" })).json() as Promise<{ id: string; arquivo: string }>;
+    const guardar = async () => (await pedir(`/api/arquivos/${chave}/referencia`, { method: "POST" })).json() as Promise<{ id: string; arquivo: string; criada: boolean }>;
 
     const guardada = await guardar();
     const deNovo = await guardar();
@@ -149,13 +149,24 @@ describe("imagem colada no chat", () => {
     const depoisDeDesfazer = await arquivosDaBiblioteca();
     const deVolta = await guardar();
 
-    expect(guardada.arquivo).toBe(chave);
-    expect(deNovo.id).toBe(guardada.id);
+    expect(guardada).toMatchObject({ arquivo: chave, criada: true });
+    expect(deNovo).toMatchObject({ id: guardada.id, criada: false });
     expect(naBiblioteca).toEqual([chave]);
     expect(depoisDeDesfazer).toEqual([]);
-    expect(deVolta.id).toBe(guardada.id);
+    expect(deVolta).toMatchObject({ id: guardada.id, criada: true });
     expect(imagensLidas).toBe(1);
     expect((await pedir(`/api/arquivos/${crypto.randomUUID()}.png/referencia`, { method: "POST" })).status).toBe(404);
+  });
+
+  test("dois cliques ao mesmo tempo em Guardar criam uma referência só, e só um deles a criou", async () => {
+    const chave = await colar();
+    const guardar = async () => (await pedir(`/api/arquivos/${chave}/referencia`, { method: "POST" })).json() as Promise<{ id: string; criada: boolean }>;
+
+    const [a, b] = await Promise.all([guardar(), guardar()]);
+
+    expect(a.id).toBe(b.id);
+    expect([a.criada, b.criada].toSorted()).toEqual([false, true]);
+    expect(await arquivosDaBiblioteca()).toEqual([chave]);
   });
 });
 

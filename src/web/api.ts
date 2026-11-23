@@ -125,7 +125,8 @@ export const apiImagensDoPedido = {
     form.set("arquivo", arquivo);
     return (await pedir("/api/arquivos", { method: "POST", body: form })).json() as Promise<{ chave: string }>;
   },
-  guardar: (chave: string) => comCorpo<ReferenciaDaApi>(`/api/arquivos/${chave}/referencia`, "POST"),
+  /** `criada` diz se este clique pôs a imagem na Biblioteca; só ele oferece Desfazer. */
+  guardar: (chave: string) => comCorpo<ReferenciaDaApi & { criada: boolean }>(`/api/arquivos/${chave}/referencia`, "POST"),
   url: (chave: string) => `/api/arquivos/${chave}`,
 };
 
