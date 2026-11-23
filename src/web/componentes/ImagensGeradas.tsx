@@ -98,7 +98,7 @@ export function ImagensGeradas({ busca }: { busca: string }) {
                       decoding="async"
                       className={`w-full bg-ativo object-cover outline-1 -outline-offset-1 outline-black/10 ${PROPORCAO[i.formato]}`}
                     />
-                    <BotaoReferencia imagem={{ url: i.url, nome: `${i.origem}-${i.id}.${i.origem === "estudio" ? "png" : "jpg"}` }} />
+                    <BotaoReferencia tamanho="cheio" imagem={{ url: i.url, nome: `${i.origem}-${i.id}.${i.origem === "estudio" ? "png" : "jpg"}` }} />
                     <div className="editar absolute top-2 right-2 z-10 flex gap-1.5">
                       {editar ? (
                         <button
