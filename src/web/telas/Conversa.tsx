@@ -565,6 +565,7 @@ function Chat({
                           parte={t.parte}
                           noAr={respondendo && m === ultima}
                           escolher={!respondendo && m === ultima ? (n) => enviar(`Quero a variação ${n}.`, { comEscolha: false }) : null}
+                          versao={`${chat.messages.length}-${respondendo}`}
                           painel={painel}
                           abrir={abrir}
                           responder={responder}
@@ -634,8 +635,11 @@ function ParteDoChefe({
   responder,
   respondidas,
   escolher,
+  versao,
 }: {
   parte: Parte;
+  /** Muda a cada mensagem e a cada fim de resposta: o cartão do ajuste relê o estado do post nessa hora. */
+  versao: string;
   /** Manda a variação escolhida; null quando a conversa já passou das artes desta parte. */
   escolher: ((variante: number) => void) | null;
   /** A mensagem desta parte ainda está chegando. */
@@ -651,7 +655,7 @@ function ParteDoChefe({
     return parte.text.trim() || digitando ? <Markdown texto={parte.text} digitando={digitando} className="max-w-[68ch] text-corpo" /> : null;
   }
   if (ehMostrarArtes(parte)) return <EscolhaDeArtes parte={parte} escolher={escolher} />;
-  if (ehArteDaConversa(parte)) return <ArteDaConversa parte={parte} />;
+  if (ehArteDaConversa(parte)) return <ArteDaConversa parte={parte} versao={versao} />;
   if (ehDelegacao(parte)) {
     const quem = botDaDelegacao(parte as ParteDelegacao);
     return quem && <CartaoTarefa parte={parte as ParteDelegacao} bot={quem} aberta={painel === tarefaIdDa(parte)} abrir={abrir} />;

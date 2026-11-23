@@ -1,6 +1,6 @@
 import { PencilEdit02Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { REGRA_DO_TEXTO } from "../../domain/art/conferencia";
 import { useApi } from "../api";
 import type { Parte } from "../tipos";
@@ -23,11 +23,13 @@ type Voltando = { tipo: "parado" } | { tipo: "voltando" } | { tipo: "voltou" } |
  * A arte que um ajuste, a volta de um ajuste ou a story deixaram na conversa. O ajuste tem o botão que desfaz,
  * enquanto ele ainda é a versão em uso do post.
  */
-export function ArteDaConversa({ parte }: { parte: ParteDaArte }) {
+export function ArteDaConversa({ parte, versao }: { parte: ParteDaArte; versao: string }) {
   const saida = parte.state === "output-available" && parte.output.ok ? parte.output : null;
   const postId = saida && "postId" in saida ? saida.postId : undefined;
   const ehAjuste = parte.type === "tool-ajustar_arte";
   const [carga, reler] = useApi<Escolhida>(ehAjuste && postId !== undefined ? `/api/posts/${postId}/escolhida` : null, 15000);
+  // A conversa mudou (o bot pode ter ajustado de novo ou voltado): relê qual versão está em uso.
+  useEffect(() => reler(), [versao, reler]);
   const [abrindo, abrirNoEditor] = useAbrirNoEditor();
   const [voltando, setVoltando] = useState<Voltando>({ tipo: "parado" });
   if (!saida || !("url" in saida) || !saida.url) return null;
