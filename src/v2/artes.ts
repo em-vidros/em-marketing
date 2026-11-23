@@ -73,7 +73,7 @@ export async function pegarArte(banco: Banco, id: string): Promise<Arte | null> 
 export async function criarArte({ banco, ia, arquivos }: Estudio, pedido: { texto: string; formato: Formato; criadaPor: string }): Promise<Arte> {
   const ativas = await listarReferencias(banco);
   const recentes = await banco.select({ referencias: artes.referencias }).from(artes).orderBy(desc(artes.criadaEm)).limit(ARTES_QUE_A_ROTACAO_OLHA);
-  const escolhidas = escolherReferencias({ ativas, recentes: recentes.map((a) => a.referencias), n: REFERENCIAS_POR_ARTE });
+  const escolhidas = escolherReferencias({ ativas, recentes: recentes.map((a) => a.referencias) }).slice(0, REFERENCIAS_POR_ARTE);
   const leituras = escolhidas.map((id) => ativas.find((r) => r.id === id)!.leitura);
   const plano = await ia.planejarArte(pedido.texto, pedido.formato, leituras);
   const cena = await arquivos.salvar(await ia.gerarCena(plano.cena, pedido.formato), "jpg");

@@ -9,6 +9,9 @@ import { referencias, type Referencia } from "./schema";
 /** Lê as referências de uma geração de post. A tool gerar_3_artes recebe isto de fora, e os testes trocam. */
 export type CarregarReferencias = (o: { pilar: Pilar; marcadas?: readonly string[] }) => Promise<ReferenciaParaGerar[]>;
 
+/** O criada_por das referências que vieram dos posts reais da @emvidros, e não de alguém da equipe. */
+export const CRIADA_PELA_CASA = "casa";
+
 /** Quantas gerações de post a rotação olha para não repetir referência. */
 const GERACOES_QUE_A_ROTACAO_OLHA = 5;
 
@@ -45,7 +48,7 @@ export async function restaurarReferencia(banco: Banco, id: string): Promise<Ref
   return restaurada ?? null;
 }
 
-type Ativa = { id: string; pilares: readonly Pilar[]; criadaEm: Date };
+type Ativa = Pick<Referencia, "id" | "pilares" | "criadaEm" | "criadaPor">;
 
 /** As referências de uma geração de post, na ordem da escolha, com a imagem em JPEG de até 1024 px. */
 export async function referenciasParaGerar(
@@ -54,7 +57,7 @@ export async function referenciasParaGerar(
 ): Promise<ReferenciaParaGerar[]> {
   const ativas = await listarReferencias(banco);
   const recentes = await referenciasDasUltimasGeracoes();
-  const escolhidas = escolherReferencias({ ativas, recentes, marcadas: o.marcadas, pilar: o.pilar, n: o.n ?? 3 });
+  const escolhidas = escolherReferencias({ ativas, recentes, marcadas: o.marcadas, pilar: o.pilar }).slice(0, o.n ?? 3);
 
   const carregadas = await Promise.all(
     escolhidas
@@ -79,26 +82,27 @@ async function referenciasDasUltimasGeracoes(): Promise<string[][]> {
 const comoJpeg = (bytes: Uint8Array) => sharp(bytes).rotate().resize(1024, 1024, { fit: "inside", withoutEnlargement: true }).jpeg({ quality: 85 }).toBuffer();
 
 /**
- * Escolhe `n` referências para uma geração nova, nesta ordem: as marcadas pela pessoa; sem marcadas, a mais nova;
- * depois as livres do pilar, as outras livres e, por fim, as usadas há mais tempo.
+ * Põe as referências na ordem de uso de uma geração nova: as marcadas pela pessoa; sem marcadas, a mais nova que a
+ * equipe subiu; depois as livres do pilar, as outras livres e, por fim, as usadas há mais tempo.
  * Livre é a que nenhuma das gerações em `recentes` usou. `recentes` vem da geração mais nova para a mais velha.
+ * Referência sem pilar serve a todos. As da casa nunca ocupam o lugar da mais nova: sem nada da equipe, só há rotação.
  */
 export function escolherReferencias(o: {
   ativas: readonly Ativa[];
   marcadas?: readonly string[];
   recentes: readonly (readonly string[])[];
   pilar?: Pilar;
-  n: number;
   sortear?: () => number;
 }): string[] {
-  const { ativas, recentes, pilar, n, sortear = Math.random } = o;
+  const { ativas, recentes, pilar, sortear = Math.random } = o;
   const idsAtivos = new Set(ativas.map((r) => r.id));
   const marcadas = (o.marcadas ?? []).filter((id) => idsAtivos.has(id));
-  const maisNova = ativas
+  const maisNovaDaEquipe = ativas
+    .filter((r) => r.criadaPor !== CRIADA_PELA_CASA)
     .toSorted((a, b) => b.criadaEm.getTime() - a.criadaEm.getTime())
     .slice(0, 1)
     .map((r) => r.id);
-  const fixas = marcadas.length > 0 ? marcadas : maisNova;
+  const fixas = marcadas.length > 0 ? marcadas : maisNovaDaEquipe;
 
   const ultimoUso = new Map<string, number>();
   recentes.forEach((usadas, idade) => usadas.forEach((id) => ultimoUso.has(id) || ultimoUso.set(id, idade)));
@@ -108,11 +112,11 @@ export function escolherReferencias(o: {
     .map(([id]) => id);
 
   const livres = ativas.filter((r) => !ultimoUso.has(r.id));
-  const ehDoPilar = (r: Ativa) => pilar !== undefined && r.pilares.includes(pilar);
+  const ehDoPilar = (r: Ativa) => pilar !== undefined && (r.pilares.length === 0 || r.pilares.includes(pilar));
   const livresDoPilar = embaralhar(livres.filter(ehDoPilar), sortear);
   const outrasLivres = embaralhar(livres.filter((r) => !ehDoPilar(r)), sortear);
 
-  return [...new Set([...fixas, ...livresDoPilar, ...outrasLivres, ...usadasDaMaisVelha])].slice(0, n);
+  return [...new Set([...fixas, ...livresDoPilar, ...outrasLivres, ...usadasDaMaisVelha])];
 }
 
 function embaralhar(referencias: readonly Ativa[], sortear: () => number): string[] {

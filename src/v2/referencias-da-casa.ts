@@ -3,14 +3,16 @@ import { eq, sql } from "drizzle-orm";
 import type { Pilar } from "../domain/art/pipeline";
 import type { Estudio } from "./artes";
 import type { Banco } from "./banco";
+import { CRIADA_PELA_CASA } from "./referencias";
 import { referencias } from "./schema";
-
-export const CRIADA_PELA_CASA = "casa";
 
 const PASTA = "brand/referencias-posts";
 
 /** Chave do pg_advisory_xact_lock: duas funções frias da Vercel sobem ao mesmo tempo e só uma semeia. */
 const TRAVA_DA_SEMENTE = 410_001;
+
+/** Datas antigas e distintas: a semente roda no deploy, e uma data de agora pareceria mais nova que tudo o que a equipe subiu. */
+const SEMEADAS_A_PARTIR_DE = Date.UTC(2026, 0, 1);
 
 /** A leitura e os pilares de cada pasta de posts reais da @emvidros. */
 const DA_CASA: Record<string, { leitura: string; pilares: Pilar[] }> = {
@@ -48,11 +50,12 @@ export async function semearReferenciasDaCasa({ banco, arquivos }: Pick<Estudio,
     if (await jaSemeada(transacao)) return;
 
     const novas = await Promise.all(
-      postsDaCasa().map(async ({ caminho, leitura, pilares }) => ({
+      postsDaCasa().map(async ({ caminho, leitura, pilares }, i) => ({
         arquivo: await arquivos.salvar(await Bun.file(caminho).bytes(), "jpg"),
         leitura,
         pilares,
         criadaPor: CRIADA_PELA_CASA,
+        criadaEm: new Date(SEMEADAS_A_PARTIR_DE + i * 60_000),
       })),
     );
     await transacao.insert(referencias).values(novas);
