@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "motion/react";
+import { AnimatePresence, motion, useMotionValue, useReducedMotion, useTransform, type PanInfo } from "motion/react";
 import { useId, useRef, useState } from "react";
 import type { Ancora } from "../../../domain/art/pipeline";
 import { apiImagensDoPedido } from "../../api";
@@ -115,15 +115,19 @@ function quandoGuardada(iso: string): string {
 
 /**
  * A referência aberta grande, num diálogo com o fundo escurecido. Cresce da miniatura da célula com mola sem quique e
- * volta para ela ao fechar. No celular, arrastar para baixo fecha, levando a velocidade do dedo.
+ * volta para ela ao fechar, sumindo só no fim do caminho. No celular, arrastar para baixo fecha, levando a velocidade
+ * do dedo, e o véu clareia junto com o arrasto. Com movimento reduzido, abre e fecha só no esmaecer.
  */
 function Visor({ aberta, aberto, fechar, desktop }: { aberta: Aberta | null; aberto: boolean; fechar: () => void; desktop: boolean }) {
   const reduzido = useReducedMotion();
   const carga = useBiblioteca();
+  const y = useMotionValue(0);
+  const veu = useTransform(y, [0, 300], [1, 0.3]);
   if (!aberta) return null;
   const { ancora, variante, origem, celula } = aberta;
   const naLista = ancora.origem === "biblioteca" ? naBiblioteca(carga, ancora.arquivo) : undefined;
   const fora = reduzido ? { opacity: 0 } : { opacity: 0, x: origem.x, y: origem.y, scale: origem.escala };
+  const saida = reduzido ? { duration: 0.15 } : { type: "spring" as const, bounce: 0, duration: 0.3, opacity: { duration: 0.1, delay: 0.2 } };
   const soltar = (_: unknown, info: PanInfo) => {
     if (info.offset.y > 120 || info.velocity.y > 600) fechar();
   };
@@ -139,8 +143,10 @@ function Visor({ aberta, aberto, fechar, desktop }: { aberta: Aberta | null; abe
           <Dialog.Portal keepMounted>
             <Dialog.Backdrop
               render={<motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.25 }} />}
-              className="fixed inset-0 z-[80] bg-veu"
-            />
+              className="fixed inset-0 z-[80]"
+            >
+              <motion.div className="absolute inset-0 bg-veu" style={{ opacity: veu }} />
+            </Dialog.Backdrop>
             <div className="pointer-events-none fixed inset-0 z-[80] grid place-items-center p-4">
               <Dialog.Popup
                 finalFocus={() => celula}
@@ -148,11 +154,12 @@ function Visor({ aberta, aberto, fechar, desktop }: { aberta: Aberta | null; abe
                   <motion.div
                     initial={fora}
                     animate={{ opacity: 1, x: 0, y: 0, scale: 1 }}
-                    exit={fora}
+                    exit={{ ...fora, transition: saida }}
                     transition={{ type: "spring", bounce: 0, duration: 0.35, opacity: { duration: 0.2 } }}
-                    drag={!desktop && !reduzido ? "y" : false}
+                    style={{ y }}
+                    drag={desktop ? false : "y"}
                     dragConstraints={{ top: 0, bottom: 0 }}
-                    dragElastic={{ top: 0.05, bottom: 0.9 }}
+                    dragElastic={{ top: 0.05, bottom: 1 }}
                     dragSnapToOrigin
                     onDragEnd={soltar}
                   />

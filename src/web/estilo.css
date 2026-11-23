@@ -346,8 +346,8 @@ button.linha:focus-visible {
 .seletor-popup {
   transform-origin: var(--transform-origin);
   transition:
-    opacity 300ms var(--ease-saida),
-    scale 300ms var(--ease-saida);
+    opacity 200ms var(--ease-saida),
+    scale 200ms var(--ease-saida);
 }
 .seletor-popup[data-starting-style],
 .seletor-popup[data-ending-style] {
@@ -389,7 +389,7 @@ button.linha:focus-visible {
 
 /* O aviso de soltar aparece com o arquivo sobre a janela, uma vez, sem mexer o fundo. */
 .soltar-aqui {
-  animation: soltar-aqui 200ms ease both;
+  animation: soltar-aqui 150ms var(--ease-saida) both;
 }
 @keyframes soltar-aqui {
   from {

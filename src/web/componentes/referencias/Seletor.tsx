@@ -265,7 +265,7 @@ function Grade({
             onFocus={() => setAtivo(i)}
             onClick={() => !bloqueada && alternar(r)}
             data-estado={estado}
-            className="group/ref flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-item text-left transition-transform duration-[120ms] ease-saida active:scale-[0.97] data-[estado=bloqueada]:cursor-not-allowed data-[estado=bloqueada]:active:scale-100"
+            className="group/ref pressiona flex min-w-0 cursor-pointer flex-col gap-1.5 rounded-item text-left data-[estado=bloqueada]:cursor-not-allowed data-[estado=bloqueada]:active:scale-100"
           >
             <span className="relative block aspect-square overflow-hidden rounded-item bg-painel after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_0.5px_var(--color-separador)] group-data-[estado=bloqueada]/ref:opacity-40">
               <img src={apiReferencias.imagem(r)} alt="" loading="lazy" className="block size-full object-cover group-data-[estado=marcada]/ref:opacity-[.86]" />
