@@ -62,8 +62,8 @@ const pedir = (rota: ReturnType<typeof rotaDeChat>, conversaId: string, ultima: 
   rota(new Request("http://localhost/api/chat", { method: "POST", body: JSON.stringify({ id: conversaId, botId, messages: [ultima] }) }), usuario);
 
 /** POST /api/chat e os chunks do stream de resposta. */
-async function postar(rota: ReturnType<typeof rotaDeChat>, conversaId: string, ultima: UIMessage) {
-  const corpo = await (await pedir(rota, conversaId, ultima)).text();
+async function postar(rota: ReturnType<typeof rotaDeChat>, conversaId: string, ultima: UIMessage, botId?: string) {
+  const corpo = await (await pedir(rota, conversaId, ultima, botId)).text();
   return corpo
     .split("\n")
     .filter((l) => l.startsWith("data: ") && l !== "data: [DONE]")
@@ -330,6 +330,65 @@ describe("referências do pedido", () => {
       rede.restaurar();
       for (const path of geradas) rmSync(path, { force: true });
     }
+  });
+
+  /**
+   * Conversa direta com o Post e as escolhas que cada geração pediu. Ao pedido com a escolha, o Post pergunta o formato;
+   * a cada mensagem seguinte, gera as artes. `chega` diz se a geração de número n leu as imagens; sem ele, todas leem.
+   */
+  async function geracoesDoPost(mensagens: UIMessage[], chega: (n: number) => boolean = () => true) {
+    const modelo = new MockLanguageModelV4({
+      doStream: async ({ prompt }) => {
+        const ultima = prompt.at(-1)!;
+        if (ultima.role === "tool") return responde("Gerei.");
+        return ultima.role === "user" && JSON.stringify(ultima.content).includes("Dia do Vidraceiro") ? responde("Feed ou stories?") : chamar("gerar_3_artes");
+      },
+    });
+    const jpeg = new Uint8Array(await sharp({ create: { width: 8, height: 8, channels: 3, background: "#F0EFEA" } }).jpeg().toBuffer());
+    const pedidas: unknown[] = [];
+    const carregarReferencias: CarregarReferencias = async ({ escolha }) => {
+      pedidas.push(escolha);
+      if (!chega(pedidas.length)) return [];
+      return (escolha?.coladas ?? []).map((arquivo) => ({ origem: "pedido" as const, arquivo, imagem: jpeg }));
+    };
+    const rota = rotaDeChat({ resolverModelo: () => modelo, carregarReferencias });
+    const id = await conversaComPost("post", PRONTO_PARA_AGENDAR.slice(0, 1));
+    const rede = await semOpenAI();
+    const geradas: string[] = [];
+    try {
+      for (const m of mensagens) {
+        await postar(rota, id, m, "post");
+        const p = await postDaConversa(id);
+        if (p?.etapa === "artes") geradas.push(...p.artes.map((x) => x.path));
+      }
+    } finally {
+      rede.restaurar();
+      for (const path of geradas) rmSync(path, { force: true });
+    }
+    return pedidas;
+  }
+
+  const colada = `${crypto.randomUUID()}.png`;
+  const escolha = { marcadas: [], coladas: [colada] };
+  const comEscolha: UIMessage = {
+    id: "u1",
+    role: "user",
+    parts: [
+      { type: "text", text: "Post do Dia do Vidraceiro." },
+      { type: "data-referencias", data: escolha },
+    ],
+  };
+
+  test("editar ou refazer a resposta à pergunta do bot corta a geração que usou a escolha, e a escolha volta a valer", async () => {
+    const pedidas = await geracoesDoPost([comEscolha, doUsuario("u2", "Feed."), doUsuario("u3", "Outra."), doUsuario("u2", "Stories.")]);
+
+    expect(pedidas).toEqual([escolha, undefined, escolha]);
+  });
+
+  test("uma geração em que nenhuma imagem escolhida chegou ao modelo não gasta a escolha", async () => {
+    const pedidas = await geracoesDoPost([comEscolha, doUsuario("u2", "Feed."), doUsuario("u3", "De novo."), doUsuario("u4", "Outra.")], (n) => n > 1);
+
+    expect(pedidas).toEqual([escolha, escolha, undefined]);
   });
 
   test("uma escolha com formato errado é recusada antes do turno", async () => {

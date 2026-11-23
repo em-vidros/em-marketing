@@ -1,18 +1,18 @@
 import type { UIMessage } from "ai";
 import { z } from "zod";
-import type { Pilar, ReferenciaParaGerar } from "../domain/art/pipeline";
+import type { Ancora, Pilar, ReferenciaParaGerar } from "../domain/art/pipeline";
 import { ehChave } from "../v2/arquivos";
 import type { EscolhaDoPedido } from "../v2/referencias";
 import { MAXIMO_COLADAS, MAXIMO_MARCADAS } from "./limitesDoPedido";
 
 /**
  * A parte `data-referencias` da mensagem da pessoa: o que ela marcou e colou no composer.
- * `usada` é gravada pelo servidor no fim do turno que gerou artes com ela.
+ * `usada` é o id da resposta do bot cuja geração de artes usou a escolha, gravado pelo servidor no fim desse turno.
  */
 export const DadosDaEscolha = z.object({
   marcadas: z.array(z.uuid()).max(MAXIMO_MARCADAS),
   coladas: z.array(z.string().refine(ehChave, "Chave de arquivo inválida.")).max(MAXIMO_COLADAS),
-  usada: z.literal(true).optional(),
+  usada: z.string().min(1).max(200).optional(),
 });
 export type DadosDaEscolha = z.infer<typeof DadosDaEscolha>;
 
@@ -61,11 +61,26 @@ export function escolhaPendente(historico: readonly UIMessage[]): { mensagemId: 
   return null;
 }
 
-/** Grava na mensagem que a geração usou a escolha dela. */
-export const marcarUsada = (mensagens: UIMessage[], mensagemId: string): UIMessage[] =>
-  mensagens.map((m) =>
-    m.id !== mensagemId ? m : { ...m, parts: m.parts.map((p) => (ehParteDaEscolha(p) ? { ...p, data: { ...p.data, usada: true as const } } : p)) },
-  );
+const trocarUsada = (m: UIMessage, usada: string | undefined): UIMessage => ({
+  ...m,
+  parts: m.parts.map((p) => (ehParteDaEscolha(p) ? { ...p, data: { marcadas: p.data.marcadas, coladas: p.data.coladas, ...(usada && { usada }) } } : p)),
+});
+
+/** Grava na mensagem da escolha o id da resposta cuja geração a usou. */
+export const marcarUsada = (mensagens: UIMessage[], mensagemId: string, respostaId: string): UIMessage[] =>
+  mensagens.map((m) => (m.id === mensagemId ? trocarUsada(m, respostaId) : m));
+
+/**
+ * Refazer ou editar uma mensagem depois da escolha corta a resposta que a usou, e mantém o id da mensagem editada.
+ * Sem essa resposta no histórico, a escolha volta a valer para a próxima geração.
+ */
+export function reabrirEscolhas(historico: UIMessage[]): UIMessage[] {
+  const ids = new Set(historico.map((m) => m.id));
+  return historico.map((m) => {
+    const usada = escolhaDa(m)?.usada;
+    return usada && !ids.has(usada) ? trocarUsada(m, undefined) : m;
+  });
+}
 
 /** O modelo não vê as imagens; vê que a pessoa escolheu, para não pedir link nem dizer que não recebeu. */
 export function notaDaEscolha(p: { type: `data-${string}`; data: unknown }) {
@@ -78,8 +93,12 @@ export function notaDaEscolha(p: { type: `data-${string}`; data: unknown }) {
   return { type: "text" as const, text: `[A pessoa mandou com este pedido ${partes.join(" e ")}. ${destino}]` };
 }
 
-/** As âncoras que a geração deste turno usa e o aviso de que usou. As delegações do turno recebem as mesmas. */
+/** A geração usou a escolha quando ao menos uma imagem dela chegou ao modelo. Uma que não abriu não conta. */
+export const chegouAoModelo = (escolha: EscolhaDoPedido, carregadas: readonly Ancora[]) =>
+  carregadas.some((a) => (a.origem === "pedido" ? escolha.coladas.includes(a.arquivo) : escolha.marcadas.includes(a.id)));
+
+/** As âncoras que a geração deste turno usa e o aviso de que gerou com elas. As delegações do turno recebem as mesmas. */
 export interface ReferenciasDoTurno {
   carregar: (pilar: Pilar) => Promise<ReferenciaParaGerar[]>;
-  usar: () => void;
+  usar: (carregadas: readonly Ancora[]) => void;
 }

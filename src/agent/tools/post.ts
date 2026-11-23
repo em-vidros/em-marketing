@@ -152,7 +152,7 @@ export function toolsDePost(conversaId: string, referencias?: ReferenciasDoTurno
         const anexos = [...carregadas.slice(3).map((r) => r.imagem), ...baixadas.imagens];
 
         const artes = await generate3Arts({ postId: p.postId, brief: p.brief, formato: alvo, ...headline, direcao, referencias: carregadas.slice(0, 3), anexos });
-        referencias?.usar();
+        referencias?.usar(carregadas);
         const estado = await aplicar(conversaId, { tipo: "artes", artes });
 
         return {

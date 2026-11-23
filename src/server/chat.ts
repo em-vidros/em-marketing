@@ -12,7 +12,7 @@ import {
 } from "ai";
 import { z } from "zod";
 import { executar, type ResolverModelo } from "../agent";
-import { escolhaDoCliente, escolhaPendente, marcarUsada, notaDaEscolha, type ReferenciasDoTurno } from "../agent/pedido";
+import { chegouAoModelo, escolhaDoCliente, escolhaPendente, marcarUsada, notaDaEscolha, reabrirEscolhas, type ReferenciasDoTurno } from "../agent/pedido";
 import type { CarregarReferencias } from "../v2/referencias";
 import { configDoBot, situacaoDoBot } from "../agent/config";
 import { explicarErro } from "../agent/erros";
@@ -141,13 +141,13 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferenci
         await turno.terminar();
         return erro(juntada.status, juntada.erro);
       }
-      const { historico } = juntada;
+      const historico = reabrirEscolhas(juntada.historico);
       const pendente = escolhaPendente(historico);
       const escolhidas = pendente ? pendente.escolha.marcadas.length + pendente.escolha.coladas.length : 0;
       let usada = false;
       const referencias: ReferenciasDoTurno | undefined = carregarReferencias && {
         carregar: (pilar) => carregarReferencias({ pilar, escolha: pendente?.escolha, n: Math.max(3, escolhidas) }),
-        usar: () => void (usada = true),
+        usar: (carregadas) => void (usada ||= !!pendente && chegouAoModelo(pendente.escolha, carregadas)),
       };
       const result = await executar(conversa.botId, conversa.id, await convertToModelMessages(historico, { convertDataPart: notaDaEscolha }), {
         resolverModelo,
@@ -167,7 +167,9 @@ export function rotaDeChat({ resolverModelo, segredoAprovacao, carregarReferenci
           try {
             const salvas = messages.filter((m) => m.parts.length > 0);
             const fechadas = isAborted ? salvas.map(fecharToolsParadas) : salvas;
-            await gravarMensagens(conversa.id, usada && pendente ? marcarUsada(fechadas, pendente.mensagemId) : fechadas);
+            const resposta = fechadas.at(-1);
+            const usou = usada && pendente && resposta?.role === "assistant";
+            await gravarMensagens(conversa.id, usou ? marcarUsada(fechadas, pendente.mensagemId, resposta.id) : fechadas);
           } finally {
             await turno.terminar();
           }
