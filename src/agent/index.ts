@@ -2,7 +2,7 @@ import { isStepCount, streamText, type LanguageModel, type ModelMessage } from "
 import type { BotId } from "./bots";
 import { botsParaDelegar, detalheDoBot, instrucoesDe, type ConfigBot } from "./config";
 import { modelo } from "./models";
-import { registrarUso } from "../domain/uso";
+import { naConversa, registrarUso } from "../domain/uso";
 import { abrirConversa, postDaConversa, resumoDoPost } from "./post";
 import { APROVACAO, catalogo, type RodarDelegado } from "./tools";
 import type { ReferenciasDoTurno } from "./pedido";
@@ -25,6 +25,16 @@ export interface Opcoes {
 
 const doRegistry: ResolverModelo = (bot) => modelo(bot.modelo);
 
+/** Cada tool roda dentro da conversa: a imagem que ela gerar entra no custo da conversa e do post dela. */
+function naConversaDoTurno<T extends Record<string, { execute?: (...args: never[]) => unknown }>>(conversaId: string, tools: T): T {
+  return Object.fromEntries(
+    Object.entries(tools).map(([nome, t]) => {
+      const execute = t.execute;
+      return [nome, execute ? { ...t, execute: (...args: never[]) => naConversa(conversaId, () => execute(...args)) } : t];
+    }),
+  ) as T;
+}
+
 const SO_COM_O_USUARIO = new Set(["mostrar_artes", "escolher_arte"]);
 
 /**
@@ -42,7 +52,7 @@ export async function executar(botId: BotId, conversaId: string, messages: Model
     model: await resolverModelo(bot),
     instructions: instrucoesDe(bot, { delegada, estadoDoPost: resumoDoPost(await postDaConversa(conversaId)), equipe: await botsParaDelegar(bot) }),
     messages,
-    tools: await catalogo({ conversaId, botId, autor, rodar, referencias }),
+    tools: naConversaDoTurno(conversaId, await catalogo({ conversaId, botId, autor, rodar, referencias })),
     // Numa tarefa delegada ninguém vê a conversa: mostrar e escolher as artes só acontecem num turno com o usuário.
     activeTools: [...bot.tools, "lembrar" as const].filter((t) => !(delegada && SO_COM_O_USUARIO.has(t))),
     toolApproval: APROVACAO,
@@ -50,7 +60,21 @@ export async function executar(botId: BotId, conversaId: string, messages: Model
     // O post no formato ambos passa por 7 tools antes do resumo; 8 cortava o fluxo no fim.
     stopWhen: isStepCount(12),
     abortSignal,
-    onFinish: ({ totalUsage }) =>
-      registrarUso({ origem: `Bot ${bot.nome}`, modelo: bot.modelo.slice(bot.modelo.indexOf(":") + 1), entrada: totalUsage.inputTokens ?? 0, saida: totalUsage.outputTokens ?? 0, imagens: 0 }),
+    // Uma linha por passo: cada passo é uma chamada ao modelo, e a tarifa de prompt longo vale por chamada.
+    onFinish: async ({ steps }) => {
+      const nome = bot.modelo.slice(bot.modelo.indexOf(":") + 1);
+      for (const { usage } of steps) {
+        const uso = {
+          origem: `Bot ${bot.nome}`,
+          modelo: nome,
+          entrada: usage.inputTokens ?? 0,
+          saida: usage.outputTokens ?? 0,
+          cacheLido: usage.inputTokenDetails.cacheReadTokens ?? 0,
+          cacheEscrito: usage.inputTokenDetails.cacheWriteTokens ?? 0,
+          imagens: 0,
+        };
+        await registrarUso(uso, conversaId);
+      }
+    },
   });
 }

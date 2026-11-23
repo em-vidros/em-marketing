@@ -1,67 +1,80 @@
+import { z } from "zod";
 import { primeira } from "../db";
 import { q } from "../v2/banco";
 
 /**
- * O crédito da OpenAI, lido de /v1/dashboard/billing/credit_grants: o saldo disponível e cada
- * depósito com valor e data. Esse endpoint só aceita a chave de sessão do painel (sess-...), que
- * não expira; ela fica em OPENAI_SESSION_KEY. Chave de API e chave de admin recebem 403.
+ * O crédito da OpenAI, calculado aqui: a OpenAI não deixa ler o saldo com chave de API.
+ * Vale o último saldo que a equipe informou, mais os depósitos depois dele, menos o custo
+ * medido em uso_api desde então. Informar o saldo de novo corrige a diferença.
  */
-export interface Deposito {
+export interface Movimento {
+  id: string;
+  tipo: "saldo" | "deposito";
   valor: number;
-  usado: number;
+  por: string;
   /** epoch ms. */
   em: number;
-  expiraEm: number | null;
 }
 
 export type Saldo =
-  | { estado: "sem-chave" }
-  | { estado: "erro"; erro: string }
-  | { estado: "ok"; disponivel: number; depositado: number; usado: number; depositos: Deposito[]; lidoEm: number };
+  | { estado: "sem-saldo"; movimentos: Movimento[] }
+  | {
+      estado: "ok";
+      disponivel: number;
+      /** O saldo informado mais os depósitos depois dele: a barra mostra quanto disso resta. */
+      total: number;
+      gasto: number;
+      /** epoch ms do último saldo informado. */
+      desde: number;
+      movimentos: Movimento[];
+    };
 
-export interface RespostaDaOpenAI {
-  total_granted?: number;
-  total_used?: number;
-  total_available?: number;
-  grants?: { data?: { grant_amount?: number; used_amount?: number; effective_at?: number; expires_at?: number | null }[] };
-  error?: { message?: string } | string;
+export const NovoMovimento = z.object(
+  {
+    tipo: z.enum(["saldo", "deposito"], { error: "O tipo precisa ser saldo ou deposito." }),
+    valor: z
+      .number({ error: "O valor precisa ser um número." })
+      .min(0, "O valor não pode ser negativo.")
+      .max(100_000, "O valor passa de US$ 100.000."),
+  },
+  { error: "Mande um objeto JSON." },
+);
+
+const MOVIMENTOS = 20;
+
+/** O saldo dos movimentos ativos, do mais novo para o mais velho, e do custo medido depois do último saldo informado. */
+export function calcularSaldo(movimentos: Movimento[], gastoDesde: number): Saldo {
+  const base = movimentos.find((m) => m.tipo === "saldo");
+  if (!base) return { estado: "sem-saldo", movimentos };
+  const total = base.valor + movimentos.filter((m) => m.tipo === "deposito" && m.em > base.em).reduce((s, m) => s + m.valor, 0);
+  return { estado: "ok", disponivel: total - gastoDesde, total, gasto: gastoDesde, desde: base.em, movimentos };
 }
 
-const CHAVE_DO_CACHE = "credito_openai";
-const CACHE_MS = 5 * 60_000;
-
-/** A resposta da OpenAI no formato da tela, depósitos do mais novo para o mais velho. */
-export function lerResposta(r: RespostaDaOpenAI, lidoEm: number): Extract<Saldo, { estado: "ok" }> {
-  const depositos = (r.grants?.data ?? [])
-    .map((g) => ({ valor: g.grant_amount ?? 0, usado: g.used_amount ?? 0, em: (g.effective_at ?? 0) * 1000, expiraEm: g.expires_at ? g.expires_at * 1000 : null }))
-    .sort((a, b) => b.em - a.em);
-  return { estado: "ok", disponivel: r.total_available ?? 0, depositado: r.total_granted ?? 0, usado: r.total_used ?? 0, depositos, lidoEm };
+async function movimentosAtivos(): Promise<Movimento[]> {
+  return q<Movimento>`SELECT id, tipo, valor, por, (extract(epoch FROM em) * 1000)::double precision AS em
+    FROM movimentos_do_saldo WHERE removido_em IS NULL ORDER BY em DESC`;
 }
 
-async function guardado(): Promise<Extract<Saldo, { estado: "ok" }> | null> {
-  const linha = await primeira(q<{ valor: string }>`SELECT valor FROM configuracoes WHERE chave = ${CHAVE_DO_CACHE}`);
-  return linha ? JSON.parse(linha.valor) : null;
+export async function saldo(): Promise<Saldo> {
+  const movimentos = await movimentosAtivos();
+  const base = movimentos.find((m) => m.tipo === "saldo");
+  const gasto = base
+    ? ((await primeira(q<{ gasto: number }>`SELECT coalesce(sum(custo), 0)::double precision AS gasto FROM uso_api WHERE em > ${base.em}`))?.gasto ?? 0)
+    : 0;
+  const s = calcularSaldo(movimentos, gasto);
+  return { ...s, movimentos: s.movimentos.slice(0, MOVIMENTOS) };
 }
 
-/**
- * Do banco se a leitura tem menos de 5 minutos, para todas as funções da Vercel dividirem uma chamada só.
- * Se a OpenAI falhar, vale a última leitura boa; sem nenhuma, o erro vai para a tela.
- */
-export async function saldo(chave = process.env.OPENAI_SESSION_KEY): Promise<Saldo> {
-  if (!chave) return { estado: "sem-chave" };
-  const ultimo = await guardado();
-  if (ultimo && Date.now() - ultimo.lidoEm < CACHE_MS) return ultimo;
-  try {
-    const res = await fetch("https://api.openai.com/v1/dashboard/billing/credit_grants", {
-      headers: { authorization: `Bearer ${chave}` },
-      signal: AbortSignal.timeout(8000),
-    });
-    const corpo = (await res.json().catch(() => ({}))) as RespostaDaOpenAI;
-    if (!res.ok) throw new Error(typeof corpo.error === "string" ? corpo.error : (corpo.error?.message ?? `A OpenAI respondeu ${res.status}.`));
-    const novo = lerResposta(corpo, Date.now());
-    await q`INSERT INTO configuracoes (chave, valor) VALUES (${CHAVE_DO_CACHE}, ${JSON.stringify(novo)}) ON CONFLICT (chave) DO UPDATE SET valor = excluded.valor`;
-    return novo;
-  } catch (e) {
-    return ultimo ?? { estado: "erro", erro: e instanceof Error ? e.message : String(e) };
-  }
+/** O relógio é o do servidor, o mesmo do `em` de uso_api: o relógio do banco poderia deixar de fora a chamada do mesmo instante. */
+export async function informar(m: z.output<typeof NovoMovimento>, por: string, agora = Date.now()): Promise<Movimento> {
+  const [novo] = await q<Movimento>`INSERT INTO movimentos_do_saldo (tipo, valor, por, em) VALUES (${m.tipo}, ${m.valor}, ${por}, to_timestamp(${agora}::double precision / 1000))
+    RETURNING id, tipo, valor, por, (extract(epoch FROM em) * 1000)::double precision AS em`;
+  return novo!;
+}
+
+/** false quando o movimento não existe. Remover e restaurar duas vezes dá no mesmo. */
+export async function removerMovimento(id: string, removido: boolean): Promise<boolean> {
+  if (!z.uuid().safeParse(id).success) return false;
+  const linhas = await q`UPDATE movimentos_do_saldo SET removido_em = ${removido ? new Date() : null} WHERE id = ${id} RETURNING id`;
+  return linhas.length > 0;
 }

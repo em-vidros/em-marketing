@@ -4,6 +4,7 @@ import type { ConversaDaPauta, Dia, ItemAgendado, ItemCalendario, ItemPauta, Nov
 import type { DataDaEquipe, NovaData } from "../domain/scheduler/calendar";
 import type { PedidoDeAgendamento, Pronto, Reagendado } from "../agent/fila";
 import type { EstadoDaChave, Provedor } from "../domain/chaves";
+import type { Movimento } from "../domain/saldo";
 import type { Edicao } from "../v2/artes";
 import type { Arte, Referencia } from "../v2/schema";
 import type { ApiConversas } from "./componentes/menu/conversas";
@@ -107,6 +108,13 @@ export const apiArtes = {
 export type ReferenciaDaApi = Omit<Referencia, "criadaEm" | "removidaEm"> & { criadaEm: string; removidaEm: string | null };
 
 /** As imagens de inspiração da Biblioteca (src/v2/api.ts). Enviar espera a IA ler a imagem, uns segundos. */
+/** O saldo informado da OpenAI (domain/saldo.ts). */
+export const apiSaldo = {
+  informar: (tipo: "saldo" | "deposito", valor: number) => comCorpo<Movimento>("/api/saldo", "POST", { tipo, valor }),
+  remover: (id: string) => semCorpo(`/api/saldo/${id}`, "DELETE"),
+  restaurar: (id: string) => semCorpo(`/api/saldo/${id}/restaurar`, "POST"),
+};
+
 export const apiReferencias = {
   enviar: async (arquivo: File) => {
     const form = new FormData();
