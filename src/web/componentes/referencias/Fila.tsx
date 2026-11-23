@@ -86,7 +86,7 @@ function Miniatura({
         {biblioteca && (
           <span
             aria-hidden="true"
-            className="absolute bottom-[3px] left-[3px] grid size-[18px] place-items-center rounded-full bg-material-fino text-tinta shadow-[0_0_0_0.5px_var(--color-separador),0_1px_2px_var(--color-sombra-perto)] backdrop-blur-[8px] backdrop-saturate-180"
+            className="absolute bottom-[3px] left-[3px] grid size-[18px] place-items-center rounded-full material-fino text-tinta shadow-[0_0_0_0.5px_var(--color-separador),0_1px_2px_var(--color-sombra-perto)]"
           >
             <svg viewBox="0 0 12 12" width="10" height="10">
               <path d="M3 1.5h6v9L6 8.5 3 10.5z" fill="currentColor" />

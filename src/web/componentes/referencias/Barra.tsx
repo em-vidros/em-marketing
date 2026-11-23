@@ -34,7 +34,7 @@ export function BarraDaEscolha({ controle }: { controle: ControleDaEscolha }) {
           e.currentTarget.value = "";
         }}
       />
-      <span role="status" className={espera ? "truncate pl-1 text-legenda" : "sr-only"}>
+      <span role="status" className={espera ? "flex-none pl-1 text-legenda whitespace-nowrap" : "sr-only"}>
         {espera === "subindo" ? (
           <span className="text-tinta-3">Subindo a imagem…</span>
         ) : espera === "falhou" ? (
@@ -47,7 +47,8 @@ export function BarraDaEscolha({ controle }: { controle: ControleDaEscolha }) {
           onClick={tentar}
           className="pressiona h-7 flex-none cursor-pointer rounded-full bg-preenchimento px-3 text-nota font-medium whitespace-nowrap hover:bg-preenchimento-forte"
         >
-          Tentar de novo
+          {/* Abaixo de 380 px o "de novo" não cabe ao lado do "Não subiu." e do Enviar; o leitor de tela ouve inteiro. */}
+          Tentar<span className="max-[379px]:sr-only"> de novo</span>
         </button>
       )}
     </>
@@ -70,8 +71,8 @@ export function SoltarAqui() {
           <path d="M18.5 16v3M17 17.5h3" />
         </svg>
       </span>
-      <p className="text-[22px] font-bold tracking-[-0.02em]">Solte para usar neste pedido</p>
-      <p className="max-w-sm text-[15px] text-pretty text-tinta-2">
+      <p className="text-titulo-grande font-bold">Solte para usar neste pedido</p>
+      <p className="max-w-sm text-titulo text-pretty text-tinta-2">
         Até 3 imagens PNG, JPEG ou WebP, de até 10 MB cada. Elas valem só para a próxima mensagem.
       </p>
     </div>

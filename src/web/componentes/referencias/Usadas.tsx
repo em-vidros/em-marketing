@@ -1,6 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { AnimatePresence, motion, useReducedMotion, type PanInfo } from "motion/react";
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { Ancora } from "../../../domain/art/pipeline";
 import { apiImagensDoPedido } from "../../api";
 import { DESKTOP, useMedia } from "../../media";
@@ -35,6 +35,7 @@ export function ReferenciasUsadas({ artes }: { artes: readonly ComAncora[] }) {
   const [aberta, setAberta] = useState<Aberta | null>(null);
   const [aberto, setAberto] = useState(false);
   const origens = useRef(new Map<number, HTMLButtonElement>());
+  const titulo = useId();
   if (!artes.some((a) => "ancora" in a)) return null;
 
   function abrir(variante: number, ancora: Ancora) {
@@ -46,30 +47,31 @@ export function ReferenciasUsadas({ artes }: { artes: readonly ComAncora[] }) {
   }
 
   return (
-    <section aria-labelledby="referencias-usadas" className="flex max-w-2xl flex-col gap-1">
-      <h3 id="referencias-usadas" className="text-legenda font-medium text-tinta-3">
+    <section aria-labelledby={titulo} className="flex max-w-2xl flex-col gap-1">
+      <h3 id={titulo} className="text-legenda font-medium text-tinta-3">
         Referências usadas
       </h3>
       <ul className="grid grid-cols-3 gap-2.5 sm:gap-3">
         {artes.map((a) => (
-          <li key={a.variante} className="min-w-0">
+          <li key={a.variante} className="@container min-w-0">
             {a.ancora ? (
               <button
                 ref={(b) => void (b ? origens.current.set(a.variante, b) : origens.current.delete(a.variante))}
                 type="button"
                 onClick={() => abrir(a.variante, a.ancora!)}
                 aria-label={`Variação ${a.variante}: ${a.ancora.origem === "biblioteca" ? a.ancora.leitura : "imagem deste pedido"}. Abrir a referência`}
-                className="pressiona -m-1 flex w-[calc(100%+8px)] min-w-0 cursor-pointer items-center gap-2 rounded-[12px] p-1 text-left hover:bg-preenchimento"
+                className="pressiona -m-1 flex w-[calc(100%+8px)] min-w-0 cursor-pointer items-center gap-2 rounded-[12px] p-1 text-left hover:bg-preenchimento @max-[7rem]:flex-col @max-[7rem]:items-start @max-[7rem]:gap-1.5"
               >
                 <Miniatura src={apiImagensDoPedido.url(a.ancora.arquivo)} tamanho={desktop ? 36 : 28} />
                 <Rotulo variante={a.variante} leitura={desktop ? (a.ancora.origem === "biblioteca" ? a.ancora.leitura : "Imagem deste pedido") : null} />
               </button>
             ) : (
-              <div className="-m-1 flex min-w-0 items-center gap-2 p-1">
-                <span aria-hidden="true" className={`flex-none rounded-[8px] bg-preenchimento ${desktop ? "size-9" : "size-7"}`} />
+              <div className="-m-1 flex min-w-0 items-center gap-2 p-1 @max-[7rem]:flex-col @max-[7rem]:items-start @max-[7rem]:gap-1.5">
+                {/* Entre 7 e 8 rem a célula não cabe o quadrado e o "Sem referência" lado a lado: o quadrado sai, e a falta da imagem já diz. */}
+                <span aria-hidden="true" className={`flex-none rounded-miniatura bg-preenchimento @min-[7rem]:@max-[8rem]:hidden ${desktop ? "size-9" : "size-7"}`} />
                 <span className="flex min-w-0 flex-col items-start">
-                  <span className="text-legenda font-semibold text-tinta">Variação {a.variante}</span>
-                  <span className="mt-0.5 rounded-full bg-preenchimento px-1.5 text-legenda-2/[18px] text-tinta-3">Sem referência</span>
+                  <span className="text-legenda font-semibold whitespace-nowrap text-tinta">Variação {a.variante}</span>
+                  <span className="mt-0.5 rounded-full bg-preenchimento px-1.5 text-legenda-2/[18px] whitespace-nowrap text-tinta-2">Sem referência</span>
                 </span>
               </div>
             )}
@@ -83,8 +85,8 @@ export function ReferenciasUsadas({ artes }: { artes: readonly ComAncora[] }) {
 
 function Miniatura({ src, tamanho }: { src: string; tamanho: number }) {
   return (
-    <span className="relative flex-none rounded-[8px] after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_0.5px_var(--color-separador)]">
-      <img src={src} alt="" loading="lazy" width={tamanho} height={tamanho} style={{ width: tamanho, height: tamanho }} className="block rounded-[8px] bg-painel object-cover" />
+    <span className="relative flex-none rounded-miniatura after:pointer-events-none after:absolute after:inset-0 after:rounded-[inherit] after:shadow-[inset_0_0_0_0.5px_var(--color-separador)]">
+      <img src={src} alt="" loading="lazy" width={tamanho} height={tamanho} style={{ width: tamanho, height: tamanho }} className="block rounded-miniatura bg-painel object-cover" />
     </span>
   );
 }
@@ -160,7 +162,7 @@ function Visor({ aberta, aberto, fechar, desktop }: { aberta: Aberta | null; abe
                 <img src={apiImagensDoPedido.url(ancora.arquivo)} alt="" draggable={false} className="block max-h-[60dvh] w-full flex-none bg-painel object-cover" />
                 <Dialog.Close
                   aria-label="Fechar"
-                  className="pressiona absolute top-3 right-3 grid size-[26px] cursor-pointer place-items-center rounded-full bg-material-fino text-tinta shadow-[0_0_0_0.5px_var(--color-separador),0_1px_3px_var(--color-sombra-perto)] backdrop-blur-[8px] after:absolute after:-inset-2"
+                  className="pressiona absolute top-3 right-3 grid size-[26px] cursor-pointer place-items-center rounded-full material-fino text-tinta shadow-[0_0_0_0.5px_var(--color-separador),0_1px_3px_var(--color-sombra-perto)] after:absolute after:-inset-2"
                 >
                   <svg aria-hidden="true" viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
                     <path d="M3 3l6 6M9 3l-6 6" />
@@ -168,7 +170,7 @@ function Visor({ aberta, aberto, fechar, desktop }: { aberta: Aberta | null; abe
                 </Dialog.Close>
                 <div className="flex min-h-0 flex-col items-start gap-1.5 overflow-y-auto px-[18px] pt-3.5 pb-[18px]">
                   <Dialog.Title className="text-legenda font-normal text-tinta-3">{legenda}</Dialog.Title>
-                  {ancora.origem === "biblioteca" && <Dialog.Description className="text-[15px]/snug text-pretty">{ancora.leitura}</Dialog.Description>}
+                  {ancora.origem === "biblioteca" && <Dialog.Description className="text-titulo text-pretty">{ancora.leitura}</Dialog.Description>}
                   <div className="mt-2">
                     {ancora.origem === "pedido" ? (
                       <GuardarNaBiblioteca chave={ancora.arquivo} />

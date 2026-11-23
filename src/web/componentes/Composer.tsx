@@ -49,7 +49,7 @@ export function Composer({
   return (
     <form
       onSubmit={aoEnviar}
-      className="sticky bottom-0 z-[1] bg-linear-to-t from-fundo from-10% to-fundo/0 to-45% px-4 pt-2 pb-[max(20px,env(safe-area-inset-bottom))] sm:px-6"
+      className="sticky bottom-0 z-[1] bg-linear-to-t from-fundo from-25% to-fundo/0 to-55% px-4 pt-2 pb-[max(20px,env(safe-area-inset-bottom))] sm:px-6"
     >
       <div
         onClick={(e) => {

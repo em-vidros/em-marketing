@@ -42,7 +42,7 @@ export function Seletor({ marcadas, alternar }: { marcadas: readonly ReferenciaD
   const conteudoDoBotao = (
     <>
       <IconeReferencias />
-      <span>Referências</span>
+      <span className="max-sm:sr-only">Referências</span>
       {n > 0 && (
         <span className="h-[18px] min-w-[18px] rounded-full bg-tinta px-[5px] text-center text-legenda-2/[18px] font-semibold text-sobre-tinta tabular-nums">{n}</span>
       )}
@@ -135,7 +135,7 @@ function Conteudo({
       <div className={`flex flex-none items-start gap-3 ${folha ? "px-5 pt-0.5 pb-3.5" : "pt-4 pr-4 pb-3 pl-[18px]"}`}>
         <div className="min-w-0 flex-1">
           <Titulo className={folha ? "text-titulo-grande font-bold" : "text-titulo font-semibold"}>Referências da Biblioteca</Titulo>
-          <Descricao className={folha ? "mt-1.5 text-[15px] tracking-[-0.004em] text-tinta-3" : "mt-0.5 text-legenda text-tinta-3"}>
+          <Descricao className={folha ? "mt-1.5 text-titulo text-tinta-3" : "mt-0.5 text-legenda text-tinta-3"}>
             Valem só para o próximo pedido.
           </Descricao>
         </div>
@@ -160,7 +160,7 @@ function Conteudo({
               <path d="M12 10v4.5" strokeLinecap="round" />
               <circle cx="12" cy="17.2" r=".9" fill="var(--color-erro)" stroke="none" />
             </svg>
-            <p className="text-[15px] font-semibold">Não deu para carregar as referências.</p>
+            <p className="text-titulo font-semibold">Não deu para carregar as referências.</p>
             <p className="text-nota text-pretty text-tinta-2">{carga.erro.message}</p>
             <button
               type="button"
@@ -175,7 +175,7 @@ function Conteudo({
             <span className="mb-2 text-tinta-2">
               <IconeReferencias tamanho={36} />
             </span>
-            <p className="text-[15px] font-semibold">A Biblioteca ainda não tem referências</p>
+            <p className="text-titulo font-semibold">A Biblioteca ainda não tem referências</p>
             <p className="text-nota text-pretty text-tinta-2">
               Lá você guarda as imagens que inspiram as artes. Depois elas aparecem aqui para marcar em qualquer pedido.
             </p>
@@ -271,7 +271,7 @@ function Grade({
               <img src={apiReferencias.imagem(r)} alt="" loading="lazy" className="block size-full object-cover group-data-[estado=marcada]/ref:opacity-[.86]" />
               <span
                 aria-hidden="true"
-                className="absolute top-1.5 right-1.5 grid size-[22px] place-items-center rounded-full bg-preenchimento text-transparent shadow-[inset_0_0_0_1.5px_var(--color-superficie),0_1px_3px_var(--color-sombra-longe)] backdrop-blur-[8px] group-data-[estado=bloqueada]/ref:hidden group-data-[estado=marcada]/ref:bg-tinta group-data-[estado=marcada]/ref:text-sobre-tinta"
+                className="absolute top-1.5 right-1.5 grid size-[22px] place-items-center rounded-full material-fino bg-preenchimento text-transparent shadow-[inset_0_0_0_1.5px_var(--color-superficie),0_1px_3px_var(--color-sombra-longe)] group-data-[estado=bloqueada]/ref:hidden group-data-[estado=marcada]/ref:bg-tinta group-data-[estado=marcada]/ref:text-sobre-tinta"
               >
                 <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M3.5 8.5l3 3 6-7" />

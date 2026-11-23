@@ -499,7 +499,6 @@ function Chat({
 
   const erro = chat.error ? lerErro(chat.error) : null;
   const ultima = chat.messages.at(-1);
-  const turno = ultima?.role === "assistant" ? ultima : null;
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1">

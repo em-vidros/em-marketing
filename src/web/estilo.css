@@ -51,7 +51,7 @@
   --blur-desfoque-grosso: 40px;
 
   --shadow-material: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 0.5px var(--color-separador), 0 1px 3px var(--color-sombra-perto), 0 12px 32px -6px var(--color-sombra-longe);
-  --shadow-material-foco: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 0.5px var(--color-borda-campo), 0 0 0 4px var(--color-preenchimento), 0 1px 3px var(--color-sombra-perto), 0 12px 32px -6px var(--color-sombra-longe);
+  --shadow-material-foco: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 1px var(--color-borda-campo), 0 0 0 4px var(--color-preenchimento), 0 1px 3px var(--color-sombra-perto), 0 12px 32px -6px var(--color-sombra-longe);
   --shadow-popover: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 0.5px var(--color-separador), 0 2px 8px var(--color-sombra-perto), 0 24px 56px -8px var(--color-sombra-longe);
   --shadow-capsula: inset 0 0.5px 0 var(--color-borda-material), 0 0 0 0.5px var(--color-separador), 0 4px 14px -4px var(--color-sombra-longe);
 
@@ -208,6 +208,18 @@
 @utility material-grosso {
   background-color: var(--color-material-grosso);
   backdrop-filter: blur(var(--blur-desfoque-grosso)) saturate(180%);
+}
+/*
+ * Os botões pequenos de vidro sobre uma imagem. A troca sem transparência fica dentro da utility, na camada dela,
+ * para um estado como bg-tinta na marcada continuar valendo por cima.
+ */
+@utility material-fino {
+  background-color: var(--color-material-fino);
+  backdrop-filter: blur(8px) saturate(180%);
+  @media (prefers-reduced-transparency: reduce) {
+    backdrop-filter: none;
+    background-color: var(--color-superficie);
+  }
 }
 
 @media (prefers-reduced-transparency: reduce) {
