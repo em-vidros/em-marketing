@@ -39,12 +39,12 @@ export function App() {
 
   useEffect(() => {
     if (sessao.isPending) return;
-    if (!logado && rota.tela !== "entrar") navegar("/entrar", { substituir: true });
+    if (!logado && rota.tela !== "entrar") navegar(`/entrar?volta=${encodeURIComponent(location.pathname + location.search)}`, { substituir: true });
     if (logado && rota.tela === "entrar") navegar("/", { substituir: true });
   }, [sessao.isPending, logado, rota.tela]);
 
   if (sessao.isPending) return null;
-  if (!sessao.data) return rota.tela === "entrar" ? <Entrar /> : null;
+  if (!sessao.data) return rota.tela === "entrar" ? <Entrar comGoogle={rota.comGoogle} /> : null;
   if (rota.tela === "entrar") return null;
   return <Shell rota={rota} email={sessao.data.user.email} />;
 }

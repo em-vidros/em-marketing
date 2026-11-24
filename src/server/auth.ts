@@ -1,6 +1,8 @@
-import { betterAuth, type BetterAuthOptions } from "better-auth";
+import { betterAuth, type BetterAuthOptions, type BetterAuthPlugin } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { APIError } from "better-auth/api";
+import { APIError, createAuthEndpoint } from "better-auth/api";
+import { setSessionCookie } from "better-auth/cookies";
+import { z } from "zod";
 import { banco } from "../v2/banco";
 import { account, session, user, verification } from "../v2/schema";
 
@@ -38,6 +40,29 @@ const google =
 /** Como a tela de entrar oferece o login. A senha só liga com LOGIN_POR_SENHA=1, no `.env` local e nos testes; em produção a única porta é o Google. */
 export const modosDeEntrar = { senha: process.env.LOGIN_POR_SENHA === "1", google: Boolean(google) } as const;
 
+/**
+ * Abre a sessão de quem o EM Hub confirmou (entradaPeloHub.ts). Sem caminho, o endpoint só existe para o
+ * servidor: o handler de /api/auth não o expõe, então ninguém abre sessão mandando um e-mail.
+ */
+const entradaPeloHub = {
+  id: "entrada-pelo-hub",
+  endpoints: {
+    abrirSessaoPeloHub: createAuthEndpoint.serverOnly(
+      { method: "POST", body: z.object({ email: z.string(), nome: z.string() }) },
+      async (ctx) => {
+        const { internalAdapter } = ctx.context;
+        const email = ctx.body.email.toLowerCase();
+        const usuario =
+          (await internalAdapter.findUserByEmail(email))?.user ??
+          (await internalAdapter.createUser({ email, name: ctx.body.nome || email, emailVerified: true }, { method: "em-hub" }));
+        const sessao = await internalAdapter.createSession(usuario.id);
+        await setSessionCookie(ctx, { session: sessao, user: usuario });
+        return ctx.json({ ok: true });
+      },
+    ),
+  },
+} satisfies BetterAuthPlugin;
+
 function opcoes() {
   return {
     basePath: "/api/auth",
@@ -48,6 +73,7 @@ function opcoes() {
     }),
     database: drizzleAdapter(banco(), { provider: "pg", schema: { user, session, account, verification } }),
     socialProviders: google,
+    plugins: [entradaPeloHub],
     emailAndPassword: { enabled: modosDeEntrar.senha, minPasswordLength: 6 },
     account: { accountLinking: { enabled: true, trustedProviders: ["google"] } },
     session: { cookieCache: { enabled: true, maxAge: 5 * 60 } },
