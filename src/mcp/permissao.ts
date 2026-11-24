@@ -12,18 +12,25 @@ export interface Chamador {
 /** O id com que o EM Hub registra este App. Token emitido para outro App não entra. */
 export const ID_NO_HUB = "em-marketing";
 
-/** O token é `corpo.assinatura`, os dois em base64url, assinado com Ed25519. `chavePublica` é o SPKI DER em base64. */
-export function lerToken(token: string, chavePublica: string, agora = Date.now()): Chamador | null {
+/**
+ * O token é `corpo.assinatura`, os dois em base64url, assinado com Ed25519. `chavePublica` é o SPKI DER em base64.
+ * O `prefixo` entra só na assinatura e separa os usos da mesma chave do Hub: o token do MCP vai sem prefixo.
+ */
+export function corpoAssinadoPeloHub(token: string, chavePublica: string, prefixo = ""): unknown {
   const [corpo, assinatura, sobra] = token.split(".");
   if (!corpo || !assinatura || sobra !== undefined) return null;
   try {
     const chave = createPublicKey({ key: Buffer.from(chavePublica, "base64"), format: "der", type: "spki" });
-    if (!verify(null, Buffer.from(corpo), chave, Buffer.from(assinatura, "base64url"))) return null;
-    const chamador = JSON.parse(Buffer.from(corpo, "base64url").toString("utf8")) as Chamador;
-    return chamador.app === ID_NO_HUB && chamador.exp * 1000 > agora ? chamador : null;
+    if (!verify(null, Buffer.from(prefixo + corpo), chave, Buffer.from(assinatura, "base64url"))) return null;
+    return JSON.parse(Buffer.from(corpo, "base64url").toString("utf8"));
   } catch {
     return null;
   }
+}
+
+export function lerToken(token: string, chavePublica: string, agora = Date.now()): Chamador | null {
+  const chamador = corpoAssinadoPeloHub(token, chavePublica) as Chamador | null;
+  return chamador?.app === ID_NO_HUB && chamador.exp * 1000 > agora ? chamador : null;
 }
 
 /** Sem HUB_CHAVE_PUBLICA ninguém entra: o MCP não abre por engano. */
