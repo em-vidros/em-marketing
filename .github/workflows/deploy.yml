@@ -10,7 +10,7 @@ on:
 
 jobs:
   build-and-deploy:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -28,7 +28,10 @@ jobs:
           context: .
           push: true
           tags: ghcr.io/em-vidros/em-marketing:latest
+      # O watchtower só responde dentro da rede do servidor, que o runner hospedado não alcança.
+      # Falhar aqui não derruba o job: a imagem já subiu e o watchtower puxa no próximo ciclo.
       - name: Trigger watchtower
+        continue-on-error: true
         run: |
           curl -fsS -X POST --max-time 90 \
             -H "Authorization: Bearer ${{ secrets.WATCHTOWER_TOKEN }}" \
