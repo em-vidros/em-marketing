@@ -3,15 +3,14 @@ import { ACEITOS, type ControleDaEscolha } from "./escolha";
 import { Seletor } from "./Seletor";
 
 /**
- * A esquerda da barra do composer de um bot que gera artes: o seletor da Biblioteca, o anexar (o caminho do celular,
- * onde não há colar nem soltar) e, quando uma imagem segura a mensagem, por quê.
+ * A esquerda da barra do composer de um bot que gera artes: o anexar (o caminho do celular, onde não há colar
+ * nem soltar), o seletor da Biblioteca e, quando uma imagem segura a mensagem, por quê.
  */
 export function BarraDaEscolha({ controle }: { controle: ControleDaEscolha }) {
   const { escolha, espera, alternar, colar, tentar } = controle;
   const arquivo = useRef<HTMLInputElement>(null);
   return (
     <>
-      <Seletor marcadas={escolha.marcadas} alternar={alternar} />
       <button
         type="button"
         aria-label="Anexar imagem ao pedido"
@@ -23,6 +22,7 @@ export function BarraDaEscolha({ controle }: { controle: ControleDaEscolha }) {
           <path d="M10 4.25v11.5M4.25 10h11.5" />
         </svg>
       </button>
+      <Seletor marcadas={escolha.marcadas} alternar={alternar} />
       <input
         ref={arquivo}
         type="file"
