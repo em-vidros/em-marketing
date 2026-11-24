@@ -44,6 +44,8 @@ describe("voltaSegura", () => {
     ["/\\mal.exemplo/x", "/"],
     ["/\t/mal.exemplo/x", "/"],
     ["https://mal.exemplo/x", "/"],
+    ["/.//mal.exemplo/x", "/"],
+    ["//", "/"],
     [null, "/"],
     ["/c/abc?aba=config", "/c/abc?aba=config"],
   ])("%p volta para %p", (volta, destino) => {
@@ -51,20 +53,35 @@ describe("voltaSegura", () => {
   });
 });
 
-const cookies = (res: Response, ...antes: string[]) => [...antes, ...res.headers.getSetCookie().map((c) => c.split(";")[0]!)].filter((c) => !c.endsWith("=")).join("; ");
+/** Como o navegador guarda: cookie de mesmo nome sobrescreve, e valor vazio apaga. */
+function cookies(res: Response, antes = "") {
+  const pote = new Map(antes.split("; ").filter(Boolean).map((c) => c.split(/=(.*)/s) as [string, string]));
+  for (const c of res.headers.getSetCookie()) {
+    const [nome, valor] = c.split(";")[0]!.split(/=(.*)/s) as [string, string];
+    if (valor) pote.set(nome, valor);
+    else pote.delete(nome);
+  }
+  return [...pote].map(([nome, valor]) => `${nome}=${valor}`).join("; ");
+}
 
 /** O fluxo inteiro com Request reais: GET inicia, o Hub devolve o bilhete por POST e a sessão abre a rota protegida. */
 async function entrarPeloHub(email: string, admin: boolean) {
-  const ida = iniciarEntrada(new Request("https://mkt.exemplo/api/entrar?volta=/biblioteca"), hub);
+  const { ida, estado } = pedirAoHub();
   const destino = new URL(ida.headers.get("location")!);
   expect(destino.origin + destino.pathname).toBe("https://hub.exemplo/api/apps/em-marketing/entrar");
-  const estado = destino.searchParams.get("estado")!;
 
-  const form = new URLSearchParams({ token: bilhete({ email, admin, estado }), estado });
-  const volta = await confirmarEntrada(new Request("https://mkt.exemplo/api/entrar", { method: "POST", headers: { cookie: cookies(ida) }, body: form }), hub);
+  const volta = await voltarDoHub(estado, cookies(ida), bilhete({ email, admin, estado }));
   expect([volta.status, volta.headers.get("location")]).toEqual([303, "/biblioteca"]);
   return usuarioDa(new Request("https://mkt.exemplo/api/eu", { headers: { cookie: cookies(volta) } }));
 }
+
+const pedirAoHub = () => {
+  const ida = iniciarEntrada(new Request("https://mkt.exemplo/api/entrar?volta=/biblioteca"), hub);
+  return { ida, estado: new URL(ida.headers.get("location")!).searchParams.get("estado")! };
+};
+
+const voltarDoHub = (estado: string, cookie: string, token = bilhete({ estado })) =>
+  confirmarEntrada(new Request("https://mkt.exemplo/api/entrar", { method: "POST", headers: { cookie }, body: new URLSearchParams({ token, estado }) }), hub);
 
 describe("entrada pelo EM Hub", () => {
   test.each([
@@ -74,9 +91,18 @@ describe("entrada pelo EM Hub", () => {
     expect(await entrarPeloHub(email, adminNoBilhete)).toMatchObject({ email, admin });
   });
 
-  test("sem o cookie da ida, o bilhete não abre sessão e a pessoa cai no login com Google", async () => {
-    const form = new URLSearchParams({ token: bilhete(), estado: ESTADO });
-    const res = await confirmarEntrada(new Request("https://mkt.exemplo/api/entrar", { method: "POST", body: form }), hub);
+  test("duas abas indo ao Hub ao mesmo tempo entram as duas", async () => {
+    const a = pedirAoHub();
+    const b = pedirAoHub();
+    const juntos = cookies(b.ida, cookies(a.ida));
+    const respostas = [await voltarDoHub(a.estado, juntos), await voltarDoHub(b.estado, juntos)];
+    expect(respostas.map((r) => r.headers.get("location"))).toEqual(["/biblioteca", "/biblioteca"]);
+  });
+
+  test("o bilhete de outra ida não abre sessão, mesmo com o navegador no meio de uma ida própria", async () => {
+    const daVitima = pedirAoHub();
+    const doAtacante = pedirAoHub();
+    const res = await voltarDoHub(doAtacante.estado, cookies(daVitima.ida));
     expect([res.status, res.headers.get("location")]).toEqual([303, "/entrar/google?error=hub"]);
     expect(res.headers.getSetCookie().some((c) => c.includes("session_token"))).toBe(false);
   });
