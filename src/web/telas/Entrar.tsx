@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { auth } from "../auth";
 import { navegar } from "../rota";
 
-/** O better-auth volta para /entrar?error=... quando o Google recusa ou o e-mail não é da empresa. */
-function mensagemDoGoogle(codigo: string | null): string | null {
+/** O better-auth volta para /entrar?error=... quando o Google recusa ou o e-mail não é da empresa; o servidor manda `hub` quando o EM Hub não confirmou. */
+function mensagemDoErro(codigo: string | null): string | null {
   if (!codigo) return null;
+  if (codigo === "hub") return "Não deu para entrar pelo EM Hub. Abra o EM Marketing pelo Hub de novo ou entre com o Google.";
   if (/access_denied/i.test(codigo)) return "O login com o Google foi cancelado. Tente de novo.";
   if (/forbidden|unable_to_create_user|user/i.test(codigo)) return "Só e-mails @emvidros.com.br entram. Use a conta Google da empresa.";
   return "Não deu para entrar agora. Tente de novo em instantes.";
@@ -18,8 +19,8 @@ function mensagemDaSenha(status: number | undefined): string {
   return "Não deu para entrar agora. Tente de novo em instantes.";
 }
 
-/** O que o servidor liga em /api/entrar: senha só no `.env` local, Google em produção. */
-type Modos = { senha: boolean; google: boolean };
+/** O que o servidor liga em /api/entrar/modos: senha só no `.env` local, Google em produção e o EM Hub quando HUB_URL, HUB_APP_ID e HUB_CHAVE_PUBLICA estão no ambiente. */
+type Modos = { senha: boolean; google: boolean; hub: boolean };
 
 function IconeGoogle() {
   return (
@@ -32,25 +33,31 @@ function IconeGoogle() {
   );
 }
 
-export function Entrar() {
+export function Entrar({ comGoogle }: { comGoogle: boolean }) {
   const [modos, setModos] = useState<Modos | null>(null);
-  const [erro, setErro] = useState(() => mensagemDoGoogle(new URLSearchParams(location.search).get("error")));
+  const [erro, setErro] = useState(() => mensagemDoErro(new URLSearchParams(location.search).get("error")));
   const [enviando, setEnviando] = useState(false);
   const email = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     document.title = "Entrar · EM Marketing";
-    fetch("/api/entrar")
+    fetch("/api/entrar/modos")
       .then((r) => r.json() as Promise<Modos>)
-      .then(setModos, () => setModos({ senha: false, google: true }));
-  }, []);
+      .then(
+        (lidos) => {
+          if (lidos.hub && !comGoogle) return location.replace(`/api/entrar?volta=${encodeURIComponent(new URLSearchParams(location.search).get("volta") ?? "/")}`);
+          setModos(lidos);
+        },
+        () => setModos({ senha: false, google: true, hub: false }),
+      );
+  }, [comGoogle]);
 
   async function entrarComGoogle() {
     if (enviando) return;
     setEnviando(true);
     setErro(null);
     const { error } = await auth.signIn
-      .social({ provider: "google", callbackURL: "/", errorCallbackURL: "/entrar" })
+      .social({ provider: "google", callbackURL: "/", errorCallbackURL: comGoogle ? "/entrar/google" : "/entrar" })
       .catch(() => ({ error: { status: 0 } }));
     if (error) {
       setEnviando(false);

@@ -2,7 +2,7 @@ import { useSyncExternalStore, type MouseEvent } from "react";
 import type { BotId } from "../agent/bots";
 
 export type Rota =
-  | { tela: "entrar" }
+  | { tela: "entrar"; comGoogle: boolean }
   | { tela: "nova" }
   | { tela: "conversa"; id: string }
   | { tela: "atividade" }
@@ -16,7 +16,9 @@ export type Rota =
 
 export function lerRota(caminho: string): Rota {
   if (caminho === "/") return { tela: "nova" };
-  if (caminho === "/entrar") return { tela: "entrar" };
+  if (caminho === "/entrar") return { tela: "entrar", comGoogle: false };
+  // A saída de emergência quando o login pelo EM Hub está ligado: a tela de sempre, sem redirecionar ao Hub.
+  if (caminho === "/entrar/google") return { tela: "entrar", comGoogle: true };
   if (caminho === "/atividade") return { tela: "atividade" };
   // /artes era a tela das artes do estúdio, que agora moram na Biblioteca; o endereço antigo continua abrindo.
   if (caminho === "/biblioteca" || caminho === "/artes") return { tela: "biblioteca" };

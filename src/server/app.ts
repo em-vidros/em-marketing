@@ -5,6 +5,7 @@ import { rotaMcp } from "../mcp/servidor";
 import { criarApi } from "../v2/api";
 import { referenciasParaGerar } from "../v2/referencias";
 import { modosDeEntrar, usuarioDa } from "./auth";
+import { confirmarEntrada, hubDoAmbiente, iniciarEntrada } from "./entradaPeloHub";
 import { iniciar } from "./iniciar";
 import { rotas } from "./rotas";
 
@@ -50,7 +51,8 @@ export async function rotasDoApp() {
       const usuario = await usuarioDa(req);
       return usuario ? Response.json(usuario) : Response.json({ erro: "Entre para continuar." }, { status: 401 });
     },
-    "/api/entrar": () => Response.json(modosDeEntrar),
+    "/api/entrar": { GET: (req: Request) => iniciarEntrada(req), POST: (req: Request) => confirmarEntrada(req) },
+    "/api/entrar/modos": () => Response.json({ ...modosDeEntrar, hub: hubDoAmbiente() !== null }),
     "/api/mcp": rotaMcp,
     "/api/cron/diario": cronDiario,
   };
